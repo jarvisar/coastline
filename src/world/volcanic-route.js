@@ -49,8 +49,8 @@ function shelfHeight(s, u, near) {
   const join = smoothstep(.24, .65, terrace(s, 7174, 144));
   const fold = (1.7 * Math.sin(s / 37 + d / 62) + 1.2 * Math.sin(s / 79 - d / 43)) * smoothstep(toe, toe + 3, d);
   const ledge = side > 0
-    ? (4.5 + 6.5 * uplift(s, 7151, 64)) * smoothstep(toe, toe + 2.6, d)
-      + (6 + 10 * uplift(s + 16, 7152, 96)) * join * smoothstep(upper, upper + 2.6, d) + fold
+    ? (5.5 + 8 * uplift(s, 7151, 64)) * smoothstep(toe, toe + 2.6, d)
+      + (8 + 13 * uplift(s + 16, 7152, 96)) * join * smoothstep(upper, upper + 2.6, d) + fold
     : (2 + 8 * terrace(s, 7153, 64)) * smoothstep(toe, Math.min(toe + 3, near), d);
   return roadHeight(s) + ash * .55 + ledge;
 }
@@ -95,9 +95,16 @@ export function shelfFlow(cell, branch, u) {
   const near = riftProfile(centre, 1).near;
   const end = branch ? near - 18 - randomAt(cell, 7162) * 8 : 27 + randomAt(cell, 7161) * 7;
   const s = centre + (branch ? Math.sin(u / 11) * 2 : Math.sin((u - end) / 9) * 2.2);
-  const t = smoothstep(end, near, u), pool = Math.exp(-((u - end - 3.5) / 3.3) ** 2);
+  const t = smoothstep(end, near, u), pool = Math.exp(-(((u - end - 3.5) / 3.3) ** 2));
   const width = (branch ? .55 : .8) + t * (branch ? .65 : 1.2) + pool * (branch ? 1.2 : 2.3);
   return { s, end, near, width: width * smoothstep(end - 1, end + 1.8, u) };
+}
+
+export function creekSection(s) {
+  const { near, far } = riftProfile(s, 1);
+  const pool = smoothstep(.4, .95, .5 + .5 * Math.sin(s / 31 + 1.2));
+  return { u: (near + far) / 2 + Math.sin(s / 19) * .65,
+    width: 2.8 + (far - near - 13) * .28 + pool * 3.8 + .55 * Math.sin(s / 7) ** 2 };
 }
 
 export function shelfFault(s, u) {
@@ -125,9 +132,9 @@ export function volcanicHeight(s, u) {
     + (side < 0 ? 6 : 18) * (.4 + uplift(s + 24, 7131 + side, 96))
       * smoothstep(.18, .7, terrace(s + 64, 7184 + side, 160)) * smoothstep(bank.upper, bank.upper + 5, out);
   const plateau = road + rise + climb + 2.1 * Math.sin(s / 47 + u / 59) + .8 * Math.sin(s / 24 + u / 19);
-  // A low cooling bank touches the perched flow. The mountain rises beyond
-  // it, leaving room for gravel bars and boulders beside the lava.
-  const bankHeight = side > 0 ? lerp(level + .7, Math.max(level + .7, plateau), smoothstep(0, bank.lower, out)) : plateau;
+  // The near bank is almost flush with the lava; the far bank retains a
+  // substantial basalt face, with the creek running along its foot.
+  const bankHeight = side > 0 ? Math.max(level + 7, plateau) : plateau;
   return d < far ? lerp(bankHeight, bed, wall(far - d)) : bankHeight;
 }
 

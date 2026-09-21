@@ -25,7 +25,8 @@ export function coastlinePwa() {
         },
       ];
     },
-    async closeBundle() {
+    // Generate the service worker only after output exists, preserving build errors.
+    async writeBundle() {
       if (config.command !== 'build') return;
       const outDir = path.resolve(config.root, config.build.outDir);
       const files = [];

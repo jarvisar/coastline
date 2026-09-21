@@ -26,14 +26,20 @@ basaltMaterial.customProgramCacheKey = () => 'volcanic-basalt-v9';
 export const lavaMaterial = new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
 lavaMaterial.onBeforeCompile = shader => {
   shader.uniforms.volcanicTime = volcanicClock;
-  shader.vertexShader = 'uniform float volcanicTime; attribute float heat; varying float vLavaPulse;\n' + shader.vertexShader;
+  shader.vertexShader = 'uniform float volcanicTime; attribute float heat; attribute float flow; varying float vLavaPulse; varying float vSurfaceFlow; varying vec3 vFlowPosition;\n' + shader.vertexShader;
   shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
     vLavaPulse = .97 + .025 * sin(position.x * .22 + position.z * .17 + volcanicTime * .35) + .02 * sin(heat * 6.2832 + volcanicTime * (.25 + heat * .35));
+    vSurfaceFlow = flow;
+    vFlowPosition = position;
   `);
-  shader.fragmentShader = 'varying float vLavaPulse;\n' + shader.fragmentShader;
-  shader.fragmentShader = shader.fragmentShader.replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb *= vLavaPulse;');
+  shader.fragmentShader = 'uniform float volcanicTime; varying float vLavaPulse; varying float vSurfaceFlow; varying vec3 vFlowPosition;\n' + shader.fragmentShader;
+  shader.fragmentShader = shader.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
+    // Moving hot folds follow decreasing elevation over the rock steps.
+    float fold = sin(vFlowPosition.y * 2.6 + volcanicTime * 1.15 + .35 * sin(vFlowPosition.x * .7));
+    diffuseColor.rgb *= vLavaPulse * (1.0 + vSurfaceFlow * fold * .065);
+  `);
 };
-lavaMaterial.customProgramCacheKey = () => 'volcanic-lava-v4';
+lavaMaterial.customProgramCacheKey = () => 'volcanic-lava-v5';
 
 // Light spilling from molten rock onto whatever lies beside it: vertex colours
 // fade to black at the outer edge, so adding them leaves no visible border.
