@@ -12,13 +12,13 @@ basaltMaterial.onBeforeCompile = shader => {
   shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvHeat = heat;');
   shader.fragmentShader = 'uniform float volcanicTime; varying float vHeat;\n' + shader.fragmentShader;
   shader.fragmentShader = shader.fragmentShader.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
-    float glow = 1.0 - clamp(vHeat / 9.5, 0.0, 1.0);
+    float glow = 1.0 - clamp(vHeat / 13.0, 0.0, 1.0);
     glow *= glow;
     float pulse = .97 + .025 * sin(volcanicTime * .65) + .015 * sin(volcanicTime * 1.13);
     totalEmissiveRadiance += mix(vec3(.2, .009, .0005), vec3(.85, .078, .001), glow) * glow * pulse;
   `);
 };
-basaltMaterial.customProgramCacheKey = () => 'volcanic-basalt-v8';
+basaltMaterial.customProgramCacheKey = () => 'volcanic-basalt-v9';
 
 // Lava reuses the `heat` slot as a per-facet phase, so the mosaic shimmers
 // facet by facet under one slow travelling swell. The depth offset keeps thin

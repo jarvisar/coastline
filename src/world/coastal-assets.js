@@ -151,7 +151,7 @@ export const coastalSedge = sedge();
 
 // Bucket projected terrain triangles once; grounding hundreds of plants then
 // only visits a few nearby faces instead of raycasting the whole chunk.
-export function terrainSampler(mesh) {
+export function terrainSampler(mesh, topmost = false) {
   const positions = mesh.geometry.attributes.position, buckets = new Map(), step = 16;
   for (let i = 0; i < positions.count; i += 3) {
     const points = [0, 1, 2].map(j => new THREE.Vector3().fromBufferAttribute(positions, i + j));
@@ -164,13 +164,18 @@ export function terrainSampler(mesh) {
     }
   }
   return (x, z) => {
+    let height = null;
     for (const [a, b, c] of buckets.get(`${Math.floor(x / step)},${Math.floor(z / step)}`) ?? []) {
       const det = (b.z - c.z) * (a.x - c.x) + (c.x - b.x) * (a.z - c.z);
       if (Math.abs(det) < 1e-8) continue;
       const u = ((b.z - c.z) * (x - c.x) + (c.x - b.x) * (z - c.z)) / det;
       const v = ((c.z - a.z) * (x - c.x) + (a.x - c.x) * (z - c.z)) / det;
-      if (u >= -.00001 && v >= -.00001 && u + v <= 1.00001) return u * a.y + v * b.y + (1 - u - v) * c.y;
+      if (u >= -.00001 && v >= -.00001 && u + v <= 1.00001) {
+        const y = u * a.y + v * b.y + (1 - u - v) * c.y;
+        if (!topmost) return y;
+        height = height === null ? y : Math.max(height, y);
+      }
     }
-    return null;
+    return height;
   };
 }

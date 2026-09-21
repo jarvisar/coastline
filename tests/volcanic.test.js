@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { CHUNK_LENGTH, roadHeight } from '../src/world/route.js';
-import { volcanicColumns, volcanicHeight, volcanicPosition, volcanicDrivingRoute, riftProfile } from '../src/world/volcanic-route.js';
+import { volcanicColumns, volcanicHeight, volcanicPosition, volcanicDrivingRoute, riftProfile, shelfSteps } from '../src/world/volcanic-route.js';
+import { terrainSampler } from '../src/world/coastal-assets.js';
 import { VolcanicChunk, VolcanicWorld } from '../src/world/volcanic.js';
 import { volcanicClock } from '../src/world/volcanic-materials.js';
 import { VolcanicAtmosphere } from '../src/world/volcanic-atmosphere.js';
@@ -56,6 +57,45 @@ test('right-hand lava tributaries split the terraces while leaving the road and 
     const bank = riftProfile(s + 24, 1);
     assert.ok(volcanicHeight(s + 24, bank.near - 1) > bank.level, `solid terrace between tributaries at ${s}`);
   }
+});
+
+test('uplifted shelves retain steep faces and broad crowns, with some upper tiers merging away', () => {
+  let distinct = 0, merged = 0;
+  for (let index = -40; index <= 40; index++) {
+    const s = index * CHUNK_LENGTH + 60, { toe, upper } = shelfSteps(s, 1);
+    assert.ok(volcanicHeight(s, toe + 2.6) - volcanicHeight(s, toe) > 4, 'lower cliff rises within three metres even where its crown sags');
+    const width = upper - .4 - toe - 3.2;
+    assert.ok(width > 4 && Math.abs(volcanicHeight(s, upper - .4) - volcanicHeight(s, toe + 3.2)) / width < .2, 'a gently folded shelf lies between the scarps');
+    const rise = volcanicHeight(s, upper + 2.6) - volcanicHeight(s, upper);
+    if (rise > 9) distinct++;
+    if (rise < 2) merged++;
+  }
+  assert.ok(distinct > 10, 'separate raised plateaus remain common');
+  assert.ok(merged > 4, 'tiers occasionally join into one shelf');
+});
+
+test('the left basin exposes broad lava flows around rooted cliff islands', () => {
+  let open = 0, samples = 0, islands = 0;
+  for (const index of [-4, 0, 4, 10]) {
+    const chunk = new VolcanicChunk(index);
+    try {
+      const ground = terrainSampler(chunk.group.getObjectByName('volcanic-basalt'));
+      const rock = terrainSampler(chunk.group.getObjectByName('volcanic-formations'), true);
+      for (let s = chunk.start + 8; s < chunk.start + CHUNK_LENGTH - 8; s += 8) {
+        const { near, far, level } = riftProfile(s, -1);
+        assert.ok(far - near >= 88, 'the basin is substantially wider than the right creek');
+        for (let d = near + 10; d < far - 10; d += 5) {
+          const p = volcanicPosition(s, -d), z = p.z + chunk.start;
+          const y = Math.max(ground(p.x, z) ?? -Infinity, rock(p.x, z) ?? -Infinity);
+          samples++;
+          if (y < level) open++;
+          if (y > level + 12) islands++;
+        }
+      }
+    } finally { chunk.dispose(); }
+  }
+  assert.ok(open / samples > .5, 'connected molten areas dominate the basin floor');
+  assert.ok(islands / samples > .04, 'large cliff islands still frame the flows');
 });
 
 test('neighboring volcanic terrain and lava meshes share exact boundary vertices', () => {

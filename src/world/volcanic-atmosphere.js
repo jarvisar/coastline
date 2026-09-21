@@ -78,7 +78,7 @@ export class VolcanicAtmosphere {
       const { near, level } = riftProfile(at, side), d = side < 0 ? near + 13 : near - 6;
       const p = volcanicPosition(at, side * d, level + 5), distance = Math.abs(at - s);
       this.lights[i].position.set(p.x, p.y, p.z + origin);
-      this.lights[i].intensity = (side < 0 ? 1100 : 700) * (1 - smoothstep(30, span, distance))
+      this.lights[i].intensity = (side < 0 ? 1400 : 1100) * (1 - smoothstep(30, span, distance))
         * (.97 + .025 * Math.sin(time * .65 + i) + .015 * Math.sin(time * 1.13 + i * 2));
     }
   }

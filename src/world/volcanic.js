@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries, mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { CHUNK_LENGTH, roadHeight, randomAt, seededRandom, lerp, clamp } from './route.js';
-import { VOLCANIC_STEP, SHELF_EDGE, PLATEAU_EDGE, riftProfile, shelfFault, volcanicColumns, volcanicVertex, volcanicHeight, volcanicPosition } from './volcanic-route.js';
+import { VOLCANIC_STEP, SHELF_EDGE, PLATEAU_EDGE, riftProfile, shelfSteps, shelfFault, volcanicColumns, volcanicVertex, volcanicHeight, volcanicPosition } from './volcanic-route.js';
 import { COLD, basaltMaterial, lavaMaterial, glowMaterial, smokeMaterial, volcanicClock } from './volcanic-materials.js';
 import { terrainSampler } from './coastal-assets.js';
 import { registerChunkResources } from './chunk-resources.js';
@@ -111,7 +111,7 @@ function geometry(data, weathered = false) {
       if (smooth.lengthSq() < .5) continue;
       normal.fromBufferAttribute(normals, i);
       // Continuous shading on the ground, retaining broad faces on cliff walls.
-      normal.lerp(smooth, .1 + .86 * clamp((normal.y - .25) / .45, 0, 1)).normalize();
+      normal.lerp(smooth, .08 + .4 * clamp((normal.y - .25) / .45, 0, 1)).normalize();
       normals.setXYZ(i, normal.x, normal.y, normal.z);
     }
   }
@@ -139,7 +139,7 @@ function lavaColor(t) {
 // the road and out from it, own the ground nearest them; pulling every cell
 // back from its neighbours leaves the web of molten channels between blocks.
 // Cells are global, so a block belongs to whichever chunk holds its seed.
-const CELL = 40, POOL = .12, LOW = .30, MID = .66;
+const CELL = 40, POOL = .16, LOW = .36, MID = .76;
 function riftSeed(i, j, side) {
   const salt = (side < 0 ? 7600 : 7700) + j * 13;
   return { s: (i + .5 + (randomAt(i, salt) - .5) * .86) * CELL, d: (j + .5 + (randomAt(i, salt + 1) - .5) * .86) * CELL,
@@ -157,8 +157,11 @@ function clip(outline, mx, my, nx, ny, inset = 0) {
 }
 function riftCell(i, j, side) {
   const seed = riftSeed(i, j, side), reach = CELL * 1.6;
-  // Low slabs stand well apart in open lava; tall blocks crowd into narrow channels.
-  const inset = seed.kind < LOW ? lerp(3.5, 6, seed.key % 97 / 97) : seed.kind < MID ? lerp(1.4, 3.2, seed.key % 97 / 97) : lerp(.9, 2.2, seed.key % 97 / 97);
+  const { near, far } = riftProfile(seed.s, side), interior = side < 0 && seed.d > near + 18 && seed.d < far - 18;
+  // The left basin is mostly connected molten watercourses. Leave broad
+  // passages around its interior islands, while bank fragments stay rooted.
+  const inset = interior ? lerp(5, 8, seed.key % 97 / 97)
+    : seed.kind < LOW ? lerp(3, 4.5, seed.key % 97 / 97) : lerp(1.6, 2.8, seed.key % 97 / 97);
   let outline = [[seed.s - reach, seed.d - reach], [seed.s + reach, seed.d - reach], [seed.s + reach, seed.d + reach], [seed.s - reach, seed.d + reach]];
   for (let di = -2; di <= 2; di++) for (let dj = -2; dj <= 2; dj++) {
     if (!di && !dj) continue;
@@ -178,6 +181,17 @@ function riftLimits(outline, side, margin) {
   return [low + 6 + margin, high - 6 - margin];
 }
 function fitToRift(outline, side, margin) {
+  if (side < 0) {
+    // Let boundary cells overlap the banks. These are pieces of the same
+    // broken shelf, with submerged roots, rather than rafts isolated by a moat.
+    let near = Infinity, far = 0;
+    const along = outline.map(p => p[0]);
+    for (let s = Math.min(...along); s <= Math.max(...along) + 4; s += 4) {
+      const profile = riftProfile(s, side); near = Math.min(near, profile.near); far = Math.max(far, profile.far);
+    }
+    outline = clip(outline, 0, Math.max(19, near - 9), 0, -1);
+    return outline.length < 3 ? outline : clip(outline, 0, far + 14, 0, 1);
+  }
   const [low, high] = riftLimits(outline, side, margin);
   outline = clip(outline, 0, low, 0, -1);
   return outline.length < 3 ? outline : clip(outline, 0, high, 0, 1);
@@ -217,17 +231,10 @@ export class VolcanicChunk {
     this.group = new THREE.Group(); this.group.name = `volcanic-chunk-${index}`;
     // Rock, molten rock and spilled light each merge into one mesh per chunk.
     this.rock = surface(); this.lava = surface(); this.glow = surface(); this.rocks = []; this.pebbles = []; this.tops = [];
-    this.buildTerrain(); this.buildLava(); this.buildRift(); this.buildCones(); this.buildOutcrops();
-    // Dressing follows the finished rock, including caps and buttresses.
-    // Sampling only the original ground buries debris and cracks inside them.
-    const rockSurface = new THREE.BufferGeometry();
-    rockSurface.setAttribute('position', new THREE.Float32BufferAttribute(this.rock.positions, 3));
-    const formations = terrainSampler({ geometry: rockSurface }), terrain = this.ground;
-    this.ground = (x, z) => {
-      const a = terrain(x, z), b = formations(x, z);
-      return a === null ? b : b === null ? a : Math.max(a, b);
-    };
-    rockSurface.dispose();
+    this.buildTerrain(); this.buildLava(); this.buildRift(); this.buildOutcrops();
+    this.sampleFormations();
+    this.buildCones();
+    this.sampleFormations();
     this.buildFissures(); this.buildCrust(); this.buildRocks(); this.buildTalus(); this.buildTrees();
     this.addMesh(this.rock, basaltMaterial, 'volcanic-formations', true);
     this.addMesh(this.lava, lavaMaterial, 'volcanic-lava');
@@ -237,6 +244,18 @@ export class VolcanicChunk {
     this.buildSmoke();
     for (const key of ['rock', 'lava', 'glow', 'rocks', 'pebbles', 'tops', 'ground']) delete this[key];
     finalizeChunkTransforms(this.group);
+  }
+  sampleFormations() {
+    // Dressing follows the finished rock, including caps and buttresses.
+    // Sampling only the original ground buries debris and cracks inside them.
+    const rockSurface = new THREE.BufferGeometry();
+    rockSurface.setAttribute('position', new THREE.Float32BufferAttribute(this.rock.positions, 3));
+    const formations = terrainSampler({ geometry: rockSurface }, true), terrain = terrainSampler(this.terrain);
+    this.ground = (x, z) => {
+      const a = terrain(x, z), b = formations(x, z);
+      return a === null ? b : b === null ? a : Math.max(a, b);
+    };
+    rockSurface.dispose();
   }
   at(s, u, y = volcanicHeight(s, u)) {
     const p = volcanicPosition(s, u, y); return { ...p, s, u, z: p.z + this.start };
@@ -382,7 +401,7 @@ export class VolcanicChunk {
     const count = outline.length, { cs, cd, reach } = outlineReach(outline);
     // A narrow chamfer: a wide one turns a slim block's top into a hipped roof.
     const flare = .8 + random() * 1.8, bevel = Math.min(reach * .18, 1 + random() * 1.6), drop = Math.min(height * .22, 1.4 + random() * 2.1);
-    const tiltS = (random() - .5) * .23, tiltD = (random() - .5) * .23, centre = this.at(cs, side * cd, base + height + (random() - .5) * 1.5);
+    const tiltS = (random() - .5) * .09, tiltD = (random() - .5) * .09, centre = this.at(cs, side * cd, base + height + (random() - .5) * .7);
     const glow = y => molten ? Math.max(0, y - base) * (1 + .2 * Math.sin(cs / 7 + cd / 5)) : COLD;
     // Move a corner `out` metres from the block's middle, or a fraction of the way in to it.
     const ring = (out, y, pull = 0, lit = true) => outline.map((p, k) => {
@@ -456,7 +475,7 @@ export class VolcanicChunk {
         const seed = riftSeed(i, j, side);
         if (seed.s < this.start || seed.s >= this.start + CHUNK_LENGTH) continue;
         const { near, far, level, rise } = riftProfile(seed.s, side), across = (seed.d - near) / (far - near), random = seededRandom(seed.key + 7800);
-        if (seed.kind < POOL) {
+        if (seed.kind < (side < 0 ? .34 : POOL)) {
           // Open lava, with a few worn stumps standing in it.
           if (across < .12 || across > .88) continue;
           for (let n = 0, count = 1 + Math.floor(random() * 3); n < count; n++) {
@@ -470,14 +489,17 @@ export class VolcanicChunk {
           }
           continue;
         }
+        if (side < 0 && (seed.d < near - 12 || seed.d > far + 12)) continue;
         const cell = riftCell(i, j, side);
         let outline = cell && fitToRift(cell.outline, side, .8 + random() * 1.8);
         if (!outline || outline.length < 3 || outlineArea(outline) < 40 || outlineReach(outline).reach < 3.4) continue;
         outline = facet(outline, 9, random);
         if (outline.length < 4) continue;
-        // Blocks stand taller toward the far bank, and as high as the road shelf at most on the camera's side.
-        const ceiling = roadHeight(seed.s) - level + (side < 0 ? 2 : rise * .7), lift = lerp(.8, 1.25, clamp(across, 0, 1));
-        const height = Math.min(ceiling, outlineReach(outline).reach * 2.7, lift * (seed.kind < LOW ? 4 + random() * 5 : seed.kind < MID ? 14 + random() * 10 : 25 + random() * 13));
+        // Tilted low remnants, mid-height shelves and tall cliff islands form
+        // one hierarchy; the outer pieces meet the elevated bank behind them.
+        const ceiling = side < 0 ? 17 + 25 * clamp(across, 0, 1) : roadHeight(seed.s) - level + rise * .7;
+        const lift = lerp(.85, 1.3, clamp(across, 0, 1));
+        const height = Math.min(ceiling, outlineReach(outline).reach * 3.6, lift * (seed.kind < LOW ? 5 + random() * 5 : seed.kind < MID ? 12 + random() * 10 : 26 + random() * 12));
         let top = this.block(outline, side, level, height, random);
         // Some broad blocks carry a second, smaller tier, set off-centre.
         if (top.reach > 6 && random() < .3) {
@@ -571,8 +593,11 @@ export class VolcanicChunk {
     for (const side of [-1, 1]) {
       // A squat spatter cone steams beside the road where the shelf has room for one.
       {
-        const s = this.start + 20 + random() * 88, { near } = riftProfile(s, side), radius = 3 + random() * 2.4, room = near - 4.5 - radius;
-        const d = lerp(13.5 + radius, room, random()), p = this.onGround(s, side * d), wanted = random() < .65;
+        // Vents sit at fault tips or at the edge of an uplift, with their
+        // connecting tension cracks added after all landforms are sampled.
+        const s = this.start + (side > 0 ? 34 + random() * 7 : 40 + random() * 48), { near } = riftProfile(s, side), radius = 3 + random() * 2.4, room = near - 4.5 - radius;
+        const d = side > 0 ? Math.min(room, shelfSteps(s, side).toe + 5 + radius) : Math.max(14 + radius, near - radius - 6);
+        const p = this.onGround(s, side * d), wanted = random() < .6;
         if (wanted && room > 13.5 + radius && p && p.y > roadHeight(s) - 2 && this.clearance(p.x, p.z, s) - radius * 1.4 > 8.5) {
           this.cone(s, side * d, radius, radius * (.65 + random() * .25), p.y - .3, random, true);
           solidPost(this, p.x, p.z, radius * .82);
@@ -589,11 +614,11 @@ export class VolcanicChunk {
         }
       }
       const s = this.start + 24 + random() * 80, { far } = riftProfile(s, side);
-      const radius = 3.8 + random() * 3.2, d = far + radius + 10 + random() * 28, p = this.onGround(s, side * d);
-      if (p) this.cone(s, side * d, radius, radius * (.65 + random() * .25), p.y - radius * .12, random);
+      const radius = 3.8 + random() * 3.2, d = far + radius + 3 + random() * 7, p = this.onGround(s, side * d);
+      if (p && random() < .72) this.cone(s, side * d, radius, radius * (.65 + random() * .25), p.y - radius * .12, random);
     }
     // And the odd one on a broad block out in the lava.
-    for (const top of this.tops) if (top.reach > 7 && random() < .09) {
+    for (const top of this.tops) if (top.reach > 7 && random() < .05) {
       const radius = Math.min(top.reach * .6, 3.4 + random() * 3);
       this.cone(top.s, top.u, radius, radius * (.6 + random() * .25), top.y - .4, random); top.reach = 0;
     }
@@ -623,27 +648,40 @@ export class VolcanicChunk {
   // Angular masses breaking through the far banks.
   buildOutcrops() {
     const random = seededRandom(this.index + 78100);
-    // Broad buttresses interrupt the rising right shoulder. Their feet are
-    // buried in the slope, leaving broken scarps between the smoking cones.
-    for (let n = 0; n < 3; n++) {
-      const s = this.start + 14 + n * 43 + random() * 12, { near } = riftProfile(s, 1);
-      const radius = 8 + random() * 8, d = near - 8 - radius * .45, p = this.onGround(s, d);
-      if (!p || shelfFault(s, d) > .01 || shelfFault(s + radius, d) > .01 || shelfFault(s - radius, d) > .01
-        || this.clearance(p.x, p.z, s) - radius * 1.6 < 10 || this.features.vents.some(v => Math.hypot(v.x - p.x, v.z - p.z) < v.radius * 1.2 + radius)) continue;
-      this.crag(s, d, radius, 9 + radius * .85, random);
-      solidPost(this, p.x, p.z, radius * 1.1);
+    // Broad bedrock shoulders overlap the two benches. Unequal footprints
+    // interrupt the contour lines with headlands, recessed walls and shelves.
+    for (let n = 0; n < 2; n++) {
+      const s = this.start + 61 + n * 43 + random() * 8, { near } = riftProfile(s, 1), { toe, upper } = shelfSteps(s, 1);
+      const d = n ? toe + 3 : upper + 2, along = n ? 12 + random() * 7 : 19 + random() * 9;
+      const across = n ? 5 + random() * 3 : Math.min(13, (near - toe) * .4), spin = random() * .4;
+      const outline = Array.from({ length: 7 }, (_, k) => {
+        const angle = spin + k * Math.PI * 2 / 7, r = .85 + random() * .2;
+        return [s + Math.cos(angle) * along * r, d + Math.sin(angle) * across * r];
+      });
+      if (outline.some(([at, u]) => { const p = this.at(at, u); return this.clearance(p.x, p.z, at) < 12 || shelfFault(at, u) > .05; })) continue;
+      const base = Math.min(...outline.map(([at, u]) => volcanicHeight(at, u))) - 3;
+      const height = Math.max(...outline.map(([at, u]) => volcanicHeight(at, u))) - base + (n ? 3 : 5) + random() * 4;
+      const top = this.block(facet(outline, 11, random), 1, base, height, random, false);
+      this.tops.push(top);
+      // The near wall is also a physical obstacle; short spans follow its
+      // outline instead of a bounding circle that can extend onto a bend.
+      for (let k = 0; k < outline.length; k++) {
+        const a = this.at(outline[k][0], outline[k][1]), b = this.at(...outline[(k + 1) % outline.length]);
+        solidSpan(this, a, b, .6);
+      }
     }
     for (const side of [-1, 1]) for (let n = 0; n < 4; n++) {
       const s = this.start + 10 + n * 28 + random() * 22, { far } = riftProfile(s, side), radius = 5 + random() * 9, d = far + 8 + radius + random() ** 1.5 * 130;
       const p = this.onGround(s, side * d);
       if (!p || this.features.vents.some(v => Math.hypot(v.x - p.x, v.z - p.z) < v.radius * 1.5 + radius * 1.4)) continue;
-      if (side > 0) { this.crag(s, d, radius * 1.35, 8 + radius * 1.4, random); continue; }
+      if (side > 0 && n === 1) { this.crag(s, d, radius * 1.1, 8 + radius * 1.1, random); continue; }
       const sides = 6 + Math.floor(random() * 3), spin = random() * Math.PI * 2, stretch = 1 + random() * .5;
       const outline = Array.from({ length: sides }, (_, k) => {
         const turn = spin + k / sides * Math.PI * 2, r = radius * (.8 + random() * .4);
         return [s + Math.cos(turn) * r * stretch, d + Math.sin(turn) * r];
       });
-      const top = this.block(facet(outline, 8, random), side, p.y - 2.5, 2.5 + radius * (.45 + random() * .8), random, false);
+      const base = Math.min(p.y - 4, ...outline.map(([at, u]) => volcanicHeight(at, side * u) - 2));
+      const top = this.block(facet(outline, 10, random), side, base, p.y - base + radius * (.35 + random() * .65), random, false);
       if (top.reach > 3.5) this.tops.push(top);
     }
   }
@@ -655,10 +693,10 @@ export class VolcanicChunk {
       for (let out = 5.2, drift = 0; out > -.4; out -= .7) path.push([s + (drift += (random() - .5) * 1.5), d - direction * out]);
       let heading = direction > 0 ? 0 : Math.PI; heading += (random() - .5) * 1.2;
       let [ps, pd] = path.at(-1);
-      for (let run = 0; run < length; run += 1.9) {
+      for (let run = 0; run < length; run += 2.8) {
         // Sharp, uneven turns: a fracture, not a stream.
-        heading += (random() - .5) * (random() < .3 ? 3 : 1.2); heading = lerp(heading, direction > 0 ? 0 : Math.PI, .2);
-        ps += Math.sin(heading) * 1.9; pd += Math.cos(heading) * 1.9;
+        heading += (random() - .5) * (random() < .3 ? 2 : .65); heading = lerp(heading, direction > 0 ? 0 : Math.PI, .2);
+        ps += Math.sin(heading) * 2.8; pd += Math.cos(heading) * 2.8;
         if (pd < 10.5 || ps < this.start + 1 || ps > this.start + CHUNK_LENGTH - 1) break;
         path.push([ps, pd]);
       }
@@ -692,13 +730,13 @@ export class VolcanicChunk {
     // favour the scarps and vents; they never reach the paved road.
     const fracture = (s, u, length, heading, width) => {
       const path = [];
-      for (let run = 0; run < length; run += 1.2) {
+      for (let run = 0; run < length; run += 2.2) {
         if (s < this.start + 2 || s > this.start + CHUNK_LENGTH - 2 || Math.abs(u) < 12) break;
         const p = this.onGround(s, u, .13);
         if (!p || p.y < riftProfile(s, Math.sign(u)).level + 1) break;
         path.push(p);
-        heading += (random() - .5) * 1.7;
-        s += Math.cos(heading) * 1.2; u += Math.sin(heading) * 1.2;
+        heading += (random() - .5) * .95;
+        s += Math.cos(heading) * 2.2; u += Math.sin(heading) * 2.2;
       }
       if (path.length > 3) this.vein(path, width, .025, random, .65);
       return path;
@@ -714,6 +752,19 @@ export class VolcanicChunk {
       const angle = random() * 6.28;
       fracture(top.s, top.u, top.reach * 1.4, angle, .2 + random() * .2);
       fracture(top.s, top.u, top.reach * .8, angle + 2.2, .14);
+    }
+    // Each smoking formation joins the fault system. Sample the finished
+    // shelves so a vein spills down their faces and terminates in the lava.
+    for (const vent of this.features.vents) {
+      const side = Math.sign(vent.u), d = Math.abs(vent.u), { near, far, level } = riftProfile(vent.s, side);
+      const target = Math.abs(d - near) < Math.abs(d - far) ? near + 5 : far - 5;
+      const from = d + Math.sign(target - d) * vent.radius * .8, length = Math.abs(target - from), path = [];
+      for (let j = 0, steps = Math.max(4, Math.ceil(length / 1.6)); j <= steps; j++) {
+        const t = j / steps, p = this.onGround(vent.s + Math.sin(t * Math.PI * 3) * 1.3, side * lerp(from, target, t), .13);
+        if (p) { p.y = Math.max(p.y, level + .07); path.push(p); }
+      }
+      if (path.length > 3) this.vein(path.reverse(), .42, .12, random, .85);
+      fracture(vent.s + vent.radius * .7, vent.u, 8 + vent.radius, side * .7, .16);
     }
   }
   // Small rafts of cooling crust interrupt the molten mosaic without turning
@@ -772,7 +823,7 @@ export class VolcanicChunk {
     const random = seededRandom(this.index + 79500);
     for (let n = 0; n < 22; n++) {
       const s = this.start + 5 + random() * (CHUNK_LENGTH - 10), { near } = riftProfile(s, 1);
-      const u = Math.max(23, near * .48) - 1 + (random() - .5) * 5;
+      const u = shelfSteps(s, 1).toe - 1 + (random() - .5) * 5;
       if (shelfFault(s, u + 7) > .05) continue;
       const p = this.onGround(s, u);
       if (!p || this.features.vents.some(v => Math.hypot(v.x - p.x, v.z - p.z) < v.radius * 1.4)) continue;
