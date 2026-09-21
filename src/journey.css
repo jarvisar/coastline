@@ -103,6 +103,22 @@ body[data-journey=city] .pause-overlay { background: #9ba7af55; }
 body[data-journey=city] .eyebrow>span { background: #4d6c82; }
 body[data-journey=city] .start-button:hover { background: #3b4c58; }
 body[data-journey=city] .touch-controls button.active { background: var(--ink); }
+body[data-journey=volcanic] { --ink: #f4ddc8; --cream: #302728; color: var(--ink); background: #302728; }
+body[data-journey=volcanic] .vignette { background: linear-gradient(180deg,#281d2345,transparent 22%,transparent 80%,#361d1c55); }
+body[data-journey=volcanic] :is(.welcome,.brand,.location) { text-shadow: 0 2px 12px #211719; }
+body[data-journey=volcanic] :is(.icon-button,.journey-button,.controls,.touch-controls button) { background: #35292bd9; border-color: #c9a18c55; }
+body[data-journey=volcanic] :is(.icon-button,.journey-button,.touch-controls button):hover { background: #57403c; }
+body[data-journey=volcanic] :is(kbd,.weather-divider,.control-separator) { border-color: #c9a18c55; }
+body[data-journey=volcanic] #toast { background: #35292bf2; }
+body[data-journey=volcanic] .chooser { background: #30272afa; }
+body[data-journey=volcanic] .chooser::backdrop { background: #160e1466; }
+body[data-journey=volcanic] .chooser-card { background: #433336; border-color: #c9a18c55; }
+body[data-journey=volcanic] .chooser-card[aria-current=true] { border-color: var(--ink); }
+body[data-journey=volcanic] #journey-transition { background: #302728; }
+body[data-journey=volcanic] .pause-overlay { background: #241a2466; }
+body[data-journey=volcanic] .eyebrow>span { background: #ff963d; }
+body[data-journey=volcanic] .start-button:hover { background: #ffd0a0; }
+body[data-journey=volcanic] .touch-controls button.active { background: var(--ink); }
 @media(max-width:1000px) { .weather { display: none; } }
 @media(max-width:600px) {
   .journey-button { position: absolute; right: 0; top: 53px; padding: 9px 13px; font-size: 10px; }

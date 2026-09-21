@@ -24,7 +24,7 @@ npm run preview
 
 ## Routes and cars
 
-Use **Change Route** or press **1–6**:
+Use **Change Route** or press **1–7**:
 
 1. Pacific Coast
 2. Red Rock Desert
@@ -32,6 +32,7 @@ Use **Change Route** or press **1–6**:
 4. Emerald Jungle
 5. Golden Plains
 6. Rainy Downtown
+7. Volcanic Rift
 
 Each route keeps your position and mileage for the current visit. Reset starts the current route in a new area with zero mileage. Reloading generates a new world; add `?seed=4817` to the URL to revisit or share one. Seeds can be any unsigned 32-bit integer.
 
@@ -52,7 +53,7 @@ Controller labels below use Xbox / PlayStation names.
 | Pause / resume | P / Escape | Start / Menu / Options |
 | Garage | C / G | Left stick press (L3) |
 | Next route | N | RB / R1 |
-| Choose route | 1–6 | Select / Back / View |
+| Choose route | 1–7 | Select / Back / View |
 | Reset | R | Y / Triangle |
 | Sound | M | Pause menu |
 | Soft shading | O | Pause menu |
@@ -67,7 +68,7 @@ On a controller, use the D-pad or stick to move through menus, A / Cross to sele
 
 On touchscreens, tap **Let's drive**, then drag the joystick in the direction you want to move on screen. Drag farther to go faster; release to stop. In first-person and third-person views, push up to accelerate, left/right to steer, and down to brake or reverse.
 
-You can drive off the road anywhere. Water and cliffs still stop the car, as buildings, tree trunks, fences and other solid scenery do everywhere.
+You can drive off the road anywhere. Water, lava and cliffs still stop the car, as buildings, tree trunks, fences and other solid scenery do everywhere.
 
 For rainbow paint, enter **↑ ↑ ↓ ↓ ← → ← → B A** on the keyboard. On a controller, use the same D-pad sequence, then B and A (Circle and Cross), while driving. Enter it again to get your paint back. Reloading turns it off.
 

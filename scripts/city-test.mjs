@@ -12,7 +12,7 @@ try {
   await page.waitForFunction(() => window.__coastline && document.querySelector('#loading').classList.contains('loaded'));
   const initial = await page.evaluate(() => { const a = window.__coastline; return { rotation: a.rendering.camera.quaternion.toArray(), top: a.rendering.camera.top, scale: a.vehicle.car.scale.toArray(), color: a.rendering.scene.background.getHex(), exposure: a.rendering.renderer.toneMappingExposure, fog: a.rendering.scene.fog.near, lamps: a.vehicle.nightLights[0].material.emissiveIntensity }; });
   await page.getByRole('button', { name: /^Change route$/i }).click();
-  assert.equal(await page.locator('.journey-card').count(), 6);
+  assert.equal(await page.locator('.journey-card').count(), 7);
   await page.getByRole('button', { name: 'Rainy Downtown', exact: true }).click();
   await page.waitForFunction(() => window.__coastline.journey === 'city' && !window.__coastline.changingJourney);
   assert.equal(await page.locator('.location-title').textContent(), 'RAINY DOWNTOWN');
@@ -80,7 +80,7 @@ try {
   mobile.on('pageerror', e => errors.push(e.message));
   await mobile.goto(url, { waitUntil: 'networkidle' }); await mobile.waitForFunction(() => window.__coastline);
   await mobile.getByRole('button', { name: /^Change route$/i }).tap();
-  await mobile.screenshot({ path: '.artifacts/six-journeys-mobile.png' });
+  await mobile.screenshot({ path: '.artifacts/seven-journeys-mobile.png' });
   await mobile.getByRole('button', { name: 'Rainy Downtown', exact: true }).tap();
   await mobile.waitForFunction(() => window.__coastline.journey === 'city' && !window.__coastline.changingJourney);
   await mobile.click('#start'); await mobile.waitForTimeout(2000);
@@ -92,6 +92,6 @@ try {
   await touch.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
   assert.ok(await mobile.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
   assert.deepEqual(errors, []);
-  const report = { passed: true, sixRoutes: true, unchangedCamera: true, cityDrivingAndReverse: true, kerbsStop: true, rainAnimates: true, pausedRainFreezes: true, savedProgress: true, daylightRestored: true, mobileTouchDriving: true, records };
+  const report = { passed: true, sevenRoutes: true, unchangedCamera: true, cityDrivingAndReverse: true, kerbsStop: true, rainAnimates: true, pausedRainFreezes: true, savedProgress: true, daylightRestored: true, mobileTouchDriving: true, records };
   await writeFile('.artifacts/city-report.json', JSON.stringify(report, null, 2)); console.log(JSON.stringify(report, null, 2));
 } finally { await browser.close(); }

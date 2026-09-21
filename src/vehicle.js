@@ -118,7 +118,7 @@ export function createClassicCar(entry = carEntry(DEFAULT_CAR)) {
     kitJourney = journey;
     const kit = entry.trim ?? journey;
     paint.color.set(customPaint ?? ROUTE_PAINT[kit] ?? ROUTE_PAINT.coast);
-    surfboard.visible = kit === 'coast'; spare.visible = kit === 'desert'; roofBox.visible = kit === 'snow'; cargo.visible = kit === 'jungle'; bale.visible = kit === 'plains'; bike.visible = kit === 'city';
+    surfboard.visible = kit === 'coast'; spare.visible = kit === 'desert' || kit === 'volcanic'; roofBox.visible = kit === 'snow'; cargo.visible = kit === 'jungle'; bale.visible = kit === 'plains'; bike.visible = kit === 'city';
     rack.visible = surfboard.visible || roofBox.visible || cargo.visible || bale.visible || bike.visible;
     plate.position.x = spare.visible ? -.65 : 0;
   }

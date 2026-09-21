@@ -54,7 +54,10 @@ export class SoundDirector {
       time: now + offset, frequency: frequency * variation, endFrequency: endFrequency * variation,
       duration, level: level * distance, pan, attack: .04,
     });
-    if (kind === 'gull') {
+    if (kind === 'vent') {
+      g.event('weather', { time: now, duration: 3.5, frequency: 115, endFrequency: 45, level: .07 * distance, pan, attack: .8 });
+      g.event('weather', { time: now + .8, duration: 2, frequency: 950, endFrequency: 350, level: .018 * distance, pan, attack: .35 });
+    } else if (kind === 'gull') {
       sing(0, 1050, 1550, .24, .015); sing(.28, 1500, 740, .65, .02); sing(1, 1100, 800, .45, .012);
     } else if (kind === 'bird' || kind === 'lark') {
       const base = kind === 'bird' ? 1800 : 2400;

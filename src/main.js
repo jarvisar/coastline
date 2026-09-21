@@ -99,7 +99,7 @@ async function boot() {
     // out. The hidden code only changes the paint.
     vehicle.toggleFreeDriving();
     vehicle.setAppearance(journey);
-    vehicle.setLights(journey === 'snow' ? 1 : journey === 'city' ? .35 : 0);
+    vehicle.setLights(journey === 'snow' ? 1 : journey === 'volcanic' ? .65 : journey === 'city' ? .35 : 0);
     rendering.setJourney(journey); audio.setJourney(journey);
     const journeyDialog = $('#journey-dialog'), carDialog = $('#car-dialog'), pauseOverlay = $('#pause-overlay');
     const openChooser = () => [journeyDialog, carDialog].find(dialog => dialog.open) ?? null;
@@ -172,7 +172,7 @@ async function boot() {
       $('.location svg text').textContent = data.routeNumber;
       $('#menu-route').textContent = data.label;
       $('#scene').setAttribute('aria-label', data.canvas);
-      document.querySelector('meta[name="theme-color"]').content = { coast: '#c2e7e8', desert: '#efc692', snow: '#111d30', jungle: '#22402a', plains: '#ecd29a', city: '#b3bcc4' }[journey];
+      document.querySelector('meta[name="theme-color"]').content = { coast: '#c2e7e8', desert: '#efc692', snow: '#111d30', jungle: '#22402a', plains: '#ecd29a', city: '#b3bcc4', volcanic: '#302728' }[journey];
       document.querySelectorAll('button[data-journey]').forEach(button => button.setAttribute('aria-current', String(button.dataset.journey === journey)));
     }
     function buildCarCards() {
@@ -294,7 +294,7 @@ async function boot() {
         vehicle.setRoute(JOURNEYS[id].route, nextState);
         autodrive.reset();
         vehicle.setAppearance(id);
-        vehicle.setLights(id === 'snow' ? 1 : id === 'city' ? .35 : 0);
+        vehicle.setLights(id === 'snow' ? 1 : id === 'volcanic' ? .65 : id === 'city' ? .35 : 0);
         traffic.reset(vehicle.route, vehicle.s, id); traffic.render(1, world.origin);
         primeMenuDrive();
         rendering.setJourney(id); audio.setJourney(id); updateJourneyUi(); paintCards(); updatePaintUi();

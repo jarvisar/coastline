@@ -11,10 +11,10 @@ const REACH = 1.2;
 // How quickly locked tyres take the speed off a car driven backwards.
 const RECOIL_GRIP = 8;
 const BEHIND = 380, AHEAD = 620;
-const DENSITY = { coast: 1, snow: .75, desert: .5, jungle: .6, plains: .5, city: 1 };
+const DENSITY = { coast: 1, snow: .75, desert: .5, jungle: .6, plains: .5, city: 1, volcanic: .35 };
 // The city runs half as many cars again over the same stretch of road.
 const FLEET = { city: 9 };
-const LIGHTS = { snow: 1, city: .35 };
+const LIGHTS = { snow: 1, city: .35, volcanic: .65 };
 
 // Four separating axes give a forgiving rectangular footprint even when the
 // player is sideways. All collision coordinates are independent of render origin.
@@ -72,7 +72,7 @@ export class Traffic {
     }
   }
   reset(route, s, journey = this.journey) {
-    this.route = route; this.journey = journey; this.salt = { coast: 2100, desert: 2200, snow: 2300, jungle: 2400, plains: 2500, city: 2600 }[journey];
+    this.route = route; this.journey = journey; this.salt = { coast: 2100, desert: 2200, snow: 2300, jungle: 2400, plains: 2500, city: 2600, volcanic: 2700 }[journey];
     this.spacing = 1 / (DENSITY[journey] ?? 1);
     const fleet = FLEET[journey] ?? 6;
     this.vehicles = this.pool.slice(0, fleet);

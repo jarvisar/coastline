@@ -40,7 +40,7 @@ export class Input {
         if (!e.repeat) onAction('fullscreen');
         return;
       }
-      const routeKey = /^(?:Digit([1-6])|Numpad([135]))$/.exec(e.code);
+      const routeKey = /^(?:Digit([1-7])|Numpad([1357]))$/.exec(e.code);
       if (routeKey && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
         e.preventDefault();
         if (!e.repeat) onAction('selectJourney', routeKey[1] || routeKey[2]);

@@ -10,6 +10,8 @@ import { PlainsWorld } from './world/plains.js';
 import { plainsDrivingRoute } from './world/plains-route.js';
 import { CityWorld } from './world/city.js';
 import { cityDrivingRoute } from './world/city-route.js';
+import { VolcanicWorld } from './world/volcanic.js';
+import { volcanicDrivingRoute } from './world/volcanic-route.js';
 
 export const JOURNEYS = {
   coast: {
@@ -47,5 +49,11 @@ export const JOURNEYS = {
     introduction: 'Follow a riverside boulevard through a city in a daytime storm.',
     sound: 'Rain, traffic and engine sounds on',
     canvas: 'A wet city boulevard beside a grey river in heavy daytime rain, between rows of buildings under a stormy sky, with a skyline fading into the mist. Drive with WASD or the arrow keys.',
+  },
+  volcanic: {
+    title: 'Volcanic Rift', label: 'VOLCANIC RIFT', routeNumber: '7', World: VolcanicWorld, route: volcanicDrivingRoute,
+    introduction: 'Wind between glowing lava rivers and smoking basalt craters.',
+    sound: 'Volcanic rumble, steam and engine sounds on',
+    canvas: 'A winding road through dark, faceted volcanic cliffs, glowing orange lava rifts, scattered basalt boulders and smoking craters. Drive with WASD or the arrow keys.',
   },
 };

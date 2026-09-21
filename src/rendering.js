@@ -80,6 +80,7 @@ export function createRendering(canvas, graphics = new Graphics()) {
     jungle: { color: '#9ab89a', near: 320, far: 780, thirdNear: 110, thirdFar: 250 },
     plains: { color: '#e9b360', near: 500, far: 1000, thirdNear: 200, thirdFar: 360 },
     city: { color: new THREE.Color('#aab4bc').multiplyScalar(.9), near: 470, far: 900, thirdNear: 130, thirdFar: 330 },
+    volcanic: { color: '#503c39', near: 360, far: 850, thirdNear: 100, thirdFar: 290 },
   };
   function updateFog() {
     const profile = fogProfiles[journey];
@@ -183,6 +184,15 @@ export function createRendering(canvas, graphics = new Graphics()) {
       sky.color.set('#d8e0e6'); sky.groundColor.set('#5c6369'); sky.intensity = 2;
       sun.color.set('#e2e9ef'); sun.intensity = 1.3; sunOffset.set(-150, 210, 110);
       renderer.toneMappingExposure = .52;
+      return;
+    }
+    if (id === 'volcanic') {
+      // Diffuse ash-filtered light softens the basalt facets; the lava supplies
+      // the strong warm light, while shadows retain their dusty rock colour.
+      scene.background.set('#503c39'); updateFog();
+      sky.color.set('#c2bdc8'); sky.groundColor.set('#704134'); sky.intensity = 1.65;
+      sun.color.set('#ded7d4'); sun.intensity = 1.85; sunOffset.set(-155, 220, 85);
+      renderer.toneMappingExposure = 1.12;
       return;
     }
     const desert = id === 'desert';

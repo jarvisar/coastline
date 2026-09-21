@@ -9,6 +9,7 @@ import { SnowChunk } from '../src/world/snow.js';
 import { JungleChunk } from '../src/world/jungle.js';
 import { PlainsChunk } from '../src/world/plains.js';
 import { CityChunk } from '../src/world/city.js';
+import { VolcanicChunk } from '../src/world/volcanic.js';
 import { packChunk, unpackChunk } from '../src/world/chunk-transfer.js';
 import { ChunkWorker } from '../src/world/chunk-source.js';
 
@@ -27,7 +28,7 @@ function snapshot(chunk) {
   });
   return hash.digest('hex');
 }
-const builders = { coast: CoastalChunk, desert: DesertChunk, snow: SnowChunk, jungle: JungleChunk, plains: PlainsChunk, city: CityChunk };
+const builders = { coast: CoastalChunk, desert: DesertChunk, snow: SnowChunk, jungle: JungleChunk, plains: PlainsChunk, city: CityChunk, volcanic: VolcanicChunk };
 
 test('transferred chunks retain geometry, transforms, shaders, bounds and animation', async () => {
   const worker = new Worker(`
@@ -36,7 +37,7 @@ test('transferred chunks retain geometry, transforms, shaders, bounds and animat
       const { initializeWorkerSeed } = await import(workerData.generation);
       initializeWorkerSeed(workerData.seed);
       const { buildChunk } = await import(workerData.builders);
-      for (const journey of ['coast', 'desert', 'snow', 'jungle', 'plains', 'city']) for (const index of [-9, 0, 1, 65, 0]) {
+      for (const journey of ['coast', 'desert', 'snow', 'jungle', 'plains', 'city', 'volcanic']) for (const index of [-9, 0, 1, 65, 0]) {
         const result = buildChunk(journey, index);
         parentPort.postMessage({ journey, index, data: result.data }, result.transfers);
       }
@@ -87,7 +88,7 @@ test('transferred chunks retain geometry, transforms, shaders, bounds and animat
     });
     worker.on('exit', code => { if (code) reject(new Error(`Worker exited with ${code}`)); else resolve(); });
   });
-  assert.equal(checked, 30);
+  assert.equal(checked, 35);
 });
 
 test('transfer lists detach only owned buffers and keep shared scenery reusable', () => {
