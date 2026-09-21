@@ -23,13 +23,14 @@ basaltMaterial.customProgramCacheKey = () => 'volcanic-basalt-v9';
 // Lava reuses the `heat` slot as a per-facet phase, so the mosaic shimmers
 // facet by facet under one slow travelling swell. The depth offset keeps thin
 // veins laid over coarse terrain facets from sinking into them.
+// Positive `flow` marks ground-bound lava, negative marks a falling sheet.
 export const lavaMaterial = new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
 lavaMaterial.onBeforeCompile = shader => {
   shader.uniforms.volcanicTime = volcanicClock;
   shader.vertexShader = 'uniform float volcanicTime; attribute float heat; attribute float flow; varying float vLavaPulse; varying float vSurfaceFlow; varying vec3 vFlowPosition;\n' + shader.vertexShader;
   shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
     vLavaPulse = .97 + .025 * sin(position.x * .22 + position.z * .17 + volcanicTime * .35) + .02 * sin(heat * 6.2832 + volcanicTime * (.25 + heat * .35));
-    vSurfaceFlow = flow;
+    vSurfaceFlow = abs(flow);
     vFlowPosition = position;
   `);
   shader.fragmentShader = 'uniform float volcanicTime; varying float vLavaPulse; varying float vSurfaceFlow; varying vec3 vFlowPosition;\n' + shader.fragmentShader;
@@ -39,7 +40,7 @@ lavaMaterial.onBeforeCompile = shader => {
     diffuseColor.rgb *= vLavaPulse * (1.0 + vSurfaceFlow * fold * .065);
   `);
 };
-lavaMaterial.customProgramCacheKey = () => 'volcanic-lava-v5';
+lavaMaterial.customProgramCacheKey = () => 'volcanic-lava-v6';
 
 // Light spilling from molten rock onto whatever lies beside it: vertex colours
 // fade to black at the outer edge, so adding them leaves no visible border.

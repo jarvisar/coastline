@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { randomAt, roadHeight, smoothstep } from './route.js';
-import { riftProfile, volcanicPosition } from './volcanic-route.js';
+import { riftProfile, creekSection, volcanicPosition } from './volcanic-route.js';
 
 const ASH = 140, EMBERS = 24, WIDTH = 320, HEIGHT = 110, DEPTH = 340;
 const wrap = (value, extent) => value - Math.floor(value / extent) * extent - extent / 2;
@@ -75,10 +75,10 @@ export class VolcanicAtmosphere {
     for (let i = 0; i < this.lights.length; i++) {
       const side = i < 2 ? -1 : 1, span = side < 0 ? 96 : 128, offset = side < 0 ? 0 : 24;
       const cell = Math.floor((s - offset) / span), at = (cell + i % 2) * span + offset;
-      const { near, level } = riftProfile(at, side), d = side < 0 ? near + 13 : near - 6;
-      const p = volcanicPosition(at, side * d, level + 5), distance = Math.abs(at - s);
+      const { near, level } = riftProfile(at, side), d = side < 0 ? near + 13 : creekSection(at).u;
+      const p = volcanicPosition(at, side * d, level + (side < 0 ? 5 : 2.5)), distance = Math.abs(at - s);
       this.lights[i].position.set(p.x, p.y, p.z + origin);
-      this.lights[i].intensity = (side < 0 ? 1400 : 1100) * (1 - smoothstep(30, span, distance))
+      this.lights[i].intensity = (side < 0 ? 1400 : 700) * (1 - smoothstep(30, span, distance))
         * (.97 + .025 * Math.sin(time * .65 + i) + .015 * Math.sin(time * 1.13 + i * 2));
     }
   }

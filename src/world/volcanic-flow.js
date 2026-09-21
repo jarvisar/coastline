@@ -1,10 +1,12 @@
-// Intersect lava ribbons with the actual terrain facets in route coordinates.
+// Intersect surface ribbons with the actual terrain facets in route coordinates.
 // Every new point inherits its triangle's plane, including cliff transitions.
 // This avoids floating ribbons, buried cascades and gaps at chunk boundaries.
+// The optional lateral bound also lets ash deposits use the same projection
+// on both road shoulders without extending the lava builder's search area.
 export class FlowSurface {
-  constructor(step) { this.step = step; this.rows = new Map(); }
+  constructor(step, minU = 18) { this.step = step; this.minU = minU; this.rows = new Map(); }
   add(a, b, c) {
-    if (Math.max(a.u, b.u, c.u) < 24) return;
+    if (Math.max(a.u, b.u, c.u) < this.minU) return;
     const face = { points: [a, b, c], minU: Math.min(a.u, b.u, c.u), maxU: Math.max(a.u, b.u, c.u) };
     const first = Math.floor(Math.min(a.s, b.s, c.s) / this.step), last = Math.floor(Math.max(a.s, b.s, c.s) / this.step);
     for (let row = first; row <= last; row++) {

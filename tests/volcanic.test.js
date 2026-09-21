@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { CHUNK_LENGTH, roadHeight } from '../src/world/route.js';
-import { volcanicColumns, volcanicHeight, volcanicPosition, volcanicDrivingRoute, riftProfile, shelfSteps } from '../src/world/volcanic-route.js';
+import { volcanicColumns, volcanicHeight, volcanicPosition, volcanicDrivingRoute, riftProfile, shelfFlow, creekSection } from '../src/world/volcanic-route.js';
 import { terrainSampler } from '../src/world/coastal-assets.js';
 import { VolcanicChunk, VolcanicWorld } from '../src/world/volcanic.js';
 import { volcanicClock } from '../src/world/volcanic-materials.js';
@@ -10,7 +10,7 @@ import { VolcanicAtmosphere } from '../src/world/volcanic-atmosphere.js';
 import { DrivingController } from '../src/vehicle.js';
 import { residentWindow } from '../src/world/resident.js';
 
-test('volcanic road stays continuous and lava stays below its cliffs across long drives', () => {
+test('volcanic road stays continuous with a left basin and a surface creek on the right', () => {
   for (let s = -40000; s <= 40000; s += 13) {
     const columns = volcanicColumns(s);
     for (let i = 1; i < columns.length; i++) assert.ok(columns[i] > columns[i - 1]);
@@ -19,12 +19,17 @@ test('volcanic road stays continuous and lava stays below its cliffs across long
       assert.equal(volcanicDrivingRoute.water(s, u), false);
     }
     for (const side of [-1, 1]) {
-      const { near, far, level } = riftProfile(s, side), u = side * (near + far) / 2;
+      const { near, far, level } = riftProfile(s, side), creek = creekSection(s), u = side < 0 ? -(near + far) / 2 : creek.u;
       assert.ok(volcanicHeight(s, u) < level);
       assert.ok(volcanicDrivingRoute.water(s, u));
-      assert.ok(near > 18 && level < roadHeight(s) - 4);
-      assert.ok(roadHeight(s) - level <= 8, 'raised lava sits close to the road shelf');
-      if (side > 0) assert.ok(far - near > 12 && far - near <= 21, 'right lava stays a narrow creek between its banks');
+      assert.ok(near > 18);
+      if (side < 0) assert.equal(roadHeight(s) - level, 8);
+      else {
+        assert.ok(creek.width >= 1.7 && creek.width < 9, 'narrow flows open into occasional pools');
+        const ground = volcanicHeight(s, u), banks = Math.min(volcanicHeight(s, u - 6), volcanicHeight(s, u + 6));
+        assert.ok(banks - ground < .8, 'the creek does not excavate a trench through the hillside');
+        assert.ok(level - ground < .4, 'lava follows the local hillside elevation');
+      }
       assert.ok(Math.abs(volcanicHeight(s + .001, side * 15) - volcanicHeight(s - .001, side * 15)) < .01);
     }
   }
@@ -40,38 +45,108 @@ test('free driving reaches the ash shoulder and stops before either lava rift', 
       assert.ok(Number.isFinite(car.car.position.y));
     }
     assert.ok(side * car.u > 10);
-    assert.ok(Math.abs(car.u) < riftProfile(car.s, side).near + 1);
+    const creek = creekSection(car.s), shore = side < 0 ? riftProfile(car.s, side).near + 1 : creek.u - creek.width / 2;
+    assert.ok(Math.abs(car.u) < shore, 'the car stops on dry ground before the visible lava');
     car.disposeModel();
   }
 });
 
-test('right-hand lava tributaries split the terraces while leaving the road and shoulder solid', () => {
+test('right-hand spillways follow the shelves and leave the road and shoulder solid', () => {
   for (let index = -80; index <= 80; index++) {
-    const s = index * CHUNK_LENGTH + 24, { near, level } = riftProfile(s, 1);
-    assert.ok(volcanicHeight(s, near - 1) < level, `tributary joins the rift at ${s}`);
-    assert.equal(volcanicDrivingRoute.water(s, near - 1), true);
-    for (const u of [0, 7, 17, 24]) {
-      assert.equal(volcanicDrivingRoute.water(s, u), false);
-      assert.ok(volcanicHeight(s, u) > level);
+    const s = index * CHUNK_LENGTH + 24;
+    for (const branch of [false, true]) {
+      const probe = shelfFlow(index, branch, 40), u = probe.end + 3, flow = shelfFlow(index, branch, u);
+      assert.equal(volcanicDrivingRoute.water(flow.s, u), true, `flow is impassable at ${flow.s}`);
     }
-    const bank = riftProfile(s + 24, 1);
-    assert.ok(volcanicHeight(s + 24, bank.near - 1) > bank.level, `solid terrace between tributaries at ${s}`);
+    for (const u of [0, 7, 12, 17]) {
+      assert.equal(volcanicDrivingRoute.water(s, u), false);
+      assert.ok(Math.abs(volcanicHeight(s, u) - roadHeight(s)) < 1);
+    }
+    assert.equal(volcanicDrivingRoute.water(s + 24, 22), false, 'dry apron between spillways');
   }
 });
 
-test('uplifted shelves retain steep faces and broad crowns, with some upper tiers merging away', () => {
-  let distinct = 0, merged = 0;
-  for (let index = -40; index <= 40; index++) {
-    const s = index * CHUNK_LENGTH + 60, { toe, upper } = shelfSteps(s, 1);
-    assert.ok(volcanicHeight(s, toe + 2.6) - volcanicHeight(s, toe) > 4, 'lower cliff rises within three metres even where its crown sags');
-    const width = upper - .4 - toe - 3.2;
-    assert.ok(width > 4 && Math.abs(volcanicHeight(s, upper - .4) - volcanicHeight(s, toe + 3.2)) / width < .2, 'a gently folded shelf lies between the scarps');
-    const rise = volcanicHeight(s, upper + 2.6) - volcanicHeight(s, upper);
-    if (rise > 9) distinct++;
-    if (rise < 2) merged++;
+test('the creek and its supporting shelf share a gentle grade without cliff crossings', () => {
+  for (let s = -40000; s < 40000; s += 7) {
+    const creek = creekSection(s), next = creekSection(s + 1), height = volcanicHeight(s, creek.u);
+    assert.ok(Math.abs(volcanicHeight(s + 1, next.u) - height) < .2, `abrupt drop along creek at ${s}`);
+    for (const offset of [-1, 1]) {
+      const bank = volcanicHeight(s, creek.u + offset * (creek.width / 2 + 2));
+      assert.ok(Math.abs(bank - height) < .08, 'both banks share the creek shelf, without a cut wall or raised rim');
+    }
   }
-  assert.ok(distinct > 10, 'separate raised plateaus remain common');
-  assert.ok(merged > 4, 'tiers occasionally join into one shelf');
+});
+
+test('right-hand molten surfaces stay attached to terrain facets', () => {
+  for (const index of [-9, 0, 5, 10, 65]) {
+    const chunk = new VolcanicChunk(index);
+    try {
+      const ground = terrainSampler(chunk.group.getObjectByName('volcanic-basalt'));
+      const { position, flow } = chunk.group.getObjectByName('volcanic-lava').geometry.attributes;
+      assert.equal(flow.count, position.count);
+      let sampled = 0;
+      for (let i = 0; i < position.count; i += 3) {
+        if (flow.getX(i) <= 0) continue;
+        const x = (position.getX(i) + position.getX(i + 1) + position.getX(i + 2)) / 3;
+        const z = (position.getZ(i) + position.getZ(i + 1) + position.getZ(i + 2)) / 3;
+        const y = (position.getY(i) + position.getY(i + 1) + position.getY(i + 2)) / 3, bed = ground(x, z);
+        assert.notEqual(bed, null, 'flow stays over the owned terrain');
+        assert.ok(Math.abs(y - bed - .075) < .02, `flow floats or clips into rock at chunk ${index}: ${y - bed}`);
+        sampled++;
+      }
+      assert.ok(sampled > 300, 'surface flows are present');
+    } finally { chunk.dispose(); }
+  }
+});
+
+test('the rendered creek stays gently graded while substantial basalt ledges flank it', () => {
+  let ledges = 0;
+  for (const index of [-9, 0, 5, 10, 65]) {
+    const chunk = new VolcanicChunk(index);
+    try {
+      const ground = terrainSampler(chunk.group.getObjectByName('volcanic-basalt'));
+      const formations = terrainSampler(chunk.group.getObjectByName('volcanic-formations'), true);
+      const { position, flow } = chunk.group.getObjectByName('volcanic-lava').geometry.attributes, points = [];
+      for (let i = 0; i < position.count; i++) if (flow.getX(i) > 0) points.push(position.getX(i), position.getY(i), position.getZ(i));
+      const geometry = new THREE.BufferGeometry(); geometry.setAttribute('position', new THREE.Float32BufferAttribute(points, 3));
+      const lava = terrainSampler({ geometry }); geometry.dispose();
+      let previous = null;
+      for (let s = chunk.start + 8; s < chunk.start + CHUNK_LENGTH - 8; s += 2) {
+        const creek = creekSection(s), p = volcanicPosition(s, creek.u), z = p.z + chunk.start;
+        const y = lava(p.x, z);
+        assert.notEqual(y, null, 'the main flow has no missing sections');
+        assert.ok(Math.abs(y - ground(p.x, z) - .075) < .02);
+        if (previous) assert.ok(Math.abs(y - previous.y) / Math.hypot(p.x - previous.x, z - previous.z) < .2, `rendered creek drops sharply at ${s}`);
+        previous = { x: p.x, y, z };
+        for (const offset of [-17, 18]) {
+          const q = volcanicPosition(s, creek.u + offset), qz = q.z + chunk.start;
+          if ((formations(q.x, qz) ?? -Infinity) - ground(q.x, qz) > 6) ledges++;
+        }
+      }
+    } finally { chunk.dispose(); }
+  }
+  assert.ok(ledges > 30, 'large raised rock masses remain beside the surface creek');
+});
+
+test('lavafalls connect real ledge lips to grounded receiving pools', () => {
+  let count = 0;
+  for (const index of [-9, 0, 5, 10, 65]) {
+    const chunk = new VolcanicChunk(index);
+    try {
+      const ground = terrainSampler(chunk.group.getObjectByName('volcanic-basalt'));
+      const { flow } = chunk.group.getObjectByName('volcanic-lava').geometry.attributes;
+      for (const fall of chunk.features.lavafalls) {
+        count++;
+        assert.ok(fall.width >= .7 && fall.width <= 1.8, 'a narrow fall leaves exposed basalt on either side');
+        assert.ok(fall.drop > 2.8 && fall.drop < 30);
+        assert.ok(Math.abs(fall.foot.y - ground(fall.foot.x, fall.foot.z) - .09) < .02, 'receiving pool is on the ground');
+        assert.ok(fall.foot.u > creekSection(fall.foot.s).u - 1, 'the pool connects from the raised bank to the creek');
+        assert.ok(fall.upper.y > fall.foot.y);
+      }
+      assert.equal([...flow.array].some(value => value < 0), chunk.features.lavafalls.length > 0, 'fall sheets use the animated lava batch');
+    } finally { chunk.dispose(); }
+  }
+  assert.ok(count >= 3, 'lavafalls occur regularly along the raised ledges');
 });
 
 test('the left basin exposes broad lava flows around rooted cliff islands', () => {
@@ -104,14 +179,17 @@ test('neighboring volcanic terrain and lava meshes share exact boundary vertices
     try {
       // Terrain jitter is global, so compare shared positions even when the
       // seam bends away from the nominal chunk boundary.
-      for (const name of ['volcanic-basalt', 'volcanic-lava']) {
+      for (const name of ['volcanic-basalt', 'volcanic-lava', 'surface-creek']) {
         const points = chunk => {
-          const p = chunk.group.getObjectByName(name).geometry.attributes.position, result = new Set();
-          for (let i = 0; i < p.count; i++) result.add([p.getX(i), p.getY(i), p.getZ(i) - chunk.start].map(v => v.toFixed(3)).join(','));
+          const attributes = chunk.group.getObjectByName(name === 'surface-creek' ? 'volcanic-lava' : name).geometry.attributes, p = attributes.position, result = new Set();
+          for (let i = 0; i < p.count; i++) {
+            if (name === 'surface-creek' && attributes.flow.getX(i) <= 0) continue;
+            result.add([p.getX(i), p.getY(i), p.getZ(i) - chunk.start].map(v => v.toFixed(3)).join(','));
+          }
           return result;
         };
         const pa = points(a), pb = points(b), common = [...pa].filter(p => pb.has(p));
-        assert.ok(common.length >= (name === 'volcanic-basalt' ? volcanicColumns(0).length - 2 : 24), `${name}: ${common.length} seam vertices`);
+        assert.ok(common.length >= (name === 'volcanic-basalt' ? volcanicColumns(0).length - 2 : name === 'surface-creek' ? 5 : 24), `${name}: ${common.length} seam vertices`);
       }
     } finally { a.dispose(); b.dispose(); }
   }
