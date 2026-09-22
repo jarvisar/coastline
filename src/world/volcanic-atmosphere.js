@@ -40,7 +40,7 @@ export class VolcanicAtmosphere {
     for (let i = 0; i < count; i++) {
       this.seeds.set([randomAt(i, 80201), randomAt(i, 80202), randomAt(i, 80203), randomAt(i, 80204)], i * 4);
       const ember = i >= ASH, color = new THREE.Color(ember ? '#ff9b35' : i % 3 ? '#5c5350' : '#958077');
-      colors.push(color.r, color.g, color.b); sizes.push(ember ? 2.1 : 1.5 + randomAt(i, 80205) * 1.4); kinds.push(ember ? 1 : 0);
+      colors.push(color.r, color.g, color.b); sizes.push(ember ? (i - ASH) % 3 === 0 ? 3.6 : 2.1 : 1.5 + randomAt(i, 80205) * 1.4); kinds.push(ember ? 1 : 0);
     }
     this.geometry = new THREE.BufferGeometry();
     this.geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(count * 3), 3).setUsage(THREE.DynamicDrawUsage));
@@ -85,7 +85,7 @@ export class VolcanicAtmosphere {
     }
     const vents = [];
     for (const chunk of chunks.values()) for (const vent of chunk.features.vents) {
-      if (!vent.steam && Math.abs(vent.s - s) < 170) vents.push({ ...vent, z: vent.z - chunk.start });
+      if (!vent.steam && !vent.dormant && Math.abs(vent.s - s) < 170) vents.push({ ...vent, z: vent.z - chunk.start });
     }
     // Embers rise only from local vents. Each one cools and disappears before
     // its cycle restarts, while ash travels mostly sideways instead of falling.
@@ -93,6 +93,18 @@ export class VolcanicAtmosphere {
       const n = (ASH + i) * 4, vent = vents[i % vents.length], age = (time * .075 + this.seeds[n]) % 1;
       if (!vent) { alpha.setX(ASH + i, 0); continue; }
       const phase = this.seeds[n + 1] * Math.PI * 2;
+      // Some of the same particles now spit up from the molten throat and
+      // fall back into it. Each crater has a quiet interval between spurts.
+      if (i % 3 === 0) {
+        const cycle = (time * .19 + randomAt(Math.floor(vent.s), 80890)) % 1;
+        const flight = (time * .6 + this.seeds[n]) % 1, reach = vent.radius * .2;
+        positions.setXYZ(ASH + i, vent.x - anchor.x + Math.cos(phase) * reach * (flight * 2 - 1),
+          (vent.lavaY ?? vent.y) - anchor.y + 4 * flight * (1 - flight) * (2 + vent.radius * .48),
+          vent.z - anchor.z + Math.sin(phase) * reach * (flight * 2 - 1));
+        alpha.setX(ASH + i, (1 - smoothstep(.32, .48, cycle)) * smoothstep(0, .1, cycle)
+          * smoothstep(0, .08, flight) * (1 - smoothstep(.82, 1, flight)));
+        continue;
+      }
       positions.setXYZ(ASH + i, vent.x - anchor.x + Math.sin(phase + age * 5) * age * 3 + age * 4,
         vent.y - anchor.y + age * (9 + this.seeds[n + 2] * 8), vent.z - anchor.z + Math.cos(phase + age * 4) * age * 3);
       alpha.setX(ASH + i, .85 * smoothstep(0, .12, age) * (1 - smoothstep(.35, 1, age)));

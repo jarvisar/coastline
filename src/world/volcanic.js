@@ -33,6 +33,7 @@ const roadColors = { asphalt: new THREE.Color('#3e3d40'), edge: new THREE.Color(
 const railColor = new THREE.Color('#7c7770'), railShade = new THREE.Color('#4e4947'), reflectorColor = new THREE.Color('#edc994');
 const postColor = new THREE.Color('#938b79'), snagColor = new THREE.Color('#231c1d');
 const warmStone = new THREE.Color('#95513b');
+const sulfur = new THREE.Color('#b4a264'), oxidized = new THREE.Color('#79513b'), cooledCrust = new THREE.Color('#29272d');
 // Additive light: a hot line where rock meets lava, a softer spill beyond it.
 // It is added to the encoded frame, where a little green already reads as tan.
 const rimLight = new THREE.Color(.15, .018, .0005), spillLight = new THREE.Color(.095, .009, .0003), dark = new THREE.Color(0, 0, 0);
@@ -246,7 +247,8 @@ export class VolcanicChunk {
     this.sampleFormations();
     this.buildCones(); this.buildColumnFields();
     this.sampleFormations();
-    this.buildLavafalls(); this.buildSurfaceFlows(); this.buildFissures(); this.buildCrust(); this.buildChannelBanks(); this.buildRocks(); this.buildTalus(); this.buildCreekBanks(); this.buildGroundCover(); this.buildTrees();
+    this.buildLavafalls(); this.buildSurfaceFlows(); this.buildFissures(); this.buildMineralVents(); this.buildCoolingBombs();
+    this.buildCrust(); this.buildChannelBanks(); this.buildRocks(); this.buildTalus(); this.buildCreekBanks(); this.buildGroundCover(); this.buildTrees();
     buildVolcanicBridge(this);
     buildVolcanicDiscoveries(this, this.discoveries);
     this.addMesh(this.rock, basaltMaterial, 'volcanic-formations', true);
@@ -801,7 +803,7 @@ export class VolcanicChunk {
         previous = across;
       }
     }
-    this.features.vents.push({ s, u, x: c.x, y: base + height * .95, z: c.z, radius,
+    this.features.vents.push({ s, u, x: c.x, y: base + height * .95, lavaY: floor.y, z: c.z, radius,
       size: landmark ? 2.8 + radius / 24 : Math.max(.85, radius / 5), landmark });
     for (let n = 0, fallen = (landmark ? 22 : 4) + Math.floor(random() * 6); n < fallen; n++) {
       const angle = random() * Math.PI * 2, out = radius * (.92 + random() * .45), size = Math.max(.3, radius * (.06 + random() ** 2 * .2));
@@ -1326,6 +1328,98 @@ export class VolcanicChunk {
       }
     }
   }
+  // Dormant vents leave mineral stains in the ash. Project the deposits onto
+  // terrain so their edges never float; these small mouths emit no smoke.
+  buildMineralVents() {
+    const random = seededRandom(this.index + 80800), terrain = terrainSampler(this.terrain);
+    if (random() < .3) return;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const s = this.start + 19 + random() * (CHUNK_LENGTH - 38), side = random() < .65 ? 1 : -1;
+      const radius = 5 + random() * 2, edge = side > 0 ? shelfSteps(s, side).toe : riftProfile(s, side).near;
+      const u = side * (edge - radius - 3), centre = this.onGround(s, u);
+      if (!centre || this.clearance(centre.x, centre.z, s) < radius + 12
+        || !volcanicDiscoveryClears(s, u, this.discoveries, radius + 2)) continue;
+      const outline = Array.from({ length: 10 }, (_, k) => {
+        const angle = k * Math.PI / 5, reach = radius * (.8 + random() * .2);
+        return this.onGround(s + Math.cos(angle) * reach, u + Math.sin(angle) * reach * .7);
+      });
+      if ([centre, ...outline].some(p => !p || crossingInfluence(p.s, p.u, 3) > .01 || shelfFault(p.s, p.u) > .01
+        || Math.abs(p.y - centre.y) > 1.2 || p.y - (terrain(p.x, p.z) ?? -Infinity) > .2
+        || this.features.vents.some(v => Math.hypot(v.x - p.x, v.z - p.z) < v.radius * 1.4 + 3))) continue;
+      for (let k = 0; k < outline.length; k++) {
+        for (const polygon of this.groundSurface.project([centre, outline[k], outline[(k + 1) % outline.length]], .04)) {
+          const tint = p => {
+            const d = Math.hypot((p.s - s) / radius, (p.u - u) / (radius * .7));
+            const mineral = oxidized.clone().lerp(sulfur, (1 - smoothstep(.15, .75, d)) * (.75 + .2 * Math.sin(p.s * 2 + p.u)));
+            return groundColor(p).lerp(mineral, .9 * (1 - smoothstep(.45, .95, d)));
+          };
+          for (let j = 1; j < polygon.length - 1; j++) triangle(this.rock, polygon[0], polygon[j], polygon[j + 1], tint);
+        }
+      }
+      for (let n = 0; n < 2; n++) {
+        const p = this.onGround(s + (n ? 1.7 : -1.2), u + (n ? .8 : -.5)), mouth = .4 + random() * .25;
+        if (!p) continue;
+        const floor = { ...p, y: p.y + .06 };
+        const rim = Array.from({ length: 7 }, (_, k) => {
+          const angle = k * Math.PI * 2 / 7;
+          const q = this.onGround(p.s + Math.cos(angle) * mouth, p.u + Math.sin(angle) * mouth * .8);
+          return q && { ...q, y: q.y + .12 + random() * .12 };
+        });
+        if (rim.some(q => !q)) continue;
+        for (let k = 0; k < rim.length; k++) {
+          triangle(this.rock, floor, rim[k], rim[(k + 1) % rim.length], cooledCrust);
+          const q = rim[k];
+          this.pebbles.push({ p: [q.x, q.y, q.z], r: [0, random() * 6.28, .2], scale: [.28, .18, .22],
+            color: sulfur.clone().lerp(stoneColors[2], random() * .6) });
+        }
+        this.features.vents.push({ s: p.s, u: p.u, x: p.x, y: p.y + .2, z: p.z,
+          radius: mouth, dormant: true });
+      }
+      break;
+    }
+  }
+  // A few freshly landed volcanic bombs: a dark, broken shell over a hot
+  // interior. Both surfaces join the existing batches, with no new draw calls.
+  buildCoolingBombs() {
+    const random = seededRandom(this.index + 80850), source = pebbleGeometry.attributes.position;
+    for (let n = 0; n < 2; n++) {
+      const s = this.start + 14 + random() * (CHUNK_LENGTH - 28), side = n % 2 ? -1 : 1;
+      const edge = side > 0 ? shelfSteps(s, side).toe : riftProfile(s, side).near;
+      const radius = 1.7 + random() * 1.4, u = side * (edge - radius - 3 - random() * 4), p = this.onGround(s, u);
+      if (!p || this.clearance(p.x, p.z, s) < radius * 1.4 + 10 || crossingInfluence(s, u, radius * 2) > .01
+        || shelfFault(s, u) > .01 || !volcanicDiscoveryClears(s, u, this.discoveries, radius * 2)
+        || this.features.vents.some(v => Math.hypot(v.x - p.x, v.z - p.z) < v.radius * 1.4 + radius * 2)) continue;
+      const feet = [0, 1, 2, 3].map(k => this.onGround(s + Math.cos(k * Math.PI / 2) * radius, u + Math.sin(k * Math.PI / 2) * radius));
+      if (feet.some(q => !q || Math.abs(q.y - p.y) > radius * .45)) continue;
+      const c = { x: p.x, y: p.y + radius * .32, z: p.z }, yaw = random() * Math.PI * 2;
+      const vertex = new THREE.Vector3();
+      const shell = Array.from({ length: source.count }, (_, i) => {
+        vertex.fromBufferAttribute(source, i);
+        vertex.multiplyScalar(1 + .13 * Math.sin(vertex.x * 7 + vertex.z * 4));
+        return { x: c.x + radius * (vertex.x * Math.cos(yaw) + vertex.z * Math.sin(yaw)),
+          y: c.y + vertex.y * radius * .9, z: c.z + radius * (vertex.z * Math.cos(yaw) - vertex.x * Math.sin(yaw)) };
+      });
+      for (let i = 0; i < shell.length; i += 3) {
+        const face = shell.slice(i, i + 3), middle = {};
+        for (const axis of ['x', 'y', 'z']) middle[axis] = face.reduce((sum, v) => sum + v[axis], 0) / 3;
+        const inset = face.map(v => ({ x: lerp(v.x, middle.x, .045), y: lerp(v.y, middle.y, .045), z: lerp(v.z, middle.z, .045) }));
+        triangle(this.rock, ...inset, cooledCrust.clone().multiplyScalar(.85 + random() * .5), 9, false);
+        // Only the exposed seams are molten; a complete inner shell would
+        // compete with the crust under the lava material's depth offset.
+        for (let k = 0; k < 3; k++) {
+          const next = (k + 1) % 3, color = lavaColor(.18 + random() * .2), phase = random();
+          triangle(this.lava, face[k], face[next], inset[k], color, phase, false);
+          triangle(this.lava, face[next], inset[next], inset[k], color, phase, false);
+        }
+      }
+      solidPost(this, c.x, c.z, radius * 1.1);
+      for (let k = 0; k < 5; k++) {
+        const angle = random() * Math.PI * 2, out = radius * (1.1 + random() * .6);
+        const q = this.onGround(s + Math.cos(angle) * out, u + Math.sin(angle) * out);
+        if (q) this.boulder(q.x, q.y, q.z, .2 + random() * .45, random, q.s);
+      }
+    }
+  }
   buildTrees() {
     const random = seededRandom(this.index + 79900);
     const count = random() < .35 ? 1 : 0;
@@ -1341,8 +1435,9 @@ export class VolcanicChunk {
     }
   }
   buildSmoke() {
+    const vents = this.features.vents.filter(v => !v.dormant);
     const positions = [], anchors = [], cycles = [], kinds = [], indices = [], source = puffGeometry.attributes.position, faces = puffGeometry.index, puffs = 14;
-    for (const vent of this.features.vents) for (let n = 0; n < puffs; n++) {
+    for (const vent of vents) for (let n = 0; n < puffs; n++) {
       const first = positions.length / 3;
       for (let i = 0; i < source.count; i++) {
         positions.push(source.getX(i), source.getY(i), source.getZ(i));
@@ -1359,7 +1454,7 @@ export class VolcanicChunk {
     g.setIndex(new THREE.Uint16BufferAttribute(indices, 1));
     // Include the complete shader motion in the CPU bounds for culling and AO.
     g.boundingBox = new THREE.Box3();
-    for (const v of this.features.vents) {
+    for (const v of vents) {
       g.boundingBox.expandByPoint(new THREE.Vector3(v.x - v.size * 12, v.y - v.size * 2, v.z - v.size * 13));
       g.boundingBox.expandByPoint(new THREE.Vector3(v.x + v.size * 17, v.y + v.size * 27, v.z + v.size * 13));
     }
