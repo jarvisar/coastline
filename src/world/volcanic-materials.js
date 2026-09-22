@@ -12,13 +12,13 @@ basaltMaterial.onBeforeCompile = shader => {
   shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvHeat = heat;');
   shader.fragmentShader = 'uniform float volcanicTime; varying float vHeat;\n' + shader.fragmentShader;
   shader.fragmentShader = shader.fragmentShader.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
-    float glow = 1.0 - clamp(vHeat / 13.0, 0.0, 1.0);
+    float glow = 1.0 - clamp(vHeat / 11.0, 0.0, 1.0);
     glow *= glow;
     float pulse = .97 + .025 * sin(volcanicTime * .65) + .015 * sin(volcanicTime * 1.13);
-    totalEmissiveRadiance += mix(vec3(.2, .009, .0005), vec3(.85, .078, .001), glow) * glow * pulse;
+    totalEmissiveRadiance += mix(vec3(.16, .008, .001), vec3(.72, .067, .003), glow) * glow * pulse;
   `);
 };
-basaltMaterial.customProgramCacheKey = () => 'volcanic-basalt-v9';
+basaltMaterial.customProgramCacheKey = () => 'volcanic-basalt-v10';
 
 // Lava reuses the `heat` slot as a per-facet phase, so the mosaic shimmers
 // facet by facet under one slow travelling swell. The depth offset keeps thin
@@ -71,7 +71,7 @@ glowMaterial.customProgramCacheKey = () => 'volcanic-glow-v1';
 // in the shader so worker-transferred chunks share one clock and no CPU updates.
 // A puff is a unit sphere, so its position doubles as a smooth normal and the
 // silhouette fades out softly rather than facet by facet.
-export const smokeMaterial = new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, opacity: .52 });
+export const smokeMaterial = new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, opacity: .44 });
 smokeMaterial.onBeforeCompile = shader => {
   shader.uniforms.volcanicTime = volcanicClock;
   shader.vertexShader = 'uniform float volcanicTime; attribute vec3 smokeAnchor; attribute vec2 smokeCycle; attribute float smokeKind; varying float vSteam; varying float vSmokeAge; varying float vSmokeEdge; varying vec3 vSmokeShape;\n' + shader.vertexShader;
@@ -91,9 +91,9 @@ smokeMaterial.onBeforeCompile = shader => {
   `);
   shader.fragmentShader = 'varying float vSteam; varying float vSmokeAge; varying float vSmokeEdge; varying vec3 vSmokeShape;\n' + shader.fragmentShader;
   shader.fragmentShader = shader.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
-    // Lit from the crater below, then cooling to ash-pink as it thins. Linear colours.
-    diffuseColor.rgb = mix(mix(vec3(1.0, .19, .022), vec3(.30, .085, .057), smoothstep(0.0, .3, vSmokeAge)), vec3(.16, .10, .09), smoothstep(.25, 1.0, vSmokeAge));
-    diffuseColor.rgb = mix(diffuseColor.rgb, mix(vec3(.43, .40, .35), vec3(.24, .23, .22), vSmokeAge), vSteam);
+    // Copper at the throat, dusty mauve in the rising ash. Linear colours.
+    diffuseColor.rgb = mix(mix(vec3(.85, .19, .038), vec3(.24, .115, .09), smoothstep(0.0, .3, vSmokeAge)), vec3(.14, .13, .16), smoothstep(.2, .85, vSmokeAge));
+    diffuseColor.rgb = mix(diffuseColor.rgb, mix(vec3(.38, .40, .43), vec3(.23, .24, .28), vSmokeAge), vSteam);
     float billow = sin(vSmokeShape.x * 4.5 + vSmokeAge * 3.0) * sin(vSmokeShape.y * 5.0 - vSmokeAge * 2.0) * sin(vSmokeShape.z * 3.5);
     vec3 facetNormal = normalize(cross(dFdx(vSmokeShape), dFdy(vSmokeShape)));
     float facetLight = abs(dot(facetNormal, normalize(vec3(-.4, .7, .5))));
@@ -101,4 +101,4 @@ smokeMaterial.onBeforeCompile = shader => {
     diffuseColor.a *= smoothstep(0.0, .08, vSmokeAge) * (1.0 - smoothstep(.55, 1.0, vSmokeAge)) * smoothstep(.06, .7, vSmokeEdge);
   `);
 };
-smokeMaterial.customProgramCacheKey = () => 'volcanic-smoke-v10';
+smokeMaterial.customProgramCacheKey = () => 'volcanic-smoke-v11';

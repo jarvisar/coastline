@@ -3,11 +3,11 @@ import { randomAt, lerp, smoothstep, clamp, roadHeight } from './route.js';
 
 // Dry ash, oxidised fines and exposed basalt are separate deposits. Their
 // colours stay muted so the molten rock remains the brightest part of the scene.
-const ash = new THREE.Color('#544a47');
-const weathered = new THREE.Color('#655550');
-const basalt = new THREE.Color('#3d383d');
-const cinder = new THREE.Color('#493d39');
-const shoulder = new THREE.Color('#756153');
+const ash = new THREE.Color('#504b50');
+const weathered = new THREE.Color('#62595a');
+const basalt = new THREE.Color('#363b45');
+const cinder = new THREE.Color('#493d3e');
+const shoulder = new THREE.Color('#6c605b');
 
 // Continuous world-space fields: deposits keep their identity through chunk
 // boundaries and origin shifts, with smaller patches nested in broad ash beds.

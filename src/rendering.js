@@ -5,6 +5,7 @@ import { FirstPersonCamera } from './first-person-camera.js';
 import { AmbientOcclusion } from './ambient-occlusion.js';
 import { Graphics, renderScale } from './graphics.js';
 import { XRCameraRig } from './xr-camera.js';
+import { volcanicPalette } from './world/volcanic-palette.js';
 
 // How fast the overhead views close on the car, per second. Ground is what the
 // player reads as responsiveness, so it settles in about an eighth of a second;
@@ -84,7 +85,7 @@ export function createRendering(canvas, graphics = new Graphics()) {
     jungle: { color: '#9ab89a', near: 320, far: 780, thirdNear: 110, thirdFar: 250 },
     plains: { color: '#e9b360', near: 500, far: 1000, thirdNear: 200, thirdFar: 360 },
     city: { color: new THREE.Color('#aab4bc').multiplyScalar(.9), near: 470, far: 900, thirdNear: 130, thirdFar: 330 },
-    volcanic: { color: '#503c39', near: 360, far: 850, thirdNear: 100, thirdFar: 290 },
+    volcanic: { color: volcanicPalette.horizon, near: 290, far: 800, thirdNear: 105, thirdFar: 310 },
   };
   function updateFog() {
     const profile = fogProfiles[journey];
@@ -191,12 +192,11 @@ export function createRendering(canvas, graphics = new Graphics()) {
       return;
     }
     if (id === 'volcanic') {
-      // Diffuse ash-filtered light softens the basalt facets; the lava supplies
-      // the strong warm light, while shadows retain their dusty rock colour.
-      scene.background.set('#503c39'); updateFog();
-      sky.color.set('#c2bdc8'); sky.groundColor.set('#704134'); sky.intensity = 1.65;
-      sun.color.set('#ded7d4'); sun.intensity = 1.85; sunOffset.set(-155, 220, 85);
-      renderer.toneMappingExposure = 1.12;
+      // Cool dusk fill separates ash shelves from the warm light at their feet.
+      scene.background.set(volcanicPalette.horizon); updateFog();
+      sky.color.set(volcanicPalette.skyLight); sky.groundColor.set(volcanicPalette.groundLight); sky.intensity = 1.9;
+      sun.color.set(volcanicPalette.sun); sun.intensity = 2.05; sunOffset.set(-155, 220, 85);
+      renderer.toneMappingExposure = 1.1;
       return;
     }
     const desert = id === 'desert';

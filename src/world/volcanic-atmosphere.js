@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { randomAt, roadHeight, smoothstep } from './route.js';
 import { riftProfile, creekSection, volcanicPosition } from './volcanic-route.js';
+import { volcanicPalette } from './volcanic-palette.js';
 
 const ASH = 140, EMBERS = 24, WIDTH = 320, HEIGHT = 110, DEPTH = 340;
 const wrap = (value, extent) => value - Math.floor(value / extent) * extent - extent / 2;
@@ -12,24 +13,40 @@ export class VolcanicAtmosphere {
     this.group = new THREE.Group(); this.group.name = 'volcanic-atmosphere'; scene.add(this.group);
     this.skyGeometry = new THREE.SphereGeometry(1000, 32, 16);
     this.skyMaterial = new THREE.ShaderMaterial({ side: THREE.BackSide, depthWrite: false, toneMapped: false,
-      uniforms: { horizon: { value: new THREE.Color('#503c39') }, zenith: { value: new THREE.Color('#282630') }, glow: { value: new THREE.Color('#795047') } },
+      uniforms: { horizon: { value: new THREE.Color(volcanicPalette.horizon) }, zenith: { value: new THREE.Color(volcanicPalette.zenith) },
+        glow: { value: new THREE.Color(volcanicPalette.cloud) }, time: { value: 0 } },
       vertexShader: `varying vec3 vSkyDirection;
         void main() {
           vSkyDirection = normalize(position);
           vec4 clip = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
           gl_Position = clip.xyww;
         }`,
-      fragmentShader: `uniform vec3 horizon; uniform vec3 zenith; uniform vec3 glow; varying vec3 vSkyDirection;
+      fragmentShader: `uniform vec3 horizon; uniform vec3 zenith; uniform vec3 glow; uniform float time; varying vec3 vSkyDirection;
+        float cloudHash(vec2 p) {
+          return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+        }
+        float cloudNoise(vec2 p) {
+          vec2 cell = floor(p), f = fract(p);
+          f = f * f * (3.0 - 2.0 * f);
+          return mix(mix(cloudHash(cell), cloudHash(cell + vec2(1.0, 0.0)), f.x),
+            mix(cloudHash(cell + vec2(0.0, 1.0)), cloudHash(cell + vec2(1.0)), f.x), f.y);
+        }
         void main() {
           vec3 direction = normalize(vSkyDirection);
           float elevation = max(0.0, direction.y);
           vec3 color = mix(horizon, zenith, smoothstep(.02, .8, elevation));
-          // Lava lights the underside of a bank of wind-stretched ash. Its
-          // broad layers fade completely at the fog horizon.
-          float cloud = sin(direction.x * 8.0 + direction.z * 5.0 + elevation * 26.0)
-            + .4 * sin(direction.x * 19.0 - direction.z * 12.0 + elevation * 45.0);
-          float bank = smoothstep(.03, .17, elevation) * (1.0 - smoothstep(.22, .58, elevation));
-          color = mix(color, glow, bank * (.2 + .15 * smoothstep(-.8, .9, cloud)));
+          // Slowly sheared ash banks, with warm undersides and cooler tops.
+          // Fade every layer into the exact fog colour at the horizon.
+          vec2 p = direction.xz / (elevation + .32);
+          vec2 wind = vec2(time * .003, time * .001);
+          float broad = cloudNoise(p * vec2(2.2, 3.8) + wind);
+          float detail = cloudNoise(p * vec2(7.0, 12.0) + broad * 1.8 + wind * 1.3);
+          float cloud = smoothstep(.28, .78, broad * .72 + detail * .28);
+          float bank = smoothstep(.015, .14, elevation) * (1.0 - smoothstep(.55, .95, elevation));
+          vec3 ash = mix(glow, zenith * .8, smoothstep(.12, .65, elevation) * .7);
+          color = mix(color, ash, cloud * bank * .78);
+          float underlight = (1.0 - smoothstep(.12, .4, elevation)) * bank * broad;
+          color += vec3(.025, .007, .002) * underlight;
           gl_FragColor = vec4(color, 1.0);
           #include <colorspace_fragment>
         }` });
@@ -74,6 +91,7 @@ export class VolcanicAtmosphere {
     const anchor = volcanicPosition(s, -14, roadHeight(s) + 20), positions = this.geometry.attributes.position, alpha = this.geometry.attributes.fleckAlpha;
     this.points.position.set(anchor.x, anchor.y, anchor.z + origin);
     this.sky.position.set(anchor.x, roadHeight(s), anchor.z + origin);
+    this.skyMaterial.uniforms.time.value = time;
     for (let i = 0; i < ASH; i++) {
       const n = i * 4, phase = this.seeds[n + 3] * Math.PI * 2;
       const x = wrap(this.seeds[n] * WIDTH + time * (1.1 + this.seeds[n + 3]) + Math.sin(time * .27 + phase) * 3 - anchor.x, WIDTH);
@@ -114,9 +132,9 @@ export class VolcanicAtmosphere {
       const side = i < 2 ? -1 : 1, span = side < 0 ? 96 : 128, offset = side < 0 ? 0 : 24;
       const cell = Math.floor((s - offset) / span), at = (cell + i % 2) * span + offset;
       const { near, level } = riftProfile(at, side), d = side < 0 ? near + 13 : creekSection(at).u;
-      const p = volcanicPosition(at, side * d, level + (side < 0 ? 5 : 4.5)), distance = Math.abs(at - s);
+      const p = volcanicPosition(at, side * d, level + (side < 0 ? 2.5 : 3)), distance = Math.abs(at - s);
       this.lights[i].position.set(p.x, p.y, p.z + origin);
-      this.lights[i].intensity = (side < 0 ? 1400 : 140) * (1 - smoothstep(30, span, distance))
+      this.lights[i].intensity = (side < 0 ? 650 : 170) * (1 - smoothstep(30, span, distance))
         * (.97 + .025 * Math.sin(time * .65 + i) + .015 * Math.sin(time * 1.13 + i * 2));
     }
   }

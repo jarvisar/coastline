@@ -257,7 +257,10 @@ export function volcanicPosition(s, u, height = volcanicHeight(s, u)) { return p
 export function volcanicVertex(row, column, jitter = 3) {
   const base = volcanicColumns(row * VOLCANIC_STEP), centre = (base.length - 1) / 2, band = Math.abs(column - centre) - 1;
   const road = Math.abs(base[column]) <= 7;
-  const s = row * VOLCANIC_STEP + (road ? 0 : (randomAt(row, column + 7120) - .5) * jitter);
+  // Move a whole cross-section together. Independent longitudinal jitter on
+  // tightly spaced cliff columns can cross their edges and tear the surface.
+  // Ease out from the fixed road, keeping the same seam in adjacent chunks.
+  const s = row * VOLCANIC_STEP + (randomAt(row, 7120) - .5) * jitter * smoothstep(7, 17, Math.abs(base[column]));
   const columns = volcanicColumns(s), gap = Math.min(columns[column] - (columns[column - 1] ?? columns[column] - 20), (columns[column + 1] ?? columns[column] + 20) - columns[column]);
   const u = columns[column] + (road ? 0 : (randomAt(row, column + 7140) - .5) * Math.min(5, gap * .3));
   // Cliff rows keep the height designed for their column, so sideways jitter

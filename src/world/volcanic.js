@@ -27,14 +27,15 @@ const treeGeometry = deadTree();
 const puff = new THREE.IcosahedronGeometry(1, 1); puff.deleteAttribute('normal'); puff.deleteAttribute('uv');
 const puffGeometry = mergeVertices(puff);
 const matrix = new THREE.Object3D();
-const stoneColors = palette(['#535053', '#5a5352', '#49494f', '#605855', '#48454c']);
-const cliffColors = palette(['#413b40', '#4b4040', '#393840', '#534746']);
-const lavaRamp = palette(['#b82403', '#ec4004', '#ff6908', '#ff9d17', '#ffcd48']);
+const stoneColors = palette(['#50525b', '#5b5659', '#454b57', '#615b5d', '#444550']);
+const cliffColors = palette(['#3c3b46', '#49414a', '#343944', '#51484d']);
+const lavaRamp = palette(['#a9250d', '#de3c0b', '#fa6510', '#ff9c26', '#ffdb72']);
 const roadColors = { asphalt: new THREE.Color('#3e3d40'), edge: new THREE.Color('#c4bcb0'), centre: new THREE.Color('#b29855') };
 const railColor = new THREE.Color('#7c7770'), railShade = new THREE.Color('#4e4947'), reflectorColor = new THREE.Color('#edc994');
 const postColor = new THREE.Color('#938b79'), snagColor = new THREE.Color('#231c1d');
 const warmStone = new THREE.Color('#95513b');
 const sulfur = new THREE.Color('#b4a264'), oxidized = new THREE.Color('#79513b'), cooledCrust = new THREE.Color('#29272d');
+const coolingLava = new THREE.Color('#622b2b');
 // Additive light: a hot line where rock meets lava, a softer spill beyond it.
 // It is added to the encoded frame, where a little green already reads as tan.
 const rimLight = new THREE.Color(.15, .018, .0005), spillLight = new THREE.Color(.095, .009, .0003), dark = new THREE.Color(0, 0, 0);
@@ -78,6 +79,7 @@ function deadTree() {
 }
 
 function surface() { return { positions: [], colors: [], heat: [] }; }
+const projectedArea = (a, b, c) => (b.z - a.z) * (c.x - a.x) - (b.x - a.x) * (c.z - a.z);
 // `heat` is a number, a function of the vertex, or null for meshes without it.
 function triangle(target, a, b, c, color, heat = COLD, upward = true) {
   if (upward && (b.z - a.z) * (c.x - a.x) - (b.x - a.x) * (c.z - a.z) < 0) [b, c] = [c, b];
@@ -248,7 +250,7 @@ export class VolcanicChunk {
     this.sampleFormations();
     this.buildCones(); this.buildColumnFields();
     this.sampleFormations();
-    this.buildLavafalls(); this.buildSurfaceFlows(); this.buildFissures(); this.buildMineralVents(); this.buildCoolingBombs();
+    this.buildLavafalls(); this.buildSurfaceFlows(); this.buildFissures(); this.buildMineralVents();
     this.buildCrust(); this.buildChannelBanks(); this.buildRocks(); this.buildTalus(); this.buildCreekBanks(); this.buildGroundCover(); this.buildTrees();
     buildVolcanicBridge(this);
     buildVolcanicDiscoveries(this, this.discoveries);
@@ -358,7 +360,12 @@ export class VolcanicChunk {
     };
     for (let r = 0; r < rows; r++) for (let c = 0; c < facets[r].length - 1; c++) {
       const a = facets[r][c], b = facets[r][c + 1], d = facets[r + 1][c], e = facets[r + 1][c + 1];
-      if (randomAt(first + r, c + 7340) < .5) { face(a, b, d); face(b, e, d); }
+      // Jitter can make a narrow cell concave. Only its interior diagonal
+      // covers that cell once; flipping an inverted triangle leaves a fold.
+      const firstArea = Math.min(projectedArea(a, b, d), projectedArea(b, e, d));
+      const secondArea = Math.min(projectedArea(a, b, e), projectedArea(a, e, d));
+      const firstDiagonal = firstArea > 0 && secondArea > 0 ? randomAt(first + r, c + 7340) < .5 : firstArea > secondArea;
+      if (firstDiagonal) { face(a, b, d); face(b, e, d); }
       else { face(a, b, e); face(a, e, d); }
     }
     // The road shares the ground's flat-shaded material, so it rides in the same mesh.
@@ -415,11 +422,19 @@ export class VolcanicChunk {
       };
       for (let r = 0; r < rows; r++) for (let c = 0; c < columns; c++) {
         const a = vertex(first + r, c), b = vertex(first + r, c + 1), d = vertex(first + r + 1, c), e = vertex(first + r + 1, c + 1);
-        // Broad hotter and cooler reaches under the facet-to-facet mosaic.
+        // Long hot currents divide quieter, cooling reaches. The broad field
+        // carries the composition; individual facets only describe its surface.
         const tone = .5 + .5 * Math.sin(a.s / 23 + a.u / 31) * Math.sin(a.s / 41 - a.u / 17 + 1.3);
         const s = (a.s + b.s + d.s + e.s) / 4, u = Math.abs((a.u + b.u + d.u + e.u) / 4), { near, far } = riftProfile(s, side);
         const edge = clamp(Math.min(u - near - 3, far - 3 - u) / 14, 0, 1);
-        const shade = k => lavaColor(.04 + edge * (.43 + tone * .28) + randomAt(first + r, c * 2 + k + 7550 + side) * .17), phase = k => randomAt(first + r, c * 2 + k + 7570 + side);
+        const current = Math.sin(s * .032 + u * .095 + 1.6 * Math.sin(s * .018 - u * .024));
+        const cooling = smoothstep(.15, .88, current) * (.65 + .35 * Math.sin(s * .025 - u * .041) ** 2);
+        const shade = k => {
+          const grain = randomAt(first + r, c * 2 + k + 7550 + side);
+          return lavaColor(.1 + edge * (.35 + tone * .29) + grain * .065)
+            .lerp(coolingLava, cooling * (.86 + grain * .08));
+        };
+        const phase = k => randomAt(first + r, c * 2 + k + 7570 + side);
         if (randomAt(first + r, c + 7590 + side) < .5) { face(a, b, d, shade(0), phase(0)); face(b, e, d, shade(1), phase(1)); }
         else { face(a, b, e, shade(0), phase(0)); face(a, e, d, shade(1), phase(1)); }
       }
@@ -572,7 +587,8 @@ export class VolcanicChunk {
   block(outline, side, base, height, random, molten = true, spillway = false) {
     const count = outline.length, { cs, cd, reach } = outlineReach(outline);
     // A narrow chamfer: a wide one turns a slim block's top into a hipped roof.
-    const flare = .8 + random() * 1.8, bevel = Math.min(reach * .18, 1 + random() * 1.6), drop = Math.min(height * .22, 1.4 + random() * 2.1);
+    const relief = Math.min(1, reach / 5, height / 6);
+    const flare = (.8 + random() * 1.8) * relief, bevel = Math.min(reach * .18, 1 + random() * 1.6), drop = Math.min(height * .22, 1.4 + random() * 2.1);
     const tiltS = (random() - .5) * .09, tiltD = (random() - .5) * .09, centre = this.at(cs, side * cd, base + height + (random() - .5) * .7);
     const glow = y => molten ? Math.max(0, y - base) * (1 + .2 * Math.sin(cs / 7 + cd / 5)) : COLD;
     // Move a corner `out` metres from the block's middle, or a fraction of the way in to it.
@@ -582,26 +598,62 @@ export class VolcanicChunk {
       v.heat = lit ? glow(level) : COLD; v.out = shift; return v;
     });
     const stone = pick(stoneColors, random());
-    const waistOut = outline.map(() => flare * .2 + (random() - .5) * 3.2), waistY = outline.map(() => base + height * (.3 + random() * .4));
-    const top = (k, ds, dd) => base + height + ds * tiltS + dd * tiltD;
+    const waistOut = outline.map(() => flare * .2 + (random() - .5) * 1.8 * relief), waistY = outline.map(() => base + height * (.3 + random() * .3));
+    const top = (k, ds, dd) => base + height + clamp(ds * tiltS + dd * tiltD, -height * .12, height * .12);
     const footOut = outline.map(() => flare * (.55 + random() * .9));
-    const rings = [ring(k => footOut[k], base - 1.5), ring(k => waistOut[k], k => waistY[k]), ring(k => -.15 + (random() - .5) * 1.1, (k, ds, dd) => top(k, ds, dd) - drop * (.7 + random() * .6)),
-      ring(-bevel, (k, ds, dd) => top(k, ds, dd) + (random() - .5) * 1.1, 0, false), ring(-bevel, (k, ds, dd) => top(k, ds, dd) + (random() - .5) * 1.5, .5, false)];
+    const rings = [ring(k => footOut[k], base - 1.5), ring(k => waistOut[k], k => waistY[k]), ring(k => (-.15 + (random() - .5) * 1.1) * relief, (k, ds, dd) => top(k, ds, dd) - drop * (.7 + random() * .3)),
+      ring(-bevel, (k, ds, dd) => top(k, ds, dd) + (random() - .5) * .7 * relief, 0, false), ring(-bevel, (k, ds, dd) => top(k, ds, dd) + (random() - .5) * .7 * relief, .5, false)];
+    // A shared crown holds the cap together. Independent inner-ring heights
+    // used to put small blocks' caps below their shoulders and invert walls.
+    for (let k = 0; k < count; k++) {
+      if (molten) rings[0][k].y = riftProfile(rings[0][k].s, side).level - 1.5;
+      rings[1][k].y = Math.min(rings[1][k].y, rings[2][k].y - height * .08);
+      for (const axis of ['x', 'y', 'z']) rings[4][k][axis] = lerp(rings[3][k][axis], centre[axis], .5);
+      if (molten) for (let level = 0; level < 3; level++) {
+        const p = rings[level][k];
+        p.heat = Math.max(0, p.y - riftProfile(p.s, side).level) * (1 + .2 * Math.sin(cs / 7 + cd / 5));
+      }
+    }
+    // Wind the complete shell consistently, including undercuts. Choosing a
+    // normal independently for each triangle opens slits along shared edges.
+    const reverse = rings[0].reduce((area, a, k) => area + projectedArea(centre, a, rings[0][(k + 1) % count]), 0) < 0;
+    const shellFace = (a, b, c, tint, heat = vertexHeat) => triangle(this.rock, a, reverse ? c : b, reverse ? b : c, tint, heat, false);
     for (let level = 0; level < rings.length - 1; level++) for (let k = 0; k < count; k++) {
       const next = (k + 1) % count, a = rings[level][k], b = rings[level][next], c = rings[level + 1][k], d = rings[level + 1][next];
       // Faces vary down the walls; the top is one slab of stone, told apart by its facets alone.
       const color = level < 2 ? pick(cliffColors, random()) : stone.clone().multiplyScalar(.97 + random() * .06), shade = color.clone().multiplyScalar(.97 + random() * .06);
-      const face = level < 2 ? (p, q, r, tint) => facing(this.rock, p, q, r, centre, tint, vertexHeat) : (p, q, r, tint) => triangle(this.rock, p, q, r, tint, vertexHeat);
+      const face = shellFace;
       if (random() < .5) { face(a, b, c, color); face(b, d, c, shade); } else { face(a, b, d, color); face(a, d, c, shade); }
     }
     centre.heat = COLD;
     const cap = rings.at(-1);
-    for (let k = 0; k < count; k++) triangle(this.rock, centre, cap[k], cap[(k + 1) % count], stone.clone().multiplyScalar(.96 + random() * .08), vertexHeat);
+    const underside = { ...centre, y: (molten ? riftProfile(cs, side).level : base) - 1.5, heat: molten ? 0 : COLD };
+    for (let k = 0; k < count; k++) {
+      shellFace(centre, cap[k], cap[(k + 1) % count], stone.clone().multiplyScalar(.96 + random() * .08));
+      shellFace(underside, rings[0][(k + 1) % count], rings[0][k], stone);
+    }
     if (molten) {
-      // Where the flared foot breaks the surface, between the two lowest rings.
-      const lines = [-.4, .45, 2.4].map((out, band) => rings[0].map((foot, k) => {
-        const waist = rings[1][k], t = (base - foot.y) / (waist.y - foot.y), ds = outline[k][0] - cs, dd = outline[k][1] - cd, length = Math.hypot(ds, dd) || 1, shift = lerp(foot.out, waist.out, t) + out;
-        const v = this.at(outline[k][0] + ds / length * shift, side * (outline[k][1] + dd / length * shift), base + .07); v.light = [rimLight, spillLight, dark][band]; return v;
+      // Find contact on the actual flared shell, even where a short island's
+      // waist submerges. The molten surface has a grade, not one flat height.
+      const contact = rings[0].map((foot, k) => {
+        let lower = foot, upper = rings[1][k];
+        for (let level = 1; level < 3 && upper.y < riftProfile(upper.s, side).level; level++) {
+          lower = upper; upper = rings[level + 1][k];
+        }
+        let lo = 0, hi = 1;
+        for (let step = 0; step < 10; step++) {
+          const t = (lo + hi) / 2;
+          if (lerp(lower.y, upper.y, t) < riftProfile(lerp(lower.s, upper.s, t), side).level) lo = t;
+          else hi = t;
+        }
+        const p = {};
+        for (const key of ['s', 'x', 'y', 'z']) p[key] = lerp(lower[key], upper[key], (lo + hi) / 2);
+        return p;
+      });
+      const lines = [-.4, .45, 2.4].map((out, band) => contact.map(p => {
+        const dx = p.x - centre.x, dz = p.z - centre.z, length = Math.hypot(dx, dz) || 1;
+        return { x: p.x + dx / length * out, y: riftProfile(p.s, side).level + .07,
+          z: p.z + dz / length * out, light: [rimLight, spillLight, dark][band] };
       }));
       for (let band = 0; band < 2; band++) for (let k = 0; k < count; k++) {
         const next = (k + 1) % count;
@@ -1141,14 +1193,14 @@ export class VolcanicChunk {
   // it into another noise texture. They are static, half-submerged plates.
   buildCrust() {
     const random = seededRandom(this.index + 78900);
-    for (const side of [-1]) for (let n = 0; n < 40; n++) {
+    for (const side of [-1]) for (let n = 0; n < 64; n++) {
       const s = this.start + 9 + random() * (CHUNK_LENGTH - 18), { near, far, level } = riftProfile(s, side);
-      const d = lerp(near + 8, far - 8, random()), centre = this.at(s, side * d, level + .13);
+      const d = lerp(near + 8, far - 8, random()), centre = this.at(s, side * d, level + .26);
       if ((this.ground(centre.x, centre.z) ?? Infinity) > level) continue;
-      const radius = .55 + random() ** 1.4 * 4.2, spin = random() * 6.28, count = 5 + Math.floor(random() * 3);
+      const radius = 1.1 + random() ** 1.2 * 6.2, spin = random() * 6.28, count = 5 + Math.floor(random() * 3);
       const ring = Array.from({ length: count }, (_, k) => {
         const angle = spin + k * Math.PI * 2 / count, r = radius * (.7 + random() * .35);
-        return this.at(s + Math.cos(angle) * r, side * (d + Math.sin(angle) * r * .7), riftProfile(s + Math.cos(angle) * r, side).level + .12);
+        return this.at(s + Math.cos(angle) * r, side * (d + Math.sin(angle) * r * .7), riftProfile(s + Math.cos(angle) * r, side).level + .18);
       });
       if (ring.some(p => (this.ground(p.x, p.z) ?? Infinity) > p.y - .2)) continue;
       const color = pick(cliffColors, random()).clone().multiplyScalar(.65);
@@ -1377,48 +1429,6 @@ export class VolcanicChunk {
           radius: mouth, dormant: true });
       }
       break;
-    }
-  }
-  // A few freshly landed volcanic bombs: a dark, broken shell over a hot
-  // interior. Both surfaces join the existing batches, with no new draw calls.
-  buildCoolingBombs() {
-    const random = seededRandom(this.index + 80850), source = pebbleGeometry.attributes.position;
-    for (let n = 0; n < 2; n++) {
-      const s = this.start + 14 + random() * (CHUNK_LENGTH - 28), side = n % 2 ? -1 : 1;
-      const edge = side > 0 ? shelfSteps(s, side).toe : riftProfile(s, side).near;
-      const radius = 1.7 + random() * 1.4, u = side * (edge - radius - 3 - random() * 4), p = this.onGround(s, u);
-      if (!p || this.clearance(p.x, p.z, s) < radius * 1.4 + 10 || crossingInfluence(s, u, radius * 2) > .01
-        || shelfFault(s, u) > .01 || !volcanicDiscoveryClears(s, u, this.discoveries, radius * 2)
-        || this.features.vents.some(v => Math.hypot(v.x - p.x, v.z - p.z) < v.radius * 1.4 + radius * 2)) continue;
-      const feet = [0, 1, 2, 3].map(k => this.onGround(s + Math.cos(k * Math.PI / 2) * radius, u + Math.sin(k * Math.PI / 2) * radius));
-      if (feet.some(q => !q || Math.abs(q.y - p.y) > radius * .45)) continue;
-      const c = { x: p.x, y: p.y + radius * .32, z: p.z }, yaw = random() * Math.PI * 2;
-      const vertex = new THREE.Vector3();
-      const shell = Array.from({ length: source.count }, (_, i) => {
-        vertex.fromBufferAttribute(source, i);
-        vertex.multiplyScalar(1 + .13 * Math.sin(vertex.x * 7 + vertex.z * 4));
-        return { x: c.x + radius * (vertex.x * Math.cos(yaw) + vertex.z * Math.sin(yaw)),
-          y: c.y + vertex.y * radius * .9, z: c.z + radius * (vertex.z * Math.cos(yaw) - vertex.x * Math.sin(yaw)) };
-      });
-      for (let i = 0; i < shell.length; i += 3) {
-        const face = shell.slice(i, i + 3), middle = {};
-        for (const axis of ['x', 'y', 'z']) middle[axis] = face.reduce((sum, v) => sum + v[axis], 0) / 3;
-        const inset = face.map(v => ({ x: lerp(v.x, middle.x, .045), y: lerp(v.y, middle.y, .045), z: lerp(v.z, middle.z, .045) }));
-        triangle(this.rock, ...inset, cooledCrust.clone().multiplyScalar(.85 + random() * .5), 9, false);
-        // Only the exposed seams are molten; a complete inner shell would
-        // compete with the crust under the lava material's depth offset.
-        for (let k = 0; k < 3; k++) {
-          const next = (k + 1) % 3, color = lavaColor(.18 + random() * .2), phase = random();
-          triangle(this.lava, face[k], face[next], inset[k], color, phase, false);
-          triangle(this.lava, face[next], inset[next], inset[k], color, phase, false);
-        }
-      }
-      solidPost(this, c.x, c.z, radius * 1.1);
-      for (let k = 0; k < 5; k++) {
-        const angle = random() * Math.PI * 2, out = radius * (1.1 + random() * .6);
-        const q = this.onGround(s + Math.cos(angle) * out, u + Math.sin(angle) * out);
-        if (q) this.boulder(q.x, q.y, q.z, .2 + random() * .45, random, q.s);
-      }
     }
   }
   buildTrees() {
