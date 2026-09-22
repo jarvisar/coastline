@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import { registerChunkResources } from './chunk-resources.js';
 import { finalizeChunkTransforms } from './chunk-transforms.js';
-import { splitBatch } from './instance-batches.js';
-import { updateResidentChunks } from './resident.js';
+import { splitBatch, computeInstanceBounds } from './instance-batches.js';
+import { updateResidentChunks, positionResidentChunks } from './resident.js';
 import { CHUNK_LENGTH, randomAt, seededRandom, smoothstep, lerp, positionAt, roadFrame } from './route.js';
 import { PLAINS_STEP, PLAINS_COLUMNS, PLAINS_COLUMN_COUNT, ROAD_RESERVE, plainsVertex, plainsRowStep, plainsPosition, plainsRoadHeight, plainsGroundHeight,
   plainsCreekAt, creekCenterS, creekDistance, CREEK_WATER_HALF_WIDTH, BRIDGE_HALF_LENGTH, fieldAt, fieldRowAt, fieldBoundary, fieldBands,
@@ -105,7 +105,7 @@ function instances(group, geo, mat, items, name, shadows = true, occlusion = tru
       if (item.color) mesh.setColorAt(i, new THREE.Color(item.color));
     }
     mesh.castShadow = shadows; mesh.receiveShadow = true;
-    mesh.computeBoundingSphere(); group.add(mesh);
+    computeInstanceBounds(mesh); group.add(mesh);
   }
 }
 
@@ -1186,7 +1186,7 @@ export class PlainsChunk {
       if (!part.length) continue;
       const mesh = new THREE.InstancedMesh(shrubGeometry, shrubMaterial, part.length); mesh.name = 'far-windbreaks';
       part.forEach((item, i) => { dummy.position.set(...item.p); dummy.rotation.set(...item.r); dummy.scale.set(...item.scale); dummy.updateMatrix(); mesh.setMatrixAt(i, dummy.matrix); mesh.setColorAt(i, new THREE.Color(item.color)); });
-      mesh.castShadow = false; mesh.receiveShadow = true; mesh.userData.ambientOcclusion = false; mesh.computeBoundingSphere(); this.group.add(mesh);
+      mesh.castShadow = false; mesh.receiveShadow = true; mesh.userData.ambientOcclusion = false; computeInstanceBounds(mesh); this.group.add(mesh);
     }
     for (const [variant, items] of bark) {
       instances(this.group, variant.bark, barkMaterial, items, 'plains-trunks');
@@ -1205,7 +1205,7 @@ export class PlainsWorld {
   update(s) {
     const center = Math.floor(s / CHUNK_LENGTH); this.origin = Math.floor(s / 1024) * 1024;
     updateResidentChunks(this, center, PlainsChunk);
-    for (const chunk of this.chunks.values()) chunk.group.position.z = this.origin - chunk.start;
+    positionResidentChunks(this);
   }
   // One clock turns the creek's ripples, the farm windmills and the turbines.
   animate(time) { animateWater(time, this.origin); }

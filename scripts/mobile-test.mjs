@@ -54,6 +54,10 @@ try {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.locator('#start').tap();
   await page.waitForTimeout(1000);
+  // Starting now hands over the welcome screen's moving car. The deadzone
+  // check below needs a stationary car; reset before testing joystick input.
+  await page.evaluate(() => window.__coastline.action('reset'));
+  await page.waitForFunction(() => !window.__coastline.changingJourney);
   // The joystick's caption is a caption: it hugs two lines, clears the stick,
   // and its dismiss button stays a 44px target while looking like a small one.
   const captionIssues = await page.evaluate(() => {

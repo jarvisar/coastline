@@ -12,7 +12,7 @@ self.onmessage = async ({ data }) => {
       self.postMessage({ type: 'ready', seed: builders.SEED });
       return;
     }
-    const result = buildChunk(data.journey, data.index);
+    const result = await buildChunk(data.journey, data.index);
     self.postMessage({ type: 'chunk', id: data.id, chunk: result.data }, result.transfers);
   } catch (error) {
     self.postMessage({ type: 'error', message: error.message });

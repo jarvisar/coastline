@@ -10,13 +10,19 @@ export function stabilizeShadowFiltering() {
   THREE.ShaderChunk.shadowmap_pars_fragment = THREE.ShaderChunk.shadowmap_pars_fragment.replaceAll(
     'interleavedGradientNoise( gl_FragCoord.xy ) * PI2', '0.0').replace(
     /shadow = \(\s*texture\( shadowMap, vec3\( shadowCoord\.xy \+ vogelDiskSample\( 0, 5, phi \)[\s\S]*?\) \* 0\.2;/,
-    `vec2 stepSize = texelSize * shadowRadius * 0.5;
+    `if (shadowRadius < 1.0) {
+      // Basic uses one hardware-filtered depth comparison. The uniform branch
+      // avoids eight extra texture reads without recompiling on quality changes.
+      shadow = texture(shadowMap, shadowCoord.xyz);
+    } else {
+    vec2 stepSize = texelSize * shadowRadius * 0.5;
     shadow = 0.0;
     for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
       float weight = (x == 0 ? 2.0 : 1.0) * (y == 0 ? 2.0 : 1.0);
       shadow += texture(shadowMap, vec3(shadowCoord.xy + vec2(float(x), float(y)) * stepSize, shadowCoord.z)) * weight;
     }
-    shadow *= 0.0625;`);
+    shadow *= 0.0625;
+    }`);
 }
 
 // Enclose the visible terrain, from valleys to peaks. Routes with a changing

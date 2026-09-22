@@ -177,7 +177,8 @@ try {
   await page.evaluate(() => { window.__coastline.rendering.ambientOcclusion.render = window.originalAORender; });
   await press('right', 5);
   await aimAtMenu(852 / 1024, 811 / 1024); await frames(); await press('right', 0);
-  await aimAtMenu(615 / 1024); await frames(); await press('right', 0);
+  // Exit is the sixth row on page two, after the Sound mix setting.
+  await aimAtMenu(727 / 1024); await frames(); await press('right', 0);
   await page.waitForFunction(() => !window.__coastline.vr.active && !window.__coastline.rendering.renderer.xr.isPresenting);
   await page.evaluate(() => { window.testRayMatrix = null; });
   assert.equal(await page.evaluate(() => window.__coastline.paused), true);

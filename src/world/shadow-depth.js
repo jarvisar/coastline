@@ -15,7 +15,9 @@ function depthMaterial(object, material) {
   const key = `${kind}/${side}`;
   let depth = depthMaterials.get(key);
   if (!depth) {
-    depth = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, side });
+    // r186's PCF shadows sample a native depth texture. Packed RGBA output
+    // is unused, so avoid its fragment work and color-attachment writes.
+    depth = new THREE.MeshDepthMaterial({ depthPacking: THREE.BasicDepthPacking, colorWrite: false, side });
     depth.name = `shadow-depth-${key}`;
     depthMaterials.set(key, depth);
   }

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { registerChunkResources } from './chunk-resources.js';
-import { splitBatch } from './instance-batches.js';
-import { updateResidentChunks } from './resident.js';
+import { splitBatch, computeInstanceBounds } from './instance-batches.js';
+import { updateResidentChunks, positionResidentChunks } from './resident.js';
 import { finalizeChunkTransforms } from './chunk-transforms.js';
 import { CHUNK_LENGTH, randomAt, seededRandom, smoothstep, lerp, positionAt } from './route.js';
 import { JUNGLE_STEP, JUNGLE_COLUMN_COUNT, RIVER_STEP, jungleColumns, jungleRows, jungleVertex, jungleHeight, jungleRoadHeight as roadHeight, riverCenter, riverHalfWidth, riverLevel, riverLips, riverLipOffset, riverRocks, riverTurbulence,
@@ -83,7 +83,7 @@ function batch(group, geometry, mat, items, name, shadows, ambientOcclusion) {
   mesh.castShadow = shadows; mesh.receiveShadow = true; mesh.instanceMatrix.needsUpdate = true;
   if (!ambientOcclusion) mesh.userData.ambientOcclusion = false;
   if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
-  mesh.computeBoundingSphere(); group.add(mesh); return mesh;
+  computeInstanceBounds(mesh); group.add(mesh); return mesh;
 }
 
 // `ambientOcclusion: false` keeps a batch out of the soft-shading prepass, which
@@ -785,7 +785,7 @@ export class JungleWorld {
   update(s) {
     const center = Math.floor(s / CHUNK_LENGTH); this.origin = Math.floor(s / 1024) * 1024;
     updateResidentChunks(this, center, JungleChunk);
-    for (const chunk of this.chunks.values()) chunk.group.position.z = this.origin - chunk.start;
+    positionResidentChunks(this);
   }
   animate(time) { animateWater(time, this.origin); }
   dispose() { this.chunkSource?.dispose(); for (const chunk of this.chunks.values()) chunk.dispose(); this.chunks.clear(); }

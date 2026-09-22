@@ -35,6 +35,9 @@ export function createRendering(canvas, graphics = new Graphics()) {
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = .94;
   const scene = new THREE.Scene(); scene.background = new THREE.Color('#b8dfe0'); scene.fog = new THREE.Fog('#c2e2db', 460, 860);
+  // The scene stays at the origin. Updating its identity matrix every frame
+  // forces all static descendants to recompute their world matrices too.
+  scene.matrixAutoUpdate = false;
   const sky = new THREE.HemisphereLight('#e4f2f5', '#617149', 1.45); scene.add(sky);
   const sun = new THREE.DirectionalLight('#fff1db', 2.5); sun.castShadow = true;
   sun.shadow.camera.near = 1; sun.shadow.camera.far = 650; sun.shadow.normalBias = .65; sun.shadow.bias = -.0003; sun.shadow.radius = 2;
@@ -54,6 +57,7 @@ export function createRendering(canvas, graphics = new Graphics()) {
   function applyQuality(settings) {
     ambientOcclusion.enabled = settings.ambientOcclusion;
     ambientOcclusion.setQuality(settings.aoQuality);
+    sun.shadow.radius = settings.id === 'basic' ? 0 : 2;
     if (sun.shadow.mapSize.x !== settings.shadowMap) {
       sun.shadow.mapSize.set(settings.shadowMap, settings.shadowMap);
       sun.shadow.map?.dispose(); sun.shadow.map = null;

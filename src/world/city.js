@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import { registerChunkResources } from './chunk-resources.js';
 import { finalizeChunkTransforms } from './chunk-transforms.js';
-import { splitBatch } from './instance-batches.js';
-import { updateResidentChunks } from './resident.js';
+import { splitBatch, computeInstanceBounds } from './instance-batches.js';
+import { updateResidentChunks, positionResidentChunks } from './resident.js';
 import { CHUNK_LENGTH, randomAt, seededRandom, smoothstep, lerp, roadFrame } from './route.js';
 import { CITY_STEP, CITY_COLUMN_COUNT, KERB, PAVEMENT_LIFT, cityVertex, cityPosition, cityRoadHeight, cityGroundHeight, pavementHeight, quayOffset, RIVER_LEVEL,
   FAR_BANK, FAR_BANK_TOP, QUAY_WALL, blockBoundary, blockAt, crossStreetAt, nearStreet, onCrossStreet, STREET_HALF_WIDTH, BANDS, SKYLINE_FROM,
@@ -78,7 +78,7 @@ function instances(group, geo, mat, items, name, shadows = true, ambientOcclusio
     }
     mesh.castShadow = shadows; mesh.receiveShadow = true;
     if (!ambientOcclusion) mesh.userData.ambientOcclusion = false;
-    mesh.computeBoundingSphere(); group.add(mesh);
+    computeInstanceBounds(mesh); group.add(mesh);
   }
 }
 
@@ -624,7 +624,7 @@ export class CityWorld {
     this.s = s; this.origin = Math.floor(s / 1024) * 1024;
     const center = Math.floor(s / CHUNK_LENGTH);
     updateResidentChunks(this, center, CityChunk);
-    for (const chunk of this.chunks.values()) chunk.group.position.z = this.origin - chunk.start;
+    positionResidentChunks(this);
   }
   animate(time) {
     this.time = time; animateWater(time, this.origin);

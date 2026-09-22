@@ -38,7 +38,7 @@ test('transferred chunks retain geometry, transforms, shaders, bounds and animat
       initializeWorkerSeed(workerData.seed);
       const { buildChunk } = await import(workerData.builders);
       for (const journey of ['coast', 'desert', 'snow', 'jungle', 'plains', 'city', 'volcanic']) for (const index of [-9, 0, 1, 65, 0]) {
-        const result = buildChunk(journey, index);
+        const result = await buildChunk(journey, index);
         parentPort.postMessage({ journey, index, data: result.data }, result.transfers);
       }
     })().catch(error => { throw error; });

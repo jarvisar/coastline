@@ -113,7 +113,7 @@ test('a model stands on the outline of its lowest quarter, turned and scaled wit
   assert.ok(Math.abs(post.x - 15) < 1e-6 && Math.abs(post.reach - 2) < 1e-6 && post.heading === undefined);
 });
 
-test('every tree and farm building a plains chunk draws is also solid, and crosses from the worker', () => {
+test('every tree and farm building a plains chunk draws is also solid, and crosses from the worker', async () => {
   const site = plainsDiscoveries(-100000, 100000).find(site => site.kind === 'farmstead');
   const index = Math.floor(site.s / CHUNK_LENGTH), chunk = new PlainsChunk(index), matrix = new THREE.Matrix4(), p = new THREE.Vector3();
   const colliders = chunk.features.colliders;
@@ -127,7 +127,7 @@ test('every tree and farm building a plains chunk draws is also solid, and cross
     }
   });
   assert.ok(drawn > 20 && colliders.length >= drawn);
-  assert.deepEqual(buildChunk('plains', index).data.features.colliders, colliders);
+  assert.deepEqual((await buildChunk('plains', index)).data.features.colliders, colliders);
   chunk.dispose();
 });
 

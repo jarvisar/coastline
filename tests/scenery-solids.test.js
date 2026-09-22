@@ -42,7 +42,7 @@ test('rock footprints follow offset, tilted, unevenly scaled geometry and skip s
   mesh.dispose(); mesh.material.dispose(); geometry.dispose();
 });
 
-test('large rocks in each rocky journey are solid and their collision survives worker transfer', () => {
+test('large rocks in each rocky journey are solid and their collision survives worker transfer', async () => {
   const scenes = [
     ['coast', CoastalChunk, ['rockGeometry', 'coastalCrags/0', 'coastalCrags/1', 'coastalCrags/2']],
     ['desert', DesertChunk, ['stoneGeometry', 'slabGeometry']],
@@ -66,7 +66,7 @@ test('large rocks in each rocky journey are solid and their collision survives w
       }
     }
     assert.ok(count > 5, `${journey}: only checked ${count} boulders`);
-    assert.deepEqual(buildChunk(journey, 3).data.features.colliders, chunk.features.colliders);
+    assert.deepEqual((await buildChunk(journey, 3)).data.features.colliders, chunk.features.colliders);
     chunk.dispose();
   }
 });

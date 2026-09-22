@@ -72,8 +72,11 @@ export function unpackChunk(data) {
       if (source.material) {
         const geometry = typeof source.geometry === 'string' ? chunkResource(source.geometry) : chunk.owned[source.geometry];
         const material = chunkResource(source.material);
-        result = source.count === undefined ? new THREE.Mesh(geometry, material) : new THREE.InstancedMesh(geometry, material, source.count);
+        // The worker already supplied the matrices. Avoid allocating and filling
+        // an identity buffer for every instance only to immediately replace it.
+        result = source.count === undefined ? new THREE.Mesh(geometry, material) : new THREE.InstancedMesh(geometry, material, 0);
         if (result.isInstancedMesh) {
+          result.count = source.count;
           result.instanceMatrix = attribute(source.matrix, true); result.instanceColor = attribute(source.color, true);
           result.boundingSphere = readSphere(source.sphere); result.boundingBox = readBox(source.box);
         }

@@ -1,7 +1,8 @@
+import { computeInstanceBounds } from './instance-batches.js';
 import * as THREE from 'three';
 import { registerChunkResources } from './chunk-resources.js';
 import { finalizeChunkTransforms } from './chunk-transforms.js';
-import { updateResidentChunks } from './resident.js';
+import { updateResidentChunks, positionResidentChunks } from './resident.js';
 import { CHUNK_LENGTH, TERRAIN_STEP, randomAt, seededRandom, roadFrame, coastOffset, shorelineOffset, terrainColumns, terrainCell, terrainVertex, positionAt, pondAt, pondRadius, ravineAmount, groundHeight, rockCover, cliffRib, bridgeAt, coastalGrove, coastalGuardrail, GUARDRAIL_OFFSET, overlookAt, overlookWidth, clamp, lerp, smoothstep } from './route.js';
 import { createWaterMaterial, createSurfMaterial, createRockWashMaterial, animateWater } from './water.js';
 import { buildLandmarks } from './landmarks.js';
@@ -83,7 +84,7 @@ function makeInstances(group, geometry, material, items, shadows = true) {
   });
   mesh.castShadow = shadows; mesh.receiveShadow = true; mesh.instanceMatrix.needsUpdate = true;
   if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
-  mesh.computeBoundingSphere(); group.add(mesh); return mesh;
+  computeInstanceBounds(mesh); group.add(mesh); return mesh;
 }
 
 function addRockWash(rock, phase, vertices, washCoords, shape = rockGeometry) {
@@ -641,7 +642,7 @@ export class CoastalWorld {
     const center = Math.floor(s / CHUNK_LENGTH);
     this.origin = Math.floor(s / 1024) * 1024;
     updateResidentChunks(this, center, CoastalChunk);
-    for (const chunk of this.chunks.values()) chunk.group.position.z = this.origin - chunk.start;
+    positionResidentChunks(this);
   }
   animate(time) {
     animateWater(time, this.origin);

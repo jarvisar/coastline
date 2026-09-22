@@ -32,6 +32,7 @@ try {
         graphics.setMode(id);
         levels.push({ id, ratio: renderer.getPixelRatio(), width: renderer.domElement.width, height: renderer.domElement.height,
           shadow: rendering.scene.children.find(child => child.isDirectionalLight).shadow.mapSize.x,
+          shadowRadius: rendering.scene.children.find(child => child.isDirectionalLight).shadow.radius,
           ambientOcclusion: rendering.ambientOcclusion.enabled, aoQuality: rendering.ambientOcclusion.quality });
       }
       graphics.toggleAmbientOcclusion();
@@ -88,6 +89,7 @@ try {
     assert.equal(density('basic').width, Math.floor(390 * expected('basic')));
     assert.equal(density('basic').height, Math.floor(844 * expected('basic')));
     assert.deepEqual(result.levels.map(level => level.shadow), [2048, 1536, 1024, 512]);
+    assert.deepEqual(result.levels.map(level => level.shadowRadius), [2, 2, 2, 0], 'Basic uses the cheaper hardware shadow filter');
     assert.deepEqual(result.levels.map(level => level.ambientOcclusion), [false, false, false, false]);
     assert.deepEqual(result.levels.map(level => level.aoQuality), ['high', 'high', 'low', 'low'], 'the AO budget follows the level');
     assert.ok(result.enabledLevels.every(level => level.enabled), 'no preset, nor Auto, switches the AO opt-in off');

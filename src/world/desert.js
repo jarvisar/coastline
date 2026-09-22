@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import { registerChunkResources } from './chunk-resources.js';
 import { finalizeChunkTransforms } from './chunk-transforms.js';
-import { splitBatch } from './instance-batches.js';
-import { updateResidentChunks } from './resident.js';
+import { splitBatch, computeInstanceBounds } from './instance-batches.js';
+import { updateResidentChunks, positionResidentChunks } from './resident.js';
 import { CHUNK_LENGTH, randomAt, seededRandom, roadHeight, roadFrame } from './route.js';
 import { DESERT_COLUMNS, DESERT_STEP, DESERT_VALLEY_EDGE, desertFacetColumn, desertColumns, desertVertex, desertPosition, desertHeight, desertRowStep, desertBridgeAt, desertCreek, desertCreekDistance, canyonProfile, dryWashCenter, dryWashWidth, mesasForChunk, insideMesa } from './desert-route.js';
 import { buildDesertCrossing, buildDesertWater, desertWaterClock } from './desert-river.js';
@@ -51,7 +51,7 @@ function batch(group, source, material, items, name) {
   });
   mesh.castShadow = true; mesh.receiveShadow = true; mesh.instanceMatrix.needsUpdate = true;
   if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
-  mesh.computeBoundingSphere(); group.add(mesh);
+  computeInstanceBounds(mesh); group.add(mesh);
 }
 
 // Flat triangular leaves form the spiky silhouettes of yuccas and Joshua trees.
@@ -606,7 +606,7 @@ export class DesertWorld {
   update(s) {
     const center = Math.floor(s / CHUNK_LENGTH); this.origin = Math.floor(s / 1024) * 1024;
     updateResidentChunks(this, center, DesertChunk);
-    for (const chunk of this.chunks.values()) chunk.group.position.z = this.origin - chunk.start;
+    positionResidentChunks(this);
   }
   animate(time) { desertWaterClock.value = time; }
   dispose() { this.chunkSource?.dispose(); for (const chunk of this.chunks.values()) chunk.dispose(); this.chunks.clear(); }

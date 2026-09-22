@@ -35,6 +35,20 @@ export function updateResidentChunks(world, center, Chunk) {
   world.chunkSource?.prefetch(center, world.chunks);
 }
 
+// Chunk contents have fixed local transforms. Only a newly attached chunk or
+// a floating-origin shift invalidates its root; animated instance buffers and
+// shader clocks remain independent of these object transforms.
+export function positionResidentChunks(world) {
+  for (const chunk of world.chunks.values()) {
+    const group = chunk.group, z = world.origin - chunk.start;
+    if (group.matrixAutoUpdate || group.position.z !== z) {
+      group.position.z = z;
+      group.updateMatrix();
+      group.matrixAutoUpdate = false;
+    }
+  }
+}
+
 // Resident chunks first, nearest the car outward and forward before back, then
 // the one chunk of lead on each side that covers a boundary crossing.
 export function prefetchOffsets(behind, ahead) {

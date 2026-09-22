@@ -1,3 +1,5 @@
+import { Box3, Matrix4, Sphere, Vector3 } from 'three';
+
 // One instanced batch per chunk gets a bounding sphere as wide as the chunk,
 // which the frustum test can almost never reject: scenery reaches hundreds of
 // metres to either side of the road, so a batch keeps drawing long after its
@@ -23,4 +25,34 @@ export function splitBatch(items, depth = 0) {
   const near = items.filter(item => item.p[axis] < middle);
   if (!near.length || near.length === items.length) return [items];
   return [...splitBatch(near, depth + 1), ...splitBatch(items.filter(item => item.p[axis] >= middle), depth + 1)];
+}
+
+const bounds = new Box3(), matrix = new Matrix4(), instance = new Sphere();
+const center = new Vector3(), extent = new Vector3();
+
+// Three.js incrementally unions instance spheres in placement order. That can
+// leave a loose, off-center bound on long roadside batches. Try a centered
+// enclosing sphere as well, and keep it only if it is smaller. Both candidates
+// contain every transformed geometry sphere, including its motion allowance.
+// Run at construction time, before callers add any batch-level animation margin.
+export function computeInstanceBounds(mesh) {
+  mesh.computeBoundingSphere();
+  if (!mesh.count || !Number.isFinite(mesh.boundingSphere.radius)) return;
+  const geometrySphere = mesh.geometry.boundingSphere;
+  bounds.makeEmpty();
+  for (let i = 0; i < mesh.count; i++) {
+    mesh.getMatrixAt(i, matrix);
+    instance.copy(geometrySphere).applyMatrix4(matrix);
+    extent.copy(instance.center).addScalar(instance.radius); bounds.expandByPoint(extent);
+    extent.copy(instance.center).addScalar(-instance.radius); bounds.expandByPoint(extent);
+  }
+  bounds.getCenter(center);
+  let radius = 0;
+  for (let i = 0; i < mesh.count; i++) {
+    mesh.getMatrixAt(i, matrix);
+    instance.copy(geometrySphere).applyMatrix4(matrix);
+    radius = Math.max(radius, center.distanceTo(instance.center) + instance.radius);
+  }
+  radius += 1e-5; // Leave room for floating-point roundoff at a frustum plane.
+  if (radius < mesh.boundingSphere.radius) mesh.boundingSphere.set(center, radius);
 }

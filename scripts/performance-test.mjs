@@ -11,13 +11,17 @@ try {
   const url = new URL(process.env.TEST_URL ?? 'http://127.0.0.1:5173'); url.searchParams.set('seed', '4817');
   await page.goto(url.href);
   await page.waitForFunction(() => window.__coastline && document.querySelector('#loading.loaded'));
+  const eagerScenery = await page.evaluate(() => performance.getEntriesByType('resource')
+    .map(entry => new URL(entry.name).pathname)
+    .filter(path => /\/src\/world\/(desert|snow|jungle|plains|city|volcanic)\.js$/.test(path)));
+  assert.deepEqual(eagerScenery, [], 'unselected scenery must stay off the startup path');
   const renderFrame = () => page.evaluate(() => window.__coastline.rendering.renderer.info.render.frame);
   const settle = () => page.evaluate(async () => {
     for (let i = 0; i < 12; i++) await new Promise(requestAnimationFrame);
   });
   await page.click('#start');
   await page.keyboard.press('KeyP');
-  for (const id of ['coast', 'desert', 'snow', 'jungle', 'plains', 'city']) {
+  for (const id of ['coast', 'desert', 'snow', 'jungle', 'plains', 'city', 'volcanic']) {
     await page.evaluate(id => window.__coastline.changeJourney(id), id);
     await settle();
     const frozenFrame = await renderFrame();
@@ -26,7 +30,7 @@ try {
     const idleWork = await page.evaluate(async () => {
       let hudMutations = 0;
       const hud = new MutationObserver(records => { hudMutations += records.length; }), canvas = new MutationObserver(() => {});
-      for (const id of ['speed', 'distance', 'gear']) hud.observe(document.getElementById(id), { childList: true, subtree: true, characterData: true });
+      hud.observe(document.getElementById('distance'), { childList: true, subtree: true, characterData: true });
       for (let i = 0; i < 20; i++) await new Promise(requestAnimationFrame);
       hudMutations += hud.takeRecords().length;
       hud.disconnect();

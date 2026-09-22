@@ -1,3 +1,4 @@
+import { computeInstanceBounds } from './instance-batches.js';
 import * as THREE from 'three';
 import { mergeGeometries, mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { CHUNK_LENGTH, roadHeight, randomAt, seededRandom, lerp, clamp, smoothstep } from './route.js';
@@ -9,7 +10,7 @@ import { COLD, basaltMaterial, lavaMaterial, glowMaterial, smokeMaterial, volcan
 import { terrainSampler } from './coastal-assets.js';
 import { registerChunkResources } from './chunk-resources.js';
 import { finalizeChunkTransforms } from './chunk-transforms.js';
-import { updateResidentChunks } from './resident.js';
+import { updateResidentChunks, positionResidentChunks } from './resident.js';
 import { solidPost, solidSpan, solidRocks } from './colliders.js';
 import { VolcanicAtmosphere } from './volcanic-atmosphere.js';
 import { volcanicDiscoveries, volcanicDiscoveryClears } from './volcanic-discoveries.js';
@@ -134,7 +135,7 @@ function instances(group, name, geometry, material, items, shadow = true) {
     const item = items[i]; matrix.position.set(...item.p); matrix.rotation.set(...(item.r ?? [0, 0, 0])); matrix.scale.set(...item.scale); matrix.updateMatrix();
     mesh.setMatrixAt(i, matrix.matrix); if (item.color) mesh.setColorAt(i, item.color);
   }
-  mesh.castShadow = shadow; mesh.receiveShadow = true; mesh.computeBoundingSphere(); group.add(mesh);
+  mesh.castShadow = shadow; mesh.receiveShadow = true; computeInstanceBounds(mesh); group.add(mesh);
 }
 const pick = (colors, random) => colors[Math.floor(random * colors.length) % colors.length];
 const railRun = s => ((s % 256) + 256) % 256;
@@ -1475,7 +1476,7 @@ export class VolcanicWorld {
   update(s) {
     this.s = s; this.origin = Math.floor(s / 1024) * 1024;
     updateResidentChunks(this, Math.floor(s / CHUNK_LENGTH), VolcanicChunk);
-    for (const chunk of this.chunks.values()) chunk.group.position.z = this.origin - chunk.start;
+    positionResidentChunks(this);
   }
   animate(time) {
     volcanicClock.value = time;

@@ -16,6 +16,7 @@ import { PAINTS, DEFAULT_PAINT, DEFAULT_PAINT_NAME, paintName, readPaint } from 
 import { SEED, journeyStart } from './world/route.js';
 import { freshSceneStart } from './world/generation.js';
 import { ChunkWorker } from './world/chunk-source.js';
+import { loadScenery } from './world/scenery.js';
 import { setResidentWindow } from './world/resident.js';
 import { DrivingController } from './vehicle.js';
 import { Traffic, TRAFFIC_CRUISE_SPEED } from './traffic.js';
@@ -91,7 +92,8 @@ async function boot() {
     let journey = 'coast';
     try { const saved = localStorage.getItem(journeyStorageKey); if (saved && Object.hasOwn(JOURNEYS, saved)) journey = saved; } catch { /* Storage is optional. */ }
     chunkWorker = new ChunkWorker();
-    let world = new JOURNEYS[journey].World(scene, chunkWorker.source(journey));
+    const { World } = await loadScenery(journey);
+    let world = new World(scene, chunkWorker.source(journey));
     let changingJourney = true, journeyWasPaused = false;
     const savedJourneys = Object.fromEntries(Object.entries(JOURNEYS).map(([id, data]) => [id, journeyStart(Number(data.routeNumber))]));
     const vehicle = new DrivingController(JOURNEYS[journey].route, savedJourneys[journey], DEFAULT_CAR); const audio = new DriveAudio();
@@ -283,8 +285,8 @@ async function boot() {
       const nextState = regenerate ? freshSceneStart(vehicle.s) : savedJourneys[id];
       let nextWorld;
       try {
-        await new Promise(resolve => setTimeout(resolve, 320));
-        nextWorld = new JOURNEYS[id].World(scene, chunkWorker.source(id));
+        const [{ World }] = await Promise.all([loadScenery(id), new Promise(resolve => setTimeout(resolve, 320))]);
+        nextWorld = new World(scene, chunkWorker.source(id));
         await nextWorld.chunkSource.prepare(nextState.s);
         nextWorld.update(nextState.s);
         if (renderer.extensions.has('KHR_parallel_shader_compile')) await renderer.compileAsync(scene, rendering.camera);

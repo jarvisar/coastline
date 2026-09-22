@@ -74,7 +74,7 @@ For rainbow paint, enter **↑ ↑ ↓ ↓ ← → ← → B A** on the keyboard
 
 ## Settings
 
-The pause menu has traffic, sound, fullscreen, and graphics controls. **Auto** adjusts graphics quality while driving; High, Balanced, Smooth, and Basic set a fixed level. Lower levels reduce resolution, shadow detail, and view distance. The pixel-density slider adjusts resolution separately. Changes to multisampling take effect on the next load.
+The pause menu has traffic, sound, fullscreen, and graphics controls. **Auto** adjusts graphics quality while driving; High, Balanced, Smooth, and Basic set a fixed level. Lower levels reduce resolution, shadow detail, and view distance. Basic also uses a cheaper shadow filter for slower devices. The pixel-density slider adjusts resolution separately. Changes to multisampling take effect on the next load.
 
 **Soft shading** adds ambient occlusion and starts off. Whether it is on is saved separately from graphics quality, and neither a preset nor Auto switches it; while it is on, its cost follows the quality level. `?ao=0` disables it for a visit. Sound also starts off. Press **M** to enable it, and use **Audio settings** for channel volumes, presets, and optional music. See [audio.md](docs/audio.md).
 
@@ -100,3 +100,6 @@ npm test
 With the dev server running, `npm run test:browser` checks driving and streaming. Other checks are listed in [package.json](package.json) and [scripts/](scripts/). Browser scripts generally use Chrome installed at the standard Windows path and accept `TEST_URL` to change the server address. Reports go to `.artifacts/`. Emulated browser and VR checks don't measure performance on physical phones or headsets.
 
 See [discovery frequency](docs/discoveries.md) to change how often landmarks appear.
+
+See [performance work and measurements](docs/performance.md) for the rendering and
+loading optimizations, research references, and reproducible profiling commands.

@@ -29,6 +29,8 @@
     "test:volcanic": "node scripts/volcanic-test.mjs",
     "test:generation": "node scripts/generation-test.mjs",
     "test:worker": "node scripts/worker-test.mjs",
+    "test:performance": "node scripts/performance-test.mjs",
+    "profile:performance": "node scripts/performance-profile.mjs",
     "electron:web": "vite build --outDir dist-electron",
     "electron:dev": "node scripts/electron-launch.mjs",
     "electron:start": "npm run electron:web && node scripts/electron-launch.mjs --built",

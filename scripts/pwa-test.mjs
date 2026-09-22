@@ -106,6 +106,18 @@ async function checkProduction(base) {
     await context.setOffline(true);
     await page.reload();
     await page.waitForFunction(() => document.querySelector('#loading.loaded') && document.querySelector('#error').hidden);
+    // Scenery and worker builders are split into route modules. A route never
+    // visited online must still load from the production precache while offline.
+    for (const [id, label] of [['desert', 'RED ROCK DESERT'], ['snow', 'MIDNIGHT ALPINE'],
+      ['jungle', 'EMERALD JUNGLE'], ['plains', 'GOLDEN PLAINS'], ['city', 'RAINY DOWNTOWN'], ['volcanic', 'VOLCANIC RIFT']]) {
+      const chunks = await page.evaluate(() => window.__chunkWorkerCheck.chunks);
+      await page.locator('#change-journey').click();
+      await page.locator(`.journey-card[data-journey="${id}"]`).click();
+      await page.waitForFunction(label => document.querySelector('.location-title').textContent === label
+        && !document.querySelector('#journey-transition').classList.contains('active'), label);
+      await page.waitForFunction(count => window.__chunkWorkerCheck.chunks >= count, chunks + SMALLEST_WINDOW);
+      assert.deepEqual(await page.evaluate(() => window.__chunkWorkerCheck.errors), [], `${id}: offline worker`);
+    }
     // A production build has no debug surface to read the quality level from,
     // so require the smallest window any level keeps built: enough to prove the
     // worker really supplied the route rather than the page falling back to

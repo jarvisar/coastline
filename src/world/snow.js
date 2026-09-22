@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import { registerChunkResources } from './chunk-resources.js';
 import { finalizeChunkTransforms } from './chunk-transforms.js';
-import { splitBatch } from './instance-batches.js';
-import { updateResidentChunks } from './resident.js';
+import { splitBatch, computeInstanceBounds } from './instance-batches.js';
+import { updateResidentChunks, positionResidentChunks } from './resident.js';
 import { CHUNK_LENGTH, randomAt, seededRandom, smoothstep } from './route.js';
 import { SNOW_STEP, SNOW_COLUMN_COUNT, LAMP_SPACING, snowVertex, snowPosition, snowGroundHeight, snowRoadHeight, snowFrame, snowBridgeAt, lampAt, terrainPocket, alpineLake, onLake, alpineExposure } from './snow-route.js';
 import { alpineRockVariants } from './alpine-rocks.js';
@@ -85,7 +85,7 @@ function batch(group, geo, mat, items, name) {
     if (item.color) mesh.setColorAt(i, new THREE.Color(item.color));
   }
   mesh.castShadow = mat !== glowMaterial; mesh.receiveShadow = true;
-  mesh.computeBoundingSphere(); group.add(mesh);
+  computeInstanceBounds(mesh); group.add(mesh);
 }
 
 export class SnowChunk {
@@ -399,7 +399,7 @@ export class SnowWorld {
     this.s = s; this.origin = Math.floor(s / 1024) * 1024;
     const center = Math.floor(s / CHUNK_LENGTH);
     updateResidentChunks(this, center, SnowChunk);
-    for (const chunk of this.chunks.values()) chunk.group.position.z = this.origin - chunk.start;
+    positionResidentChunks(this);
     const lampIndex = Math.round((s - 16) / LAMP_SPACING);
     // Fixed fixtures only move when the light pool advances or the world rebases.
     // Their fades still follow the car every frame.
