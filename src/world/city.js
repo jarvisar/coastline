@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { joinCoplanarFaces } from './surface-joins.js';
 import { registerChunkResources } from './chunk-resources.js';
 import { finalizeChunkTransforms } from './chunk-transforms.js';
 import { splitBatch, computeInstanceBounds } from './instance-batches.js';
@@ -570,9 +571,9 @@ export class CityChunk {
   }
   finishScenery() {
     const { blocks, details, streets, lit, skyline, boxes, furniture, parked, bark, leaves } = this.scenery;
-    if (blocks.vertices.length) this.addMesh(geometry(blocks.vertices, blocks.colors), blocksMaterial, 'city-blocks', true);
-    if (details.vertices.length) this.addMesh(geometry(details.vertices, details.colors), blocksMaterial, 'city-promenade', true);
-    if (streets.vertices.length) this.addMesh(geometry(streets.vertices, streets.colors), streetsMaterial, 'city-side-roads');
+    if (blocks.vertices.length) this.addMesh(joinCoplanarFaces(geometry(blocks.vertices, blocks.colors)), blocksMaterial, 'city-blocks', true);
+    if (details.vertices.length) this.addMesh(joinCoplanarFaces(geometry(details.vertices, details.colors)), blocksMaterial, 'city-promenade', true);
+    if (streets.vertices.length) this.addMesh(joinCoplanarFaces(geometry(streets.vertices, streets.colors)), streetsMaterial, 'city-side-roads');
     if (lit.vertices.length) { const mesh = this.addMesh(geometry(lit.vertices, lit.colors), litMaterial, 'lit-windows'); mesh.receiveShadow = false; }
     if (skyline.vertices.length) {
       const mesh = this.addMesh(geometry(skyline.vertices, skyline.colors), skylineMaterial, 'city-skyline');

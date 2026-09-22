@@ -1,3 +1,4 @@
+import { joinCoplanarFaces } from './surface-joins.js';
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { registerChunkResources } from './chunk-resources.js';
@@ -29,7 +30,7 @@ export class VolcanicParts {
     this.add(new THREE.DodecahedronGeometry(1, 0).scale(...size), p, color, rotation);
   }
   finish() {
-    const g = mergeGeometries(this.parts); this.parts.forEach(part => part.dispose());
+    const g = joinCoplanarFaces(mergeGeometries(this.parts)); this.parts.forEach(part => part.dispose());
     g.computeVertexNormals(); g.computeBoundingSphere(); return g;
   }
 }

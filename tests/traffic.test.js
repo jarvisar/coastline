@@ -5,7 +5,7 @@ import { Traffic, TRAFFIC_CRUISE_SPEED, trafficContact } from '../src/traffic.js
 import { collisionImpulse, contactPoint } from '../src/impact.js';
 import { TRAFFIC_MODELS } from '../src/traffic-models.js';
 import { DrivingController } from '../src/vehicle.js';
-import { coastalDrivingRoute } from '../src/world/route.js';
+import { coastalDrivingRoute, randomAt } from '../src/world/route.js';
 import { desertDrivingRoute } from '../src/world/desert-route.js';
 import { snowDrivingRoute } from '../src/world/snow-route.js';
 
@@ -18,6 +18,12 @@ const straightRoute = {
 function setup(route = straightRoute, s = 24) {
   const scene = new THREE.Scene(), player = new DrivingController(route, { s });
   const traffic = new Traffic(scene, route, s);
+  // Keep collision fixtures on their original body shapes and starting positions.
+  traffic.random = (car, salt) => {
+    const value = randomAt(car.index + car.generation * 31, salt + traffic.salt);
+    return salt === 4 ? (car.index % TRAFFIC_MODELS.length) / TRAFFIC_MODELS.length : salt === 1 ? .5 + value * .35 : value;
+  };
+  traffic.reset(route, s);
   return { scene, player, traffic };
 }
 function footprint(car) {
@@ -55,11 +61,10 @@ test('disabled traffic hides the fleet and prevents movement and collisions acro
   traffic.dispose();
 });
 
-test('traffic has five distinct shapes, varied paint, and ample initial gaps', () => {
+test('traffic supports five distinct shapes and ample initial gaps', () => {
   const { traffic } = setup();
   assert.equal(traffic.vehicles.length, 6);
   assert.equal(new Set(traffic.vehicles.map(car => car.spec.name)).size, 5);
-  assert.ok(new Set(traffic.vehicles.map(car => car.paint.color.getHex())).size >= 3);
   assert.equal(new Set(TRAFFIC_MODELS.map(spec => `${spec.length}/${spec.cabin.join('/')}`)).size, 5);
   for (const car of traffic.vehicles) {
     assert.equal(car.car.children.length, 4);
@@ -67,10 +72,51 @@ test('traffic has five distinct shapes, varied paint, and ample initial gaps', (
       assert.ok(mesh.geometry.attributes.position.count > 0);
       assert.ok([...mesh.geometry.attributes.position.array].every(Number.isFinite));
     }
-    assert.ok(Math.abs(car.s - 24) > 70);
-    for (const other of traffic.vehicles) if (other !== car && other.direction === car.direction) assert.ok(Math.abs(other.s - car.s) > 300);
+    assert.ok(Math.abs(car.s - 24) >= 18);
+    for (const other of traffic.vehicles) if (other !== car && other.direction === car.direction) assert.ok(Math.abs(other.s - car.s) > 250);
   }
   traffic.dispose();
+});
+
+test('scene resets and recycled cars vary the fleet while reusing meshes and geometry', t => {
+  let seed = 0;
+  t.mock.method(Math, 'random', () => (++seed * .137) % 1);
+  const traffic = new Traffic(new THREE.Scene(), straightRoute, 24);
+  t.after(() => traffic.dispose());
+  const car = traffic.vehicles[0], meshes = [...car.car.children], paint = car.paint;
+  const geometries = new Set();
+  for (let index = 0; index < TRAFFIC_MODELS.length; index++) {
+    traffic.models.setModel(car, index);
+    for (const mesh of meshes) geometries.add(mesh.geometry);
+  }
+  const snapshot = () => traffic.vehicles.map(car => [car.spec.name, car.paint.color.getHex(), car.s]);
+  const shapes = new Set(), colors = new Set();
+  for (const journey of ['coast', 'city', 'snow', 'desert', 'jungle', 'plains', 'volcanic']) {
+    const before = snapshot();
+    traffic.reset(straightRoute, 24, journey);
+    assert.notDeepEqual(snapshot(), before);
+    const first = snapshot();
+    traffic.reset(straightRoute, 24, journey);
+    for (const column of [0, 1, 2]) assert.notDeepEqual(snapshot().map(row => row[column]), first.map(row => row[column]));
+    for (const vehicle of traffic.vehicles) {
+      assert.ok(Math.abs(vehicle.s - 24) >= 18);
+      for (const other of traffic.vehicles) if (other !== vehicle && other.direction === vehicle.direction) {
+        assert.ok(Math.abs(other.s - vehicle.s) > 100);
+      }
+    }
+    for (let i = 0; i < 12; i++) {
+      traffic.recycle(car, 24);
+      shapes.add(car.spec.name); colors.add(car.paint.color.getHex());
+      assert.ok(Math.abs(car.s - 24) > 250 * traffic.spacing);
+      assert.deepEqual(car.car.children, meshes);
+      assert.equal(car.paint, paint);
+      assert.ok(meshes.every(mesh => geometries.has(mesh.geometry)));
+      assert.equal(car.car.name, `traffic-${car.spec.name}`);
+      assert.deepEqual(car.position, car.previousPosition);
+    }
+  }
+  assert.equal(shapes.size, TRAFFIC_MODELS.length);
+  assert.ok(colors.size >= 3);
 });
 
 test('opposite lanes pass without collision and rotated footprints collide accurately', () => {

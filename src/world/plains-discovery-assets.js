@@ -1,3 +1,4 @@
+import { joinCoplanarFaces, roofShell } from './surface-joins.js';
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { registerChunkResources } from './chunk-resources.js';
@@ -29,17 +30,15 @@ class Parts {
     g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.normalize()));
     this.add(g, from.add(to).multiplyScalar(.5).toArray(), color);
   }
-  // A pitched roof over a footprint: two slabs and the two gable triangles.
+  // A closed pitched roof with a shared ridge and two gable triangles.
   // Turned, the ridge runs along x rather than z, which is how a dormer faces
   // out of the roof it stands in.
   gable(p, width, length, wallHeight, ridgeHeight, wall, roof, overhang = .35, turned = false) {
     const [x, y, z] = p, rise = ridgeHeight - wallHeight, half = width / 2;
-    const slope = Math.atan2(rise, half), run = Math.hypot(half, rise) + overhang;
-    const lift = y + wallHeight + rise / 2 + .1;
-    for (const side of [-1, 1]) {
-      if (turned) this.box([x, lift, z + side * (half + overhang) / 2], [length + overhang * 2, .22, run], roof, [side * slope, 0, 0]);
-      else this.box([x + side * (half + overhang) / 2, lift, z], [run, .22, length + overhang * 2], roof, [0, 0, -side * slope]);
-    }
+    const eave = wallHeight - rise * overhang / half + .22;
+    const shell = roofShell([[-half - overhang, eave], [0, ridgeHeight + .22], [half + overhang, eave]], length + overhang * 2);
+    if (turned) shell.rotateY(Math.PI / 2);
+    this.add(shell, p, roof);
     // Each end is wound to face out of the building. Wound both the same way
     // round, one of them is a back face and is culled, and the roof then
     // stands over a gable you can see the far wall through.
@@ -54,19 +53,12 @@ class Parts {
     g.computeVertexNormals(); this.add(g, [0, 0, 0], wall);
   }
   // A gambrel: the barn roof that breaks halfway up, steep at the eaves and
-  // shallow over the ridge. Two slabs a side plus the two end walls.
+  // shallow over the ridge. The pitches meet along shared edges.
   gambrel(p, width, length, wallHeight, kneeHeight, ridgeHeight, wall, roof, overhang = .35) {
     const [x, y, z] = p, half = width / 2, knee = half * .62;
-    const lower = [[half + overhang, wallHeight - overhang * .5], [knee, kneeHeight]];
-    const upper = [[knee, kneeHeight], [0, ridgeHeight]];
-    for (const side of [-1, 1]) for (const [[x0, y0], [x1, y1]] of [lower, upper]) {
-      const run = Math.hypot(x0 - x1, y0 - y1), angle = Math.atan2(y1 - y0, x0 - x1);
-      // A slab runs outward and downward, from the ridge or knee above to the
-      // eave below, the same way round as the gable's: with the sign the other
-      // way each slab was the mirror of the pitch it was meant to cover, and
-      // the barn's roof flew off its own walls.
-      this.box([x + side * (x0 + x1) / 2, y + (y0 + y1) / 2, z], [run, .24, length + overhang * 2], roof, [0, 0, -side * angle]);
-    }
+    const eave = wallHeight - overhang * (kneeHeight - wallHeight) / (half - knee);
+    this.add(roofShell([[-half - overhang, eave + .24], [-knee, kneeHeight + .24], [0, ridgeHeight + .24],
+      [knee, kneeHeight + .24], [half + overhang, eave + .24]], length + overhang * 2, .24), p, roof);
     // As with the gable, each end is wound to face out of the barn.
     const ends = [];
     for (const end of [-1, 1]) {
@@ -81,7 +73,7 @@ class Parts {
     g.computeVertexNormals(); this.add(g, [0, 0, 0], wall);
   }
   finish() {
-    const g = mergeGeometries(this.parts); this.parts.forEach(part => part.dispose());
+    const g = joinCoplanarFaces(mergeGeometries(this.parts)); this.parts.forEach(part => part.dispose());
     g.computeVertexNormals(); g.computeBoundingSphere(); return g;
   }
 }

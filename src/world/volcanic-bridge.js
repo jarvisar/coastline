@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { joinCoplanarFaces } from './surface-joins.js';
 import { roadHeight, randomAt } from './route.js';
 import { volcanicCrossing } from './volcanic-route.js';
 import { solidSpan } from './colliders.js';
@@ -136,6 +137,7 @@ export function buildVolcanicBridge(chunk) {
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(data.positions, 3));
     geometry.setAttribute('color', new THREE.Float32BufferAttribute(data.colors, 3));
+    joinCoplanarFaces(geometry);
     geometry.computeVertexNormals(); geometry.computeBoundingSphere();
     chunk.addMesh(geometry, material, name, true);
   }

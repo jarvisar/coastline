@@ -1,3 +1,4 @@
+import { joinCoplanarFaces } from './surface-joins.js';
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { registerChunkResources } from './chunk-resources.js';
@@ -25,7 +26,7 @@ class Parts {
     this.add(g, from.add(to).multiplyScalar(.5).toArray(), color);
   }
   finish() {
-    const g = mergeGeometries(this.parts); this.parts.forEach(part => part.dispose());
+    const g = joinCoplanarFaces(mergeGeometries(this.parts)); this.parts.forEach(part => part.dispose());
     g.computeVertexNormals(); g.computeBoundingSphere(); return g;
   }
 }

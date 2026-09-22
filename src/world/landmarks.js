@@ -41,7 +41,13 @@ function buildBridge(chunk, bridge) {
       for (const u of [outer, outer - side * .24]) quad(point(s, u, high + 1.15), point(end, u, highEnd + 1.15), point(s, u, high + 1.4), point(end, u, highEnd + 1.4));
       quad(point(s, outer, high + 1.4), point(end, outer, highEnd + 1.4), point(s, outer - side * .24, high + 1.4), point(end, outer - side * .24, highEnd + 1.4));
       if (s % 3 === 0) {
-        for (const u of [outer, outer - side * .28]) quad(point(s, u, high), point(s + .33, u, high), point(s, u, high + 1.35), point(s + .33, u, high + 1.35));
+        // Posts end at the rail's underside and follow that exact facet,
+        // including its grade. Extending into it doubled the outer face.
+        for (const u of [outer, outer - side * .24]) {
+          const a = point(s, u, high), edge = point(end, u, highEnd), t = Math.min(.33 / (end - s), 1);
+          const b = { x: a.x + (edge.x - a.x) * t, y: a.y + (edge.y - a.y) * t, z: a.z + (edge.z - a.z) * t };
+          quad(a, b, { ...a, y: a.y + 1.15 }, { ...b, y: b.y + 1.15 });
+        }
       }
     }
     // The deck has an underside, so the arches remain solid from the ocean side.

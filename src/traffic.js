@@ -61,7 +61,7 @@ export class Traffic {
     this.nearest = [];
     this.reset(route, s, journey);
   }
-  random(car, salt) { return randomAt(car.index + car.generation * 31, salt + this.salt); }
+  random(car, salt) { return randomAt(car.index + car.generation * 31, salt + this.salt, this.seed); }
   setEnabled(enabled, player) {
     if (this.enabled === enabled) return;
     this.enabled = enabled;
@@ -73,6 +73,8 @@ export class Traffic {
   }
   reset(route, s, journey = this.journey) {
     this.route = route; this.journey = journey; this.salt = { coast: 2100, desert: 2200, snow: 2300, jungle: 2400, plains: 2500, city: 2600, volcanic: 2700 }[journey];
+    // Traffic gets a fresh roll even when revisiting the same seeded scenery.
+    this.seed = Math.floor(Math.random() * 4294967296);
     this.spacing = 1 / (DENSITY[journey] ?? 1);
     const fleet = FLEET[journey] ?? 6;
     this.vehicles = this.pool.slice(0, fleet);
@@ -85,14 +87,16 @@ export class Traffic {
     const span = 1080 / Math.ceil(fleet / 2);
     for (const car of this.vehicles) {
       car.generation = 0;
-      car.s = s + (-280 + Math.floor(car.index / 2) * span + (car.direction < 0 ? 80 : 0) + this.random(car, 1) * 35) * this.spacing;
+      car.s = s + (-280 + Math.floor(car.index / 2) * span + (car.direction < 0 ? 80 : 0) + (this.random(car, 1) - .5) * 100) * this.spacing;
       this.respawn(car, car.s);
     }
+    this.clearNear({ s });
   }
   respawn(car, s) {
     car.s = s; car.generation++;
     car.u = car.direction * LANE; car.drift = 0; car.yaw = 0; car.spin = 0; car.recoil = 0;
     car.cruiseSpeed = car.direction > 0 ? TRAFFIC_CRUISE_SPEED : 20; car.speed = car.cruiseSpeed;
+    this.models.setModel(car, Math.floor(this.random(car, 4) * TRAFFIC_MODELS.length));
     car.paint.color.set(TRAFFIC_COLORS[Math.floor(this.random(car, 2) * TRAFFIC_COLORS.length)]);
     this.pose(car); car.previousPosition.copy(car.position); car.previousQuaternion.copy(car.quaternion);
   }
@@ -100,7 +104,7 @@ export class Traffic {
     // Pick a clear spot outside the camera, including when reversing or resetting.
     let bestS = playerS + (AHEAD - 30) * this.spacing, bestGap = -Infinity;
     for (const offset of [-360, -300, 460, 530, 600]) {
-      const s = playerS + (offset + this.random(car, 3) * 12) * this.spacing;
+      const s = playerS + (offset + (this.random(car, offset) - .5) * 35) * this.spacing;
       const gap = Math.min(...this.vehicles.filter(other => other !== car && other.direction === car.direction).map(other => Math.abs(other.s - s)));
       if (gap > bestGap) { bestGap = gap; bestS = s; }
     }

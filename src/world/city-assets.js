@@ -1,3 +1,4 @@
+import { joinCoplanarFaces, roofShell } from './surface-joins.js';
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { vehicleGeometry, TRAFFIC_MODELS } from '../traffic-models.js';
@@ -25,22 +26,21 @@ export class Parts {
     g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.normalize()));
     this.add(g, from.add(to).multiplyScalar(.5).toArray(), color);
   }
-  // A pitched roof over a footprint: two slabs and the two gable triangles.
+  // One closed pitched roof and two outward-facing gable triangles.
   gable(p, width, length, wallHeight, ridgeHeight, wall, roof, overhang = .35) {
     const [x, y, z] = p, rise = ridgeHeight - wallHeight, half = width / 2;
-    const slope = Math.atan2(rise, half), run = Math.hypot(half, rise) + overhang;
-    for (const side of [-1, 1]) {
-      this.box([x + side * (half + overhang) / 2, y + wallHeight + rise / 2 + .1, z], [run, .22, length + overhang * 2], roof, [0, 0, -side * slope]);
-    }
+    const eave = wallHeight - rise * overhang / half + .22;
+    this.add(roofShell([[-half - overhang, eave], [0, ridgeHeight + .22], [half + overhang, eave]], length + overhang * 2), p, roof);
     const ends = [];
-    for (const zEnd of [z - length / 2, z + length / 2]) {
-      ends.push(x - half, y + wallHeight, zEnd, x + half, y + wallHeight, zEnd, x, y + ridgeHeight, zEnd);
+    for (const end of [-1, 1]) {
+      const zEnd = z + end * length / 2;
+      ends.push(x - end * half, y + wallHeight, zEnd, x + end * half, y + wallHeight, zEnd, x, y + ridgeHeight, zEnd);
     }
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(ends, 3));
     g.computeVertexNormals(); this.add(g, [0, 0, 0], wall);
   }
   finish() {
-    const g = mergeGeometries(this.parts); this.parts.forEach(part => part.dispose());
+    const g = joinCoplanarFaces(mergeGeometries(this.parts)); this.parts.forEach(part => part.dispose());
     g.computeVertexNormals(); g.computeBoundingSphere(); return g;
   }
 }
@@ -52,7 +52,7 @@ const iron = '#3d4246', darkIron = '#2f3336', galvanised = '#9da3a6', timber = '
 function lampPost() {
   const p = new Parts();
   p.cylinder([0, 3.6, 0], .09, .15, 7.2, iron, 6);
-  p.cylinder([0, .18, 0], .22, .26, .36, darkIron, 6);
+  p.cylinder([0, .17, 0], .22, .26, .38, darkIron, 6);
   p.beam([0, 7.15, 0], [-1.6, 7.55, 0], .07, iron);
   p.box([-1.75, 7.5, 0], [.9, .24, .36], darkIron);
   p.box([-1.75, 7.36, 0], [.7, .06, .28], '#d9d5c4');
@@ -72,7 +72,7 @@ function bench() {
   const p = new Parts();
   for (const z of [-.8, .8]) {
     p.box([0, .24, z], [.5, .48, .08], darkIron);
-    p.box([.28, .62, z], [.08, .45, .08], darkIron);
+    p.box([.29, .62, z], [.08, .45, .08], darkIron);
   }
   p.box([0, .47, 0], [.55, .07, 1.9], timber);
   p.box([.3, .84, 0], [.07, .42, 1.9], timber);
@@ -93,8 +93,17 @@ function busShelter() {
 function railing() {
   const p = new Parts();
   p.box([0, 1.02, 0], [.07, .09, 4], iron);
-  p.box([0, .5, 0], [.05, .05, 4], iron);
-  for (const z of [-2, -1, 0, 1, 2]) p.box([0, .52, z], [.05, 1.04, .05], darkIron);
+  // The crossbar fits inside the posts, leaving their outer faces exposed.
+  p.box([0, .5, 0], [.04, .05, 4], iron);
+  const post = (z, depth) => {
+    const g = new THREE.BoxGeometry(.05, .975, depth);
+    // The handrail closes the post's top. Omit that buried contact face.
+    g.setIndex(Array.from(g.index.array).filter(i => g.attributes.normal.getY(i) < .5));
+    p.add(g, [0, .4875, z], darkIron);
+  };
+  for (const z of [-1, 0, 1]) post(z, .05);
+  // Each span owns half of an end post; consecutive runs meet at z = ±2.
+  for (const side of [-1, 1]) post(side * 1.9875, .025);
   return p.finish();
 }
 // A bollard by the water and a bin by the bench.

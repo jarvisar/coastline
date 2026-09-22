@@ -1,3 +1,4 @@
+import { joinCoplanarFaces } from './surface-joins.js';
 import * as THREE from 'three';
 import { birdFlightGLSL } from './bird-flight.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -25,7 +26,7 @@ export class JungleDiscoveryParts {
     this.add(g,a.clone().add(b).multiplyScalar(.5).toArray(),color);
   }
   finish(keepWings=false) {
-    const geometry=mergeGeometries(this.parts);this.parts.forEach(part=>part.dispose());
+    const geometry=keepWings ? mergeGeometries(this.parts) : joinCoplanarFaces(mergeGeometries(this.parts));this.parts.forEach(part=>part.dispose());
     if(!keepWings) geometry.deleteAttribute('birdWing');
     geometry.computeVertexNormals();geometry.computeBoundingSphere();return geometry;
   }

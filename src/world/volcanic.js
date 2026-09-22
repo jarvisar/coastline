@@ -1,5 +1,6 @@
 import { computeInstanceBounds } from './instance-batches.js';
 import * as THREE from 'three';
+import { joinCoplanarFaces } from './surface-joins.js';
 import { mergeGeometries, mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { CHUNK_LENGTH, roadHeight, randomAt, seededRandom, lerp, clamp, smoothstep } from './route.js';
 import { VOLCANIC_STEP, SHELF_EDGE, PLATEAU_EDGE, riftProfile, shelfSteps, shelfFault, shelfFlow, creekSection, volcanicColumns, volcanicVertex, volcanicHeight, volcanicTerrainHeight, volcanicPosition, volcanicCrossing, crossingChannel, crossingInfluence } from './volcanic-route.js';
@@ -108,7 +109,7 @@ function bake(target, model, transform, color) {
     if (face.length === 3) triangle(target, ...face.splice(0), color, COLD, false);
   }
 }
-function geometry(data, weathered = false) {
+function geometry(data, weathered = false, join = false) {
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(data.positions, 3));
   g.setAttribute('color', new THREE.Float32BufferAttribute(data.colors, 3));
@@ -128,6 +129,7 @@ function geometry(data, weathered = false) {
     }
   }
   if (weathered) softenNormals(g, normal => .08 + .65 * clamp((normal.y - .55) / .35, 0, 1));
+  if (weathered || join) joinCoplanarFaces(g);
   g.computeBoundingSphere(); return g;
 }
 function instances(group, name, geometry, material, items, shadow = true) {
@@ -293,7 +295,7 @@ export class VolcanicChunk {
     return nearest;
   }
   addMesh(data, material, name, shadow = false) {
-    const g = data.isBufferGeometry ? data : geometry(data, material === basaltMaterial && name !== 'volcanic-basalt'), mesh = new THREE.Mesh(g, material), light = material === lavaMaterial || material === glowMaterial || material === smokeMaterial;
+    const g = data.isBufferGeometry ? data : geometry(data, material === basaltMaterial && name !== 'volcanic-basalt', material === lavaMaterial), mesh = new THREE.Mesh(g, material), light = material === lavaMaterial || material === glowMaterial || material === smokeMaterial;
     mesh.name = name; mesh.castShadow = shadow; mesh.receiveShadow = !light;
     if (light) mesh.userData.ambientOcclusion = false;
     this.owned.push(g); this.group.add(mesh); return mesh;

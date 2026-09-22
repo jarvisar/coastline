@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { stableShadowDepth } from './world/shadow-depth.js';
+import { joinCoplanarFaces } from './world/surface-joins.js';
 
 export const TRAFFIC_MODELS = [
   { name: 'hatchback', width: 1.85, length: 3.45, cabin: [1.63, .75, 1.95], cabinZ: .25 },
@@ -87,7 +88,7 @@ export function vehicleGeometry(spec, { separateWheels = false } = {}) {
     box([.56, .1, 1], [0, 1.29, -l * .26]);
   }
   const merged = Object.fromEntries(Object.entries(parts).map(([key, geometries]) => {
-    const geometry = mergeGeometries(geometries);
+    const geometry = joinCoplanarFaces(mergeGeometries(geometries));
     // A lowered body sits closer to unchanged wheels, so drop only the shell.
     if (drop) geometry.translate(0, -drop, 0);
     for (const part of geometries) part.dispose();
@@ -117,6 +118,12 @@ export function createTrafficModels() {
         mesh.castShadow = true; mesh.receiveShadow = true; stableShadowDepth(mesh); car.add(mesh);
       }
       return { car, paint, spec };
+    },
+    // Swap shared geometry when a pooled car respawns; keep its meshes and paint.
+    setModel(vehicle, index) {
+      vehicle.spec = TRAFFIC_MODELS[index];
+      vehicle.car.name = `traffic-${vehicle.spec.name}`;
+      Object.values(templates[index]).forEach((geometry, i) => { vehicle.car.children[i].geometry = geometry; });
     },
     // Lamps from daytime (0) to night (1); a storm runs them part way up.
     setLights(level) { headlights.emissiveIntensity = .3 + 2 * level; taillights.emissiveIntensity = .25 + 1.55 * level; },

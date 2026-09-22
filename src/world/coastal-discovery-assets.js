@@ -1,3 +1,4 @@
+import { joinCoplanarFaces, roofShell } from './surface-joins.js';
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { registerChunkResources } from './chunk-resources.js';
@@ -28,7 +29,7 @@ class Parts {
     this.add(g, from.add(to).multiplyScalar(.5).toArray(), color);
   }
   finish() {
-    const g = mergeGeometries(this.parts);
+    const g = joinCoplanarFaces(mergeGeometries(this.parts));
     for (const part of this.parts) part.dispose();
     g.computeVertexNormals(); g.computeBoundingSphere(); return g;
   }
@@ -64,8 +65,9 @@ function lighthouse() {
 function cottage() {
   const p = new Parts();
   p.box([0, 1.8, 0], [5.3, 3.6, 7.1], '#e3dfc8');
+  const eave = 3.6 - (4.77 - 3.6) * .35 / 2.65;
+  p.add(roofShell([[-3, eave + .23], [0, 5], [3, eave + .23]], 7.7, .23), [0, 0, 0], '#8b6552');
   for (const side of [-1, 1]) {
-    p.box([side * 1.4, 4.05, 0], [3.35, .23, 7.7], '#8b6552', [0, 0, side * -.45]);
     for (const z of [-2.1, 1.5]) {
       p.box([side * 2.67, 2.05, z], [.08, 1.18, 1.1], '#c5cabc');
       p.box([side * 2.72, 2.05, z], [.05, .88, .8], '#577778');

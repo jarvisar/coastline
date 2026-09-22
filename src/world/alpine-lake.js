@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { joinCoplanarFaces } from './surface-joins.js';
 import { registerChunkResources } from './chunk-resources.js';
 import { CHUNK_LENGTH, randomAt, smoothstep } from './route.js';
 import { alpineLake, snowPosition, LAKE_LEVEL } from './snow-route.js';
@@ -100,7 +101,7 @@ export function buildAlpineLake(start) {
   const surface = makeGeometry(vertices, coords), haze = surface.clone(); haze.translate(0, 3.8, 0);
   return [
     { geometry: surface, material: water, name: 'alpine-lake' },
-    { geometry: makeGeometry(frozen), material: ice, name: 'shore-ice' },
+    { geometry: joinCoplanarFaces(makeGeometry(frozen)), material: ice, name: 'shore-ice' },
     { geometry: haze, material: mist, name: 'lake-mist' },
   ];
 }
