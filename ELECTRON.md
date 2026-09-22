@@ -1,20 +1,16 @@
 # Desktop app
 
-The desktop app packages the web game with Electron. Download builds from [Releases](https://github.com/jarvisar/coastline/releases):
+Download the Electron app from [Releases](https://github.com/jarvisar/coastline/releases):
 
-- **Windows:** installer (`-setup.exe`) or portable executable (`-portable.exe`).
+- **Windows:** installer (`-setup.exe`) or portable app (`-portable.exe`).
 - **Linux / Steam Deck:** AppImage.
 - **macOS:** DMG or ZIP; `arm64` for Apple silicon, `x64` for Intel.
 
-Packages are unsigned. Windows may require **More info → Run anyway**; macOS may require right-clicking the app and choosing **Open**. On Linux, make the AppImage executable before running it:
+Builds are unsigned. Windows may need **More info → Run anyway**; macOS may need right-click → **Open**. On Linux, run `chmod +x Coastline-*.AppImage` first.
 
-```sh
-chmod +x Coastline-*.AppImage
-```
+The Windows installer and AppImage versions download updates at launch and install them when you quit. Portable Windows and macOS builds show a **Get version** button instead.
 
-The installed Windows app and the AppImage check for a new release at launch, download it in the background, and install it when you quit. The portable executable and the macOS app can't update themselves; when a new version is out, a **Get version** button on the title screen and pause menu opens the download page.
-
-The app starts fullscreen. F, F11, Alt+Enter, LB / L1, or the pause menu toggle fullscreen. Escape opens or closes menus without leaving fullscreen. F12 opens DevTools.
+The app starts fullscreen. Use F, F11, Alt+Enter, LB / L1, or the pause menu to toggle it. Escape opens menus. F12 opens DevTools.
 
 ## Run from source
 
@@ -25,49 +21,49 @@ npm install
 npm run electron:dev
 ```
 
-This starts Vite and opens an Electron window with hot reload. Use `npm run electron:start` to build and open the production version, or `npm run electron:dev -- --url=http://127.0.0.1:5173` to use an existing dev server.
+This starts Vite and Electron with hot reload. Use `npm run electron:start` for a production build, or `npm run electron:dev -- --url=http://127.0.0.1:5173` for an existing dev server.
 
 ## Launch options
 
-Pass these to the executable, through Steam launch options, or after `npm run electron:dev --`.
+Pass these to the executable, Steam launch options, or after `npm run electron:dev --`.
 
 | Flag | Environment variable | Effect |
 | --- | --- | --- |
-| `--fullscreen` / `--windowed` | `COASTLINE_FULLSCREEN=1` / `0` | Set the starting window mode. Default: fullscreen. |
-| `--seed=<n>` | | Open a specific world. |
-| `--software-gl` | `COASTLINE_SOFTWARE_GL=1` | Use SwiftShader for testing GPU problems. Runs slowly. |
-| `--no-update` | `COASTLINE_NO_UPDATE=1` | Skip the update check at launch. |
-| `--devtools` | `COASTLINE_DEVTOOLS=1` | Open DevTools on launch. |
-| `--dev-url=<url>` | `COASTLINE_DEV_URL` | Load a dev server instead of the built game. |
-| | `COASTLINE_USER_DATA=<dir>` | Use a separate profile directory. |
-| `--help` | | Print the options. |
+| `--fullscreen` / `--windowed` | `COASTLINE_FULLSCREEN=1` / `0` | Starting window mode; defaults to fullscreen |
+| `--seed=<n>` | | Open a specific world |
+| `--software-gl` | `COASTLINE_SOFTWARE_GL=1` | Test GPU problems with SwiftShader; runs slowly |
+| `--no-update` | `COASTLINE_NO_UPDATE=1` | Skip the launch update check |
+| `--devtools` | `COASTLINE_DEVTOOLS=1` | Open DevTools |
+| `--dev-url=<url>` | `COASTLINE_DEV_URL` | Load a dev server |
+| | `COASTLINE_USER_DATA=<dir>` | Use a separate profile directory |
+| `--help` | | Print options |
 
-Profiles are stored in `%APPDATA%\Coastline` on Windows, `~/.config/Coastline` on Linux, and `~/Library/Application Support/Coastline` on macOS. Delete `window-state.json` there to reset window size and position.
+Profiles are in `%APPDATA%\Coastline` (Windows), `~/.config/Coastline` (Linux), or `~/Library/Application Support/Coastline` (macOS). Delete `window-state.json` there to reset window size and position.
 
 ## Steam Deck
 
-1. In Desktop Mode, download the AppImage and mark it executable in **Properties → Permissions**.
+1. In Desktop Mode, download the AppImage and mark it executable under **Properties → Permissions**.
 2. Open it once to check it runs.
 3. In Steam, choose **Games → Add a Non-Steam Game → Browse**. Select **All Files** and add the AppImage.
-4. Set its controller layout to **Gamepad** or **Gamepad with Joystick Trackpad**.
-5. Launch it from the **Non-Steam** tab in Game Mode. Use the Steam menu's **Exit Game** to quit.
+4. Set the controller layout to **Gamepad** or **Gamepad with Joystick Trackpad**.
+5. Launch from the **Non-Steam** tab in Game Mode. Use **Exit Game** in the Steam menu to quit.
 
-See the [controller mapping](README.md#controls). Steam's **Properties → Launch Options** accepts flags such as `--windowed` or `--seed=4817`.
+See [controls](README.md#controls). Add flags such as `--windowed` or `--seed=4817` under Steam's **Properties → Launch Options**.
 
-## Build packages
+## Build
 
-Build commands rebuild the web game into `dist-electron/` and write packages to `release/`.
+Commands rebuild the game into `dist-electron/` and write packages to `release/`.
 
 | Command | Output |
 | --- | --- |
 | `npm run electron:pack` | Unpacked app for the current OS |
 | `npm run electron:build` | Packages for the current OS |
-| `npm run electron:build:win` | Windows x64 installer and portable executable |
+| `npm run electron:build:win` | Windows x64 installer and portable app |
 | `npm run electron:build:linux` | Linux x64 AppImage |
 | `npm run electron:build:mac` | macOS arm64 and x64 DMG and ZIP |
-| `npm run electron:icons` | Regenerate the icon from `public/favicon.svg` |
+| `npm run electron:icons` | Regenerate icons from `public/favicon.svg` |
 
-Use a macOS host for macOS packages. Build the Linux AppImage on Linux or in WSL; Windows can produce an unpacked Linux build, but can't finish the AppImage. For WSL, use a separate checkout and install Node inside WSL:
+Build macOS packages on macOS. Build the AppImage on Linux or WSL. For WSL, use a separate checkout with Node installed inside WSL:
 
 ```sh
 git clone https://github.com/jarvisar/coastline.git ~/coastline
@@ -76,51 +72,51 @@ npm ci
 npm run electron:build:linux
 ```
 
-Package targets and installer options are in [builder.config.cjs](electron/builder.config.cjs).
+Package settings are in [builder.config.cjs](electron/builder.config.cjs).
 
 ## Releases
 
-The [Desktop app workflow](.github/workflows/desktop.yml) tests pushes to `main` and pull requests. A `v*` tag builds packages on Windows, Linux, and macOS and attaches them to a GitHub release. A manual workflow run builds downloadable artifacts without publishing a release.
+The [desktop workflow](.github/workflows/desktop.yml) tests pushes to `main` and pull requests. A `v*` tag builds and publishes packages for all three platforms. Manual runs upload artifacts without publishing.
 
-To bump the patch version and publish:
+To publish a patch release:
 
 ```sh
 npm version patch
 git push --follow-tags
 ```
 
-Each release also carries `latest.yml`, `latest-linux.yml`, `latest-mac.yml`, and a `.blockmap` for the installer. [electron-updater](https://www.electron.build/auto-update) in installed apps reads these to find and download the new version, so don't delete them from a release. A release only reaches users once it is published; drafts and pre-releases are ignored.
+Keep `latest.yml`, `latest-linux.yml`, `latest-mac.yml`, and installer `.blockmap` files in releases; automatic updates need them. Drafts and pre-releases don't reach the updater.
 
-The macOS smoke test is informational and doesn't block releases; its CI runner hasn't loaded the WebGL scene reliably.
+The macOS smoke test doesn't block releases because its CI runner hasn't loaded WebGL reliably.
 
-## Wrapper and tests
+## Development and tests
 
-[main.js](electron/main.js) serves `dist-electron/` at `app://coastline/`. The renderer is sandboxed, with a [preload bridge](electron/preload.cjs) for fullscreen, Escape, and the update notice. PWA installation and service worker scripts are disabled in Electron. External links open in the system browser. The update check runs only in packaged builds, and the tests turn it off.
+[main.js](electron/main.js) serves `dist-electron/` at `app://coastline/`. The sandboxed renderer uses a [preload bridge](electron/preload.cjs) for fullscreen, Escape, and updates. PWA scripts are disabled. External links open in the system browser.
 
-Web changes reach the desktop app on the next build. If asset paths or extensions change, check the protocol handler and MIME table. If PWA script names change, update `WEB_ONLY_SCRIPTS`. The manifest supplies app metadata; `package.json` supplies the version. Regenerate the desktop icon after changing the favicon.
+Update the protocol handler and MIME table when changing asset paths or extensions, and `WEB_ONLY_SCRIPTS` when renaming PWA scripts. Regenerate icons after changing the favicon.
 
-Check the current source:
+Test the current source:
 
 ```sh
 npm run test:electron -- --build
 ```
 
-Check a packaged app:
+Test a packaged app:
 
 ```sh
 npm run electron:pack
 npm run test:electron -- --packaged
 ```
 
-These tests cover loading, the chunk worker, storage, controls, fullscreen, and route switching. Reports and screenshots go to `.artifacts/electron/`. Pass `--windowed` to test that startup option. The tests use the installed Electron package and don't need a separate browser download.
+Tests cover loading, workers, storage, controls, fullscreen, and routes. Reports go to `.artifacts/electron/`. Add `--windowed` to test windowed startup. Tests disable updates and use the installed Electron package.
 
 ## Troubleshooting
 
-- **Missing web build:** run `npm run electron:web`, or use `npm run electron:dev`.
-- **Black window:** open DevTools with F12 and check for WebGL errors. Try `--software-gl` to check whether the GPU is the cause.
-- **Electron prints a Node version:** unset `ELECTRON_RUN_AS_NODE`, or use the repo's launch scripts, which remove it.
-- **Linux sandbox error:** try `--no-sandbox` if the system blocks user namespaces.
+- **Missing web build:** run `npm run electron:web` or `npm run electron:dev`.
+- **Black window:** check F12 for WebGL errors. Try `--software-gl`.
+- **Electron prints a Node version:** unset `ELECTRON_RUN_AS_NODE` or use the repo's launch scripts.
+- **Linux sandbox error:** try `--no-sandbox` if user namespaces are blocked.
 - **Missing FUSE:** run `./Coastline-*.AppImage --appimage-extract`, then `squashfs-root/coastline`.
-- **macOS still blocks the app:** for the downloaded app in `/Applications`, run `xattr -cr /Applications/Coastline.app`.
-- **Windows packaging fails with `EPERM` during rename:** use the repo's build scripts and config, which stage Electron by copying.
-- **No sound:** sound starts off. Press M or enable it in the pause menu.
+- **macOS blocks the app:** for the downloaded app, run `xattr -cr /Applications/Coastline.app`.
+- **Windows packaging fails with `EPERM` during rename:** use the repo's build scripts and config.
+- **No sound:** press M or enable sound in the pause menu.

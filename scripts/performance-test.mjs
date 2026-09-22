@@ -21,9 +21,30 @@ try {
   });
   await page.click('#start');
   await page.keyboard.press('KeyP');
+  await page.evaluate(() => {
+    const { renderer, scene } = window.__coastline.rendering;
+    const compile = renderer.compile.bind(renderer), render = renderer.render.bind(renderer);
+    const lighting = () => {
+      const lights = [];
+      scene.traverseVisible(object => { if (object.isLight) lights.push(object.uuid); });
+      return JSON.stringify([lights.sort(), scene.fog?.color.getHex(), renderer.toneMappingExposure]);
+    };
+    window.__compileChecks = [];
+    let compiledLighting;
+    renderer.compile = (...args) => { compiledLighting = lighting(); return compile(...args); };
+    renderer.render = (...args) => {
+      if (compiledLighting) {
+        window.__compileChecks.push(compiledLighting === lighting());
+        compiledLighting = null;
+      }
+      return render(...args);
+    };
+  });
   for (const id of ['coast', 'desert', 'snow', 'jungle', 'plains', 'city', 'volcanic']) {
     await page.evaluate(id => window.__coastline.changeJourney(id), id);
     await settle();
+    assert.ok(await page.evaluate(() => window.__compileChecks.every(Boolean)),
+      `${id}: shader warmup must use the same lights and environment as the revealed route`);
     const frozenFrame = await renderFrame();
     await settle();
     assert.equal(await renderFrame(), frozenFrame, `${id}: paused scene must not redraw`);
@@ -112,6 +133,8 @@ try {
   const restoredFrame = await renderFrame(); await settle();
   assert.equal(await renderFrame(), restoredFrame, 'restored paused canvas must return to idle rendering');
   assert.deepEqual(errors, []);
+  assert.ok(await page.evaluate(() => window.__compileChecks.length >= 6 && window.__compileChecks.every(Boolean)),
+    'all route shader warmups must run with their final environment');
   await mkdir('.artifacts/performance', { recursive: true });
   await writeFile('.artifacts/performance/browser-report.json', JSON.stringify({ passed: true, records }, null, 2));
   console.log(JSON.stringify({ passed: true, records }, null, 2));

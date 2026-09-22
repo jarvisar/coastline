@@ -76,7 +76,7 @@ export class AmbientOcclusion {
     this.quad = new FullScreenQuad(this.material);
     // Bound once: this runs over every visible object on every rendered frame.
     this.hideOverlay = object => {
-      if (!object.isMesh) return;
+      if (!object.isMesh && !object.isPoints && !object.isLine) return;
       // Background layers still draw; they just stay out of the AO prepass,
       // which is a second pass over the whole scene's geometry.
       if (object.userData.ambientOcclusion === false) {

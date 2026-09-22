@@ -102,6 +102,13 @@ export class SnowChunk {
     buildSnowDiscoveries(this, this.discoveries);
     buildAlpineLandmarks(this);
     solidRocks(this, alpineRockVariants.map(variant => variant.rock));
+    // Lights need the cabins on either side of every position in this chunk.
+    // Survey them in the worker and transfer the results with the scenery:
+    // the main thread's independent cache otherwise repeats this costly search.
+    this.features.cabinLights = [];
+    for (let i = Math.floor((this.start - 76) / CABIN_SPACING); i <= Math.floor((this.start + CHUNK_LENGTH - 76) / CABIN_SPACING) + 1; i++) {
+      this.features.cabinLights.push({ index: i, ...alpineCabin(i) });
+    }
     finalizeChunkTransforms(this.group);
   }
   addMesh(g, mat, name) {
@@ -423,7 +430,8 @@ export class SnowWorld {
     const cabinIndex = Math.floor((s - 76) / CABIN_SPACING);
     if (cabinIndex !== this.cabinIndex || this.origin !== this.lightOrigin) {
       this.cabins = this.cabinLights.map((light, i) => {
-        const cabin = alpineCabin(cabinIndex + i), p = snowPosition(cabin.s, cabin.u, cabin.y);
+        const cabin = this.chunks.get(center).features.cabinLights.find(cabin => cabin.index === cabinIndex + i);
+        const p = snowPosition(cabin.s, cabin.u, cabin.y);
         light.position.set(p.x - 3, p.y + 2, p.z + this.origin);
         return cabin;
       });

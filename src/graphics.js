@@ -155,6 +155,7 @@ export class Graphics {
     // one way and the picture cannot flicker between two levels all drive.
     this.ceiling = 0;
     this.target = 60;
+    this.refreshRate = 60;
     this.cascade = null;
     this.suspend(FIRST_SETTLE_MS);
   }
@@ -183,7 +184,7 @@ export class Graphics {
     this.mode = mode === 'auto' ? 'auto' : mode;
     // A fresh choice clears adaptive history and the density override.
     // The independent AO choice stays as the player left it.
-    this.ceiling = 0; this.cascade = null; this.target = 60;
+    this.ceiling = 0; this.cascade = null; this.target = this.refreshRate;
     this.densityOverride = null;
     if (index !== -1) this.level = index;
     this.suspend();
@@ -239,13 +240,42 @@ export class Graphics {
   suspend(settle = SETTLE_MS) {
     this.settle = settle; this.startedAt = null; this.windowStart = null;
     this.frames = 0; this.slow = 0; this.fast = 0;
+    this.refreshPrevious = null; this.refreshStart = null; this.refreshIntervals = [];
+  }
+
+  // Learn faster displays from the cadence they actually deliver. At 120 Hz,
+  // alternating 8/16 ms frames is already uneven even though the average is
+  // above 60 FPS. A lower percentile finds that cadence through dropped frames;
+  // requiring a window of samples ignores isolated short timestamp intervals.
+  observeRefresh(timestamp) {
+    const previous = this.refreshPrevious;
+    this.refreshPrevious = timestamp;
+    this.refreshStart ??= timestamp;
+    if (previous !== null && timestamp > previous) this.refreshIntervals.push(timestamp - previous);
+    if (timestamp - this.refreshStart < WINDOW_MS) return;
+    if (this.refreshIntervals.length >= 30) {
+      this.refreshIntervals.sort((a, b) => a - b);
+      const interval = this.refreshIntervals[Math.floor(this.refreshIntervals.length * .2)];
+      const rate = Math.min(240, 1000 / interval);
+      if (rate > this.refreshRate * 1.1) {
+        this.refreshRate = rate;
+        this.target = rate;
+        this.fast = 0; this.slow = 0; this.cascade = null;
+      }
+    }
+    this.refreshStart = timestamp; this.refreshIntervals.length = 0;
   }
 
   // One sample per displayed frame. `active` is false while paused, hidden or
   // changing route, when frame times say nothing about how the scene performs.
   sample(timestamp, active) {
     if (!this.auto) return false;
-    if (!active) { this.startedAt = null; this.windowStart = null; this.frames = 0; return false; }
+    if (!active) {
+      this.startedAt = null; this.windowStart = null; this.frames = 0;
+      this.refreshPrevious = null; this.refreshStart = null; this.refreshIntervals.length = 0;
+      return false;
+    }
+    this.observeRefresh(timestamp);
     this.startedAt ??= timestamp;
     if (timestamp - this.startedAt < this.settle) return false;
     if (this.windowStart === null) { this.windowStart = timestamp; this.frames = 0; return false; }

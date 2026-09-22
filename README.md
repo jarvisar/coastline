@@ -1,8 +1,8 @@
 # Coastline
 
-Endless driving game built with [Three.js](https://threejs.org/). Drive yourself or turn on autodrive. Supports keyboard, touch, controllers, and browser VR.
+Endless driving game built with [Three.js](https://threejs.org/). Supports keyboard, touch, controllers, and browser VR.
 
-[Play in your browser](https://jarvisar.github.io/coastline/) or download a [desktop build](https://github.com/jarvisar/coastline/releases). See [desktop setup](ELECTRON.md) for Windows, Linux, macOS, and Steam Deck, or [PWA.md](PWA.md) to install the website for offline use.
+[Play in your browser](https://jarvisar.github.io/coastline/) or download a [desktop build](https://github.com/jarvisar/coastline/releases).
 
 ## Run locally
 
@@ -13,34 +13,13 @@ npm install
 npm run dev
 ```
 
-Open the URL printed by Vite. Use its Network URL to play on a phone on the same Wi-Fi. On Windows, allow Node through the firewall for private networks if prompted.
+Open the URL printed by Vite. Use the Network URL to play on a phone on the same Wi-Fi. Allow Node through the Windows firewall for private networks if prompted.
 
-To build and preview:
-
-```sh
-npm run build
-npm run preview
-```
-
-## Routes and cars
-
-Use **Change Route** or press **1–7**:
-
-1. Pacific Coast
-2. Red Rock Desert
-3. Midnight Alpine
-4. Emerald Jungle
-5. Golden Plains
-6. Rainy Downtown
-7. Volcanic Rift
-
-Each route keeps your position and mileage for the current visit. Reset starts the current route in a new area with zero mileage. Reloading generates a new world; add `?seed=4817` to the URL to revisit or share one. Seeds can be any unsigned 32-bit integer.
-
-Open **Garage** to change cars or paint. **Default** uses the route's car. Cars have different handling and lose speed and grip off-road. Your car choice is saved; paint applies to all cars for the current visit and resets on reload.
+Use `npm run build` to build and `npm run preview` to preview.
 
 ## Controls
 
-Controller labels below use Xbox / PlayStation names.
+Controller buttons use Xbox / PlayStation names.
 
 | Action | Keyboard | Controller |
 | --- | --- | --- |
@@ -60,46 +39,63 @@ Controller labels below use Xbox / PlayStation names.
 | Fullscreen | F | LB / L1 |
 | FPS counter | F3 | Right stick press (R3) |
 
-Numpad 8 / 2 / 4 / 6 also work for driving, with Num Lock on or off. Views include four overhead distances, third-person, and first-person.
+Numpad 8 / 2 / 4 / 6 also work for driving. Press V to cycle through four overhead views, third-person, and first-person.
 
-Autodrive follows the road and passes slower traffic when there's room. Steering, accelerating, or braking gives control back to you.
+Press H to follow the road automatically. Steering, accelerating, or braking turns autodrive off.
 
-On a controller, use the D-pad or stick to move through menus, A / Cross to select, and B / Circle to go back. Press a button if the browser hasn't detected the controller. Disconnecting or leaving the tab pauses the game; release held controls before resuming. If a browser blocks controller fullscreen, use F or the pause menu's Fullscreen button.
+In controller menus, use the D-pad or stick to move, A / Cross to select, and B / Circle to go back. Press a button if the browser hasn't detected the controller. Disconnecting it or leaving the tab pauses the game.
 
-On touchscreens, tap **Let's drive**, then drag the joystick in the direction you want to move on screen. Drag farther to go faster; release to stop. In first-person and third-person views, push up to accelerate, left/right to steer, and down to brake or reverse.
+On touchscreens, tap **Let's drive** and drag the joystick where you want to go. Drag farther to go faster; release to stop. In first-person and third-person, push up to accelerate, left/right to steer, and down to brake or reverse.
 
-You can drive off the road anywhere. Water, lava and cliffs still stop the car, as buildings, tree trunks, fences and other solid scenery do everywhere.
+## Routes and cars
 
-For rainbow paint, enter **↑ ↑ ↓ ↓ ← → ← → B A** on the keyboard. On a controller, use the same D-pad sequence, then B and A (Circle and Cross), while driving. Enter it again to get your paint back. Reloading turns it off.
+Use **Change Route** or press **1–7**:
+
+1. Pacific Coast
+2. Red Rock Desert
+3. Midnight Alpine
+4. Emerald Jungle
+5. Golden Plains
+6. Rainy Downtown
+7. Volcanic Rift
+
+Each route keeps your position and mileage until you reload. Reset starts the current route in a new area. Add `?seed=4817` to the URL to revisit or share a world; seeds accept unsigned 32-bit integers.
+
+Open **Garage** to change cars or paint. **Default** uses the route's car. Car choice is saved; paint applies to all cars and resets on reload. Cars handle differently and lose speed and grip off-road.
+
+For rainbow paint, enter **↑ ↑ ↓ ↓ ← → ← → B A** while driving. On a controller, use the D-pad, then B / Circle and A / Cross. Enter it again to restore your paint.
 
 ## Settings
 
-The pause menu has traffic, sound, fullscreen, and graphics controls. **Auto** adjusts graphics quality while driving; High, Balanced, Smooth, and Basic set a fixed level. Lower levels reduce resolution, shadow detail, and view distance. Basic also uses a cheaper shadow filter for slower devices. The pixel-density slider adjusts resolution separately. Changes to multisampling take effect on the next load.
+Open the pause menu for traffic, sound, fullscreen, and graphics settings.
 
-**Soft shading** adds ambient occlusion and starts off. Whether it is on is saved separately from graphics quality, and neither a preset nor Auto switches it; while it is on, its cost follows the quality level. `?ao=0` disables it for a visit. Sound also starts off. Press **M** to enable it, and use **Audio settings** for channel volumes, presets, and optional music. See [audio.md](docs/audio.md).
+**Auto** adjusts graphics quality while driving. High, Balanced, Smooth, and Basic use fixed levels. Lower levels reduce resolution, shadows, and view distance. The pixel-density slider adjusts resolution separately. Multisampling changes apply after reloading.
 
-## Quest / browser VR
+**Soft shading** adds ambient occlusion. It starts off and is saved separately from graphics quality. Use `?ao=0` to disable it for a visit.
 
-Open the HTTPS site in the Quest browser, then choose **Enter VR** on the title screen or in the pause menu. The button appears when immersive WebXR is available. A plain HTTP local-network URL won't work; local headset development needs HTTPS with a trusted certificate. VR is only available in the browser build.
+Sound starts off. Press **M** to enable it. **Audio settings** has channel volumes, presets, and music.
 
-- **Left stick:** steer. The right stick works if only the right controller is connected.
+## VR
+
+Open the HTTPS site in the Quest browser and choose **Enter VR**. Local headset development needs HTTPS with a trusted certificate. VR requires the browser build and immersive WebXR support.
+
+- **Left stick:** steer. The right stick works if it's the only controller connected.
 - **Right trigger:** accelerate. **Left trigger:** brake, then reverse. **Either grip:** strong brake.
 - **A:** change view. **B / left stick press:** pause or resume.
 - **X:** reset. **Y:** exit VR. **Right stick press:** recenter.
 
-VR starts in third-person and supports all six views. In menus, use stick up/down and A, or point at a button and pull a trigger. B goes back. Exiting VR pauses the game and restores the previous camera. Custom paint entry remains on the regular page.
+VR starts in third-person. In menus, use stick up/down and A, or point and pull a trigger. B goes back. Exiting VR pauses the game. Custom paint entry uses the regular page.
 
 ## Development
 
-Route generation and scenery live in [src/world/](src/world/), driving in [vehicle.js](src/vehicle.js), and scene setup in [main.js](src/main.js). Geometry and audio are generated in code; there are no external model, texture, or audio downloads.
+Scenery is in [src/world/](src/world/), driving in [vehicle.js](src/vehicle.js), and scene setup in [main.js](src/main.js). Geometry and audio are generated in code.
 
-```sh
-npm test
-```
+Run `npm test` for unit tests. With the dev server running, use `npm run test:browser` for driving and streaming checks. Other tests are in [package.json](package.json).
 
-With the dev server running, `npm run test:browser` checks driving and streaming. Other checks are listed in [package.json](package.json) and [scripts/](scripts/). Browser scripts generally use Chrome installed at the standard Windows path and accept `TEST_URL` to change the server address. Reports go to `.artifacts/`. Emulated browser and VR checks don't measure performance on physical phones or headsets.
+Browser scripts generally use Chrome at the standard Windows path. Set `TEST_URL` to use another server address. Reports go to `.artifacts/`.
 
-See [discovery frequency](docs/discoveries.md) to change how often landmarks appear.
-
-See [performance work and measurements](docs/performance.md) for the rendering and
-loading optimizations, research references, and reproducible profiling commands.
+- [Desktop app and Steam Deck](ELECTRON.md)
+- [Install the website / offline use](PWA.md)
+- [Audio](docs/audio.md)
+- [Discovery frequency](docs/discoveries.md)
+- [Performance](docs/performance.md)

@@ -7,7 +7,31 @@ import { lakeClock } from '../src/world/alpine-lake.js';
 import { alpineCabin, CABIN_SPACING } from '../src/world/alpine-cabins.js';
 import { SnowWorld, SnowChunk } from '../src/world/snow.js';
 import { Snowfall } from '../src/world/snowfall.js';
+import { weatherPositions } from './weather-positions.js';
 import { DrivingController } from '../src/vehicle.js';
+
+test('Alpine lights use transferred cabin positions without surveying the main-thread terrain', () => {
+  const scene = new THREE.Scene();
+  const source = { take(index) {
+    const start = index * CHUNK_LENGTH;
+    const cabinLights = [];
+    for (let i = Math.floor((start - 76) / CABIN_SPACING); i <= Math.floor((start + CHUNK_LENGTH - 76) / CABIN_SPACING) + 1; i++) {
+      cabinLights.push({ index: i, s: i * CABIN_SPACING + 64, u: -123, y: 456 });
+    }
+    return { start, group: new THREE.Group(), features: { cabinLights }, dispose() { this.group.removeFromParent(); } };
+  }, prefetch() {}, retain() {}, dispose() {} };
+  const world = new SnowWorld(scene, source);
+  try {
+    for (const s of [-1025, -512, -1, 0, 75, 76, 127, 128, 587, 588, 1024, 2048, 24]) {
+      world.update(s);
+      const index = Math.floor((s - 76) / CABIN_SPACING);
+      world.cabinLights.forEach((light, i) => {
+        const p = snowPosition((index + i) * CABIN_SPACING + 64, -123, 456);
+        assert.deepEqual(light.position.toArray(), [p.x - 3, p.y + 2, p.z + world.origin]);
+      });
+    }
+  } finally { world.dispose(); }
+});
 
 test('mountain ledges stay continuous, ordered and clear of the driving corridor', () => {
   for (let s = -10000; s < 10000; s += 13) {
@@ -84,10 +108,10 @@ test('lakeside cabins stay on dry land through positive and negative route cells
 test('snowfall stays in world space while the camera follows and the origin rebases', () => {
   const snowfall = new Snowfall(), anchor = { x: 12, y: 67, z: -1023 };
   snowfall.update(12, anchor, 0);
-  const before = Array.from(snowfall.geometry.attributes.position.array);
+  const before = Array.from(weatherPositions(snowfall));
   const next = { x: 14, y: 67.3, z: -1025 };
   snowfall.update(12, next, 1024);
-  const after = snowfall.geometry.attributes.position.array;
+  const after = weatherPositions(snowfall);
   let compared = 0;
   for (let i = 0; i < before.length; i += 3) {
     if (Math.abs(before[i]) > 140 || Math.abs(before[i + 1]) > 90 || Math.abs(before[i + 2]) > 170) continue;
@@ -160,9 +184,9 @@ test('night effects remain bounded, animate deterministically and dispose on lea
     assert.equal(world.glowGeometry.attributes.position.version, positionVersion, 'stationary halos need no repeated position upload');
     assert.deepEqual(world.headlights.position.toArray(), car.car.position.toArray());
     assert.ok(world.headlights.quaternion.angleTo(car.car.quaternion) < .0001);
-    const first = Array.from(world.flakeGeometry.attributes.position.array);
-    world.animate(12, car); assert.deepEqual(Array.from(world.flakeGeometry.attributes.position.array), first);
-    world.animate(13, car); assert.notDeepEqual(Array.from(world.flakeGeometry.attributes.position.array), first);
+    const first = weatherPositions(world.snowfall);
+    world.animate(12, car); assert.deepEqual(weatherPositions(world.snowfall), first);
+    world.animate(13, car); assert.notDeepEqual(weatherPositions(world.snowfall), first);
   }
   for (let i = -50; i < 50; i++) assert.equal(lampAt(i).y, snowRoadHeight(lampAt(i).s) + 7.6);
   assert.equal(world.headlights.visible, true);

@@ -1,6 +1,6 @@
 # Discovery frequency
 
-To change how often a landmark appears, edit its value in the route's `*_DISCOVERY_MILES` table and reload:
+Edit the route's `*_DISCOVERY_MILES` table and reload:
 
 | Route | File |
 | --- | --- |
@@ -12,22 +12,20 @@ To change how often a landmark appears, edit its value in the route's `*_DISCOVE
 | Rainy Downtown | [city-discoveries.js](../src/world/city-discoveries.js) |
 | Volcanic Rift | [volcanic-discoveries.js](../src/world/volcanic-discoveries.js) |
 
-`'cable-car': 5` means roughly one cable car encounter every five miles. Lower values make it more frequent; higher values make it rarer. Use `Infinity` to disable a type. Zero and negative values are invalid.
+`'cable-car': 5` means roughly one encounter every five miles. Lower values make it more common. Use `Infinity` to disable it. Zero and negative values are invalid.
 
-Defaults add up to about one discovery every 2.5 miles per route. Changing one value doesn't rebalance the others. Terrain and the world seed affect placement, so gaps vary. The scheduler enforces minimum spacing even with very frequent settings. Changes can move other discoveries in the same route.
+Defaults average about one discovery every 2.5 miles per route. Terrain, seed, and minimum spacing affect the gaps. Changing one value can move other discoveries but doesn't change their target frequency.
 
-Birds, Alpine lakeside cabins, and ordinary road bridges use separate schedules. A discovery's smaller objects, such as a dock's boat or a farm's tractor, follow the parent discovery.
+Birds, Alpine lakeside cabins, and ordinary road bridges have separate schedules. Smaller objects, such as a dock's boat, follow their parent discovery.
 
-Volcanic Rift includes geothermal stations (9 miles), abandoned mines (11.25), research camps (9), and collapsed basalt arches (11.25). The scene's original lava flows, falls, and river bridges remain part of the terrain.
+## Check placement
 
-All four have placements on both sides. Mines follow the basalt scarps, and natural arches cross the existing lava channels. About 30% of arches span the road instead, with supports and fallen debris clear of traffic. Seeded offsets and small orientation changes keep the sites varied.
-
-Run `node scripts/volcanic-discoveries-test.mjs` with the dev server running to review both sides, rear faces, animations, and the three normal overhead views at desktop, tablet, and phone sizes. Screenshots and reports go to `.artifacts/volcanic-discoveries`.
-
-Check the resulting frequencies from the repo root:
+From the repo root:
 
 ```sh
 node scripts/discovery-frequency.mjs
 ```
 
-The report compares target and measured averages over 2,000 route miles. Pass a number to change the sample length, such as `node scripts/discovery-frequency.mjs 500`. Set `TEST_WORLD_SEED` to check another world. The automated frequency test covers five seeds.
+This compares target and measured averages over 2,000 miles. Pass a sample length, such as `node scripts/discovery-frequency.mjs 500`, or set `TEST_WORLD_SEED` to check another world.
+
+With the dev server running, `node scripts/volcanic-discoveries-test.mjs` checks volcanic landmarks from both sides at desktop, tablet, and phone sizes. Screenshots and reports go to `.artifacts/volcanic-discoveries/`.

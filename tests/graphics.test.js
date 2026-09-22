@@ -124,6 +124,40 @@ test('a cautious start climbs while the device keeps up, one level at a time', (
   assert.equal(display.changes, 3, 'it stops at the top');
 });
 
+for (const refresh of [90, 120, 144]) {
+  test(`Auto preserves ${refresh} Hz delivery instead of accepting any rate above 60`, () => {
+    const graphics = graphicsAt(levelIndex('smooth'));
+    const display = new Device(graphics, [60, refresh * .75, refresh, refresh]).run(120);
+    assert.ok(Math.abs(graphics.target - refresh) < 1);
+    assert.equal(graphics.levelId, 'smooth');
+    assert.deepEqual(display.levels, ['balanced', 'smooth']);
+    graphics.setMode('high'); graphics.setMode('auto');
+    assert.ok(Math.abs(graphics.target - refresh) < 1, 'mode changes retain the measured refresh rate');
+  });
+}
+
+test('Auto detects high refresh through uneven frames and ignores isolated short intervals', () => {
+  const steady = graphicsAt(levelIndex('high'));
+  let time = 0; steady.sample(time, true);
+  for (let i = 0; i < 500; i++) steady.sample(time += (i % 30 === 0 ? 2 : 1000 / 60), true);
+  assert.equal(steady.target, 60);
+  const phone = graphicsAt(levelIndex('high'));
+  const levels = [];
+  phone.onChange(() => levels.push(phone.levelId));
+  time = 0; phone.sample(time, true);
+  for (let i = 0; i < 1500; i++) phone.sample(time += (i % 2 ? 1000 / 120 : 1000 / 60), true);
+  assert.ok(Math.abs(phone.refreshRate - 120) < 1, 'dropped frames do not disguise a 120 Hz display as 80 Hz');
+  assert.equal(levels[0], 'balanced', 'uneven high-refresh delivery triggers a downgrade');
+});
+
+test('hidden frames cannot teach Auto an artificial refresh rate', () => {
+  const graphics = graphicsAt(levelIndex('high'));
+  const display = new Device(graphics, 240).run(20, { active: false });
+  display.run(20, { hz: 60 });
+  assert.equal(graphics.target, 60);
+  assert.equal(display.changes, 0);
+});
+
 test('a climb that turns out to be too much settles one level below it, for good', () => {
   const graphics = graphicsAt(levelIndex('smooth'));
   // This device runs the cheaper levels comfortably but cannot hold the two

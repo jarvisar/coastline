@@ -10,6 +10,7 @@ import { cityParkingForBlock, cityParkingWidth, cityParkingHeight } from '../src
 import { CityWorld, CityChunk, lightning } from '../src/world/city.js';
 import { dressSkyline } from '../src/world/city-architecture.js';
 import { Rainfall } from '../src/world/rainfall.js';
+import { weatherPositions } from './weather-positions.js';
 import { DrivingController } from '../src/vehicle.js';
 
 test('city terrain stays ordered, continuous, level under the road, and lower toward the camera', () => {
@@ -135,11 +136,11 @@ test('city chunks carry buildings, a river and street furniture, and the world s
 test('rain wraps around the car, pauses with the clock, and lightning is rare and brief', () => {
   const rain = new Rainfall(), anchor = { x: 12, y: 24, z: -400 };
   rain.update(1, anchor, 0);
-  const first = Array.from(rain.geometry.attributes.position.array.slice(0, 300));
+  const first = Array.from(weatherPositions(rain).slice(0, 300));
   rain.update(1, anchor, 0);
-  assert.deepEqual(Array.from(rain.geometry.attributes.position.array.slice(0, 300)), first, 'the same clock gives the same rain');
+  assert.deepEqual(Array.from(weatherPositions(rain).slice(0, 300)), first, 'the same clock gives the same rain');
   rain.update(1.5, anchor, 0);
-  const later = rain.geometry.attributes.position.array;
+  const later = weatherPositions(rain);
   assert.notDeepEqual(Array.from(later.slice(0, 30)), first);
   for (let i = 0; i < later.length; i += 3) {
     assert.ok(Math.abs(later[i]) <= 150 && Math.abs(later[i + 1]) <= 100 && Math.abs(later[i + 2]) <= 180, 'a drop left the volume');
@@ -153,9 +154,10 @@ test('rain wraps around the car, pauses with the clock, and lightning is rare an
   // must not accumulate or oscillate faster as the scene clock grows.
   for (const time of [1.5, 300, 3600]) {
     rain.update(time, anchor, 0);
+    const positions = weatherPositions(rain);
     for (let i = 0; i < first.length; i += 3) {
-      assert.equal(rain.geometry.attributes.position.array[i], first[i], 'rain drifts sideways');
-      assert.equal(rain.geometry.attributes.position.array[i + 2], first[i + 2], 'rain drifts along the road');
+      assert.equal(positions[i], first[i], 'rain drifts sideways');
+      assert.equal(positions[i + 2], first[i + 2], 'rain drifts along the road');
     }
   }
   rain.dispose();

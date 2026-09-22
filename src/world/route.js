@@ -186,12 +186,17 @@ export function roadFrame(s) {
   const scale = Math.sqrt(1 + dx * dx);
   return { x: roadX(s), y: roadHeight(s), z: -s, nx: 1 / scale, nz: dx / scale, angle: Math.atan(dx), scale };
 }
-export function positionAt(s, u, height) {
-  const f = roadFrame(s);
+export function positionAt(s, u, height, target = {}) {
+  // Position callers need the road normal, not a full frame's heading and
+  // road height. Avoid those extra trig calls and the intermediate object.
+  const dx = roadDerivative(s), scale = Math.sqrt(1 + dx * dx);
   // Fade out the normal offset beyond the shoulders so wide hills cannot fold
   // over themselves on the inside of a bend. The road itself uses exact normals.
   const offset = Math.abs(u) <= 7 ? u : Math.sign(u) * (7 + 30 * Math.tanh((Math.abs(u) - 7) / 30));
-  return { x: f.x + u + offset * (f.nx - 1), y: height ?? terrainHeight(s, u), z: f.z + offset * f.nz };
+  target.x = roadX(s) + u + offset * (1 / scale - 1);
+  target.y = height ?? terrainHeight(s, u);
+  target.z = -s + offset * (dx / scale);
+  return target;
 }
 
 function baseTerrainHeight(s, u, radius) {

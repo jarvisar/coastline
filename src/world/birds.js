@@ -34,6 +34,7 @@ const transform = new THREE.Object3D();
 const flightUp = new THREE.Vector3(0, 1, 0), forward = new THREE.Vector3();
 const previousForward = new THREE.Vector3(), right = new THREE.Vector3(), up = new THREE.Vector3();
 const basis = new THREE.Matrix4();
+const p = new THREE.Vector3(), before = new THREE.Vector3(), after = new THREE.Vector3();
 
 export class CoastalBirds {
   constructor(chunk) {
@@ -46,22 +47,23 @@ export class CoastalBirds {
       this.flightHeight = Math.max(this.flightHeight, object.boundingBox.max.y + 5);
     }
     this.mesh = new THREE.InstancedMesh(geometry, material, 4);
+    this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.mesh.name = 'coastal-gulls';
     chunk.group.add(this.mesh); this.update(0);
     this.mesh.computeBoundingSphere(); this.mesh.boundingSphere.radius += 85;
   }
   update(time) {
+    // Worker-restored flocks initialize this small deterministic cache once too.
+    if (!this.flight) {
+      this.flight = new Float64Array(16);
+      for (let i = 0; i < 4; i++) {
+        const seed = this.start / 128 * 7 + i;
+        this.flight.set([.13 + randomAt(seed, 1771) * .065, randomAt(seed, 1772) * 2.2,
+          21 + randomAt(seed, 1773) * 7, 8 + randomAt(seed, 1774) * 4], i * 4);
+      }
+    }
     for (let i = 0; i < 4; i++) {
-      const seed = this.start / 128 * 7 + i;
-      const rate = .13 + randomAt(seed, 1771) * .065, delay = randomAt(seed, 1772) * 2.2;
-      const along = 21 + randomAt(seed, 1773) * 7, across = 8 + randomAt(seed, 1774) * 4;
-      const flightPoint = t => {
-        const phase = this.phase + t * rate + delay + .1 * Math.sin(t * .31 + delay);
-        const s = this.start + 64 + Math.cos(phase) * along - i * 2.4;
-        const u = shorelineOffset(s) - 30 + Math.sin(phase) * across + (i % 2 ? 2 : -2);
-        return positionAt(s, u, this.flightHeight + Math.sin(phase * 2 + delay) * 1.2 + i * .35);
-      };
-      const p = flightPoint(time), before = flightPoint(time - .02), after = flightPoint(time + .02);
+      this.flightPoint(i, time, p); this.flightPoint(i, time - .02, before); this.flightPoint(i, time + .02, after);
       // The shoreline bends the actual world-space path; an orbit angle alone
       // cannot tell which way the bird is travelling along that path.
       forward.set(after.x - before.x, after.y - before.y, after.z - before.z).normalize();
@@ -69,11 +71,18 @@ export class CoastalBirds {
       const turn = previousForward.z * forward.x - previousForward.x * forward.z;
       const bank = THREE.MathUtils.clamp(turn * 90, -.32, .32);
       right.crossVectors(forward, flightUp).normalize(); up.crossVectors(right, forward);
-      basis.makeBasis(right, up, forward.clone().negate());
+      basis.makeBasis(right, up, forward.negate());
       transform.position.set(p.x, p.y, p.z + this.start);
       transform.quaternion.setFromRotationMatrix(basis); transform.rotateZ(bank);
       transform.scale.setScalar(.78); transform.updateMatrix(); this.mesh.setMatrixAt(i, transform.matrix);
     }
     this.mesh.instanceMatrix.needsUpdate = true;
+  }
+  flightPoint(i, time, target) {
+    const n = i * 4, rate = this.flight[n], delay = this.flight[n + 1];
+    const phase = this.phase + time * rate + delay + .1 * Math.sin(time * .31 + delay);
+    const s = this.start + 64 + Math.cos(phase) * this.flight[n + 2] - i * 2.4;
+    const u = shorelineOffset(s) - 30 + Math.sin(phase) * this.flight[n + 3] + (i % 2 ? 2 : -2);
+    return positionAt(s, u, this.flightHeight + Math.sin(phase * 2 + delay) * 1.2 + i * .35, target);
   }
 }

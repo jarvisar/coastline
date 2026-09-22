@@ -70,10 +70,13 @@ try {
       graphics.setMode('high'); reads();
       clock = drive(12, clock + 1000, 30);
       const pinned = { level: graphics.levelId, writes: reads() };
+      graphics.setMode('smooth'); graphics.setMode('auto');
+      clock = drive([60, 90, 120, 120], clock + 1000, 120);
+      const highRefresh = { level: graphics.levelId, target: graphics.target, ratio: renderer.getPixelRatio() };
       observer.disconnect();
       graphics.setMode('auto');
       renderer.render(rendering.scene, rendering.camera);
-      return { levels, enabledLevels, steady, slowed, recovered, pinned,
+      return { levels, enabledLevels, steady, slowed, recovered, pinned, highRefresh,
         unchangedProjection: JSON.stringify(projection) === JSON.stringify(camera.projectionMatrix.toArray()) };
     });
 
@@ -106,6 +109,9 @@ try {
     assert.equal(result.recovered.level, 'balanced', 'a settled level does not climb back');
     assert.equal(result.recovered.writes, 0);
     assert.equal(result.pinned.level, 'high', 'a chosen level ignores frame times');
+    assert.equal(result.highRefresh.level, 'smooth', 'Auto preserves smooth delivery on a faster display');
+    assert.ok(Math.abs(result.highRefresh.target - 120) < 1);
+    assert.equal(result.highRefresh.ratio, expected('smooth'));
 
     // The panel reflects the renderer, and survives a rotation and a reload.
     await page.setViewportSize({ width: 844, height: 390 });

@@ -289,8 +289,6 @@ async function boot() {
         nextWorld = new World(scene, chunkWorker.source(id));
         await nextWorld.chunkSource.prepare(nextState.s);
         nextWorld.update(nextState.s);
-        if (renderer.extensions.has('KHR_parallel_shader_compile')) await renderer.compileAsync(scene, rendering.camera);
-        else renderer.compile(scene, rendering.camera);
         world.dispose(); world = nextWorld; journey = id;
         savedJourneys[id] = nextState;
         if (regenerate) { time = 0; hudTime = 0; vehicle.wheelSpin = 0; }
@@ -303,6 +301,11 @@ async function boot() {
         rendering.setJourney(id); audio.setJourney(id); updateJourneyUi(); paintCards(); updatePaintUi();
         vehicle.render(1, world.origin);
         rendering.snap(); rendering.update(vehicle.car, 1, world.origin); world.animate(time, vehicle);
+        // Compile against the final route's lights, fog and traffic. Doing this
+        // before removing the old world produced unused lighting variants and
+        // left the real ones to compile synchronously on the first drive frame.
+        if (renderer.extensions.has('KHR_parallel_shader_compile')) await renderer.compileAsync(scene, rendering.camera);
+        else renderer.compile(scene, rendering.camera);
         updateHud();
         if (renderer.xr.isPresenting) needsRender = true;
         else rendering.render();
@@ -692,7 +695,7 @@ async function boot() {
       soundScene.heading = Math.atan2(cameraMatrix[2], cameraMatrix[0]);
       audio.update(vehicle.audioTelemetry, dt, false, soundScene);
       hudTime += dt; if (hudTime > .1) { updateHud(); hudTime = 0; }
-      // The desktop quality sampler targets 60 Hz and resizes a canvas, whereas
+      // The regular quality sampler measures display cadence and resizes a canvas, whereas
       // the headset owns its framebuffer and refresh rate.
       rendering.recordFrame(timestamp, !vr.active && !paused && !document.hidden && document.hasFocus() && !changingJourney);
       // A paused desktop canvas only redraws when invalidated. In VR, keep
