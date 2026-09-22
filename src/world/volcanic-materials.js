@@ -74,10 +74,11 @@ glowMaterial.customProgramCacheKey = () => 'volcanic-glow-v1';
 export const smokeMaterial = new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, opacity: .52 });
 smokeMaterial.onBeforeCompile = shader => {
   shader.uniforms.volcanicTime = volcanicClock;
-  shader.vertexShader = 'uniform float volcanicTime; attribute vec3 smokeAnchor; attribute vec2 smokeCycle; varying float vSmokeAge; varying float vSmokeEdge; varying vec3 vSmokeShape;\n' + shader.vertexShader;
+  shader.vertexShader = 'uniform float volcanicTime; attribute vec3 smokeAnchor; attribute vec2 smokeCycle; attribute float smokeKind; varying float vSteam; varying float vSmokeAge; varying float vSmokeEdge; varying vec3 vSmokeShape;\n' + shader.vertexShader;
   shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>', `
     float age = fract(smokeCycle.x + volcanicTime * .055);
     vSmokeAge = age;
+    vSteam = smokeKind;
     vSmokeShape = position;
     // Each puff leaves the column its own way, so a plume seen from the road
     // billows instead of stacking up like a row of identical discs.
@@ -88,10 +89,11 @@ smokeMaterial.onBeforeCompile = shader => {
     vec3 towardCamera = isOrthographic ? vec3(0.0, 0.0, 1.0) : normalize(-(modelViewMatrix * vec4(centre, 1.0)).xyz);
     vSmokeEdge = abs(dot(normalize(normalMatrix * position), towardCamera));
   `);
-  shader.fragmentShader = 'varying float vSmokeAge; varying float vSmokeEdge; varying vec3 vSmokeShape;\n' + shader.fragmentShader;
+  shader.fragmentShader = 'varying float vSteam; varying float vSmokeAge; varying float vSmokeEdge; varying vec3 vSmokeShape;\n' + shader.fragmentShader;
   shader.fragmentShader = shader.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
     // Lit from the crater below, then cooling to ash-pink as it thins. Linear colours.
     diffuseColor.rgb = mix(mix(vec3(1.0, .19, .022), vec3(.30, .085, .057), smoothstep(0.0, .3, vSmokeAge)), vec3(.16, .10, .09), smoothstep(.25, 1.0, vSmokeAge));
+    diffuseColor.rgb = mix(diffuseColor.rgb, mix(vec3(.43, .40, .35), vec3(.24, .23, .22), vSmokeAge), vSteam);
     float billow = sin(vSmokeShape.x * 4.5 + vSmokeAge * 3.0) * sin(vSmokeShape.y * 5.0 - vSmokeAge * 2.0) * sin(vSmokeShape.z * 3.5);
     vec3 facetNormal = normalize(cross(dFdx(vSmokeShape), dFdy(vSmokeShape)));
     float facetLight = abs(dot(facetNormal, normalize(vec3(-.4, .7, .5))));
@@ -99,4 +101,4 @@ smokeMaterial.onBeforeCompile = shader => {
     diffuseColor.a *= smoothstep(0.0, .08, vSmokeAge) * (1.0 - smoothstep(.55, 1.0, vSmokeAge)) * smoothstep(.06, .7, vSmokeEdge);
   `);
 };
-smokeMaterial.customProgramCacheKey = () => 'volcanic-smoke-v9';
+smokeMaterial.customProgramCacheKey = () => 'volcanic-smoke-v10';

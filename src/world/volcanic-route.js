@@ -1,4 +1,6 @@
 import { roadFrame, roadHeight, positionAt, randomAt, smoothstep, lerp } from './route.js';
+import { volcanicDiscoveries } from './volcanic-discoveries.js';
+import { volcanicPlatformHeight } from './volcanic-discovery-platforms.js';
 
 export const VOLCANIC_STEP = 8;
 // Columns on one side of the road count outward from the centre line. These two
@@ -208,7 +210,7 @@ function baseHeight(s, u) {
   return d < far ? lerp(plateau, bed, wall(far - d)) : plateau;
 }
 
-export function volcanicTerrainHeight(s, u) {
+export function volcanicNaturalTerrainHeight(s, u) {
   const base = baseHeight(s, u), crossing = volcanicCrossing(s);
   if (Math.abs(s - crossing.centre) > 38 || u > 80 || u < -90) return base;
   const channel = crossingChannel(crossing, u);
@@ -221,6 +223,26 @@ export function volcanicTerrainHeight(s, u) {
   const cut = 1 - (.76 * smoothstep(inner, inner + 3.3, distance) + .24 * smoothstep(inner + 3.3, outer, distance));
   const sourceFade = 1 - smoothstep(channel.source - 7, channel.source, u);
   return lerp(base, Math.min(base, channel.level - .075), cut * sourceFade);
+}
+
+const discoveryTerrainCache = new Map();
+function platformTerrain(s,u,natural) {
+  if(Math.abs(u)<=7 || Math.abs(u)>85)return natural;
+  const cell=Math.floor(s/128);
+  if(!discoveryTerrainCache.has(cell)) {
+    discoveryTerrainCache.set(cell,volcanicDiscoveries(cell*128-64,(cell+1)*128+64).filter(site=>site.platform));
+    if(discoveryTerrainCache.size>128)discoveryTerrainCache.delete(discoveryTerrainCache.keys().next().value);
+  }
+  const sites=discoveryTerrainCache.get(cell);
+  if(!sites.length)return natural;
+  // Preserve the road, open lava channels and the original basin cliff lip.
+  const near=riftProfile(s,Math.sign(u)).near;
+  const protection=smoothstep(7,11,Math.abs(u))*(1-smoothstep(near-5,near-1,Math.abs(u)));
+  return volcanicPlatformHeight(s,u,natural,sites,protection);
+}
+
+export function volcanicTerrainHeight(s,u) {
+  return platformTerrain(s,u,volcanicNaturalTerrainHeight(s,u));
 }
 
 export function volcanicHeight(s, u) {
@@ -241,7 +263,8 @@ export function volcanicVertex(row, column, jitter = 3) {
   // Cliff rows keep the height designed for their column, so sideways jitter
   // facets the face without sliding a crest vertex down to the lava.
   const cliff = band >= 4 && crossingInfluence(s, u, 4) < .01;
-  return { ...volcanicPosition(s, u, volcanicTerrainHeight(s, cliff ? columns[column] : u)), s, u, band };
+  const natural=volcanicNaturalTerrainHeight(s,cliff?columns[column]:u);
+  return { ...volcanicPosition(s, u, platformTerrain(s,u,natural)), s, u, band };
 }
 
 export const volcanicDrivingRoute = {

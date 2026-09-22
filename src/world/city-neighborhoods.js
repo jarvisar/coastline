@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { CHUNK_LENGTH, randomAt, lerp } from './route.js';
 import { blockAt, blockBoundary, nearStreet, bankStreetRange, cityGroundHeight, cityStreetHeight, STREET_HALF_WIDTH } from './city-route.js';
 import { drapeCityLawn } from './city-surfaces.js';
+import { dockRailingSpans } from './city-docks.js';
 
 const WALLS = ['#887970', '#96968e', '#78878b', '#8a6960', '#a99d85', '#71808a'];
 const ROOFS = ['#555e63', '#626866', '#6b625c'];
@@ -111,13 +112,13 @@ export function buildNeighborhoods(chunk) {
   // chunk. Planting must not depend on which side of a seam was built first.
   plantings.forEach(plantTree);
 
-  // Continuous riverfront edge. The rail opens only at a real bridge, so
+  // Continuous riverfront edge. The rail opens at bridges and dock access, so
   // T junctions retain a walking route instead of ending abruptly at water.
   for (let s = chunk.start; s < chunk.start + CHUNK_LENGTH; s += 8) {
     const index = blockAt(s + 4), nearest = Math.abs(s + 4 - blockBoundary(index)) < Math.abs(s + 4 - blockBoundary(index + 1)) ? index : index + 1;
     const center = blockBoundary(nearest), edge = STREET_HALF_WIDTH - .3;
     const spans = nearStreet(nearest) ? [[s, Math.min(s + 8, center - edge)], [Math.max(s, center + edge), s + 8]] : [[s, s + 8]];
-    for (const [from, to] of spans) {
+    for (const [from, to] of spans.flatMap(([from, to]) => to > from ? dockRailingSpans(from, to, 'far') : [])) {
       if (to <= from) continue;
       const point = (t, lift) => chunk.at(t, -133, cityStreetHeight(t, -133) + .095 + lift);
       chunk.beam(boxes, point(from, 0), point(from, 1.04), .085, '#414b4d');

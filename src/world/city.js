@@ -12,6 +12,7 @@ import { terrainSampler } from './coastal-assets.js';
 import { cityAssets, cityTrees, parkedCars, PARKED_PAINTS } from './city-assets.js';
 import { dressBuilding, buildShopfront, rooftopTank, dressSkyline } from './city-architecture.js';
 import { buildPromenade } from './city-promenade.js';
+import { buildCityDocks, dockRailingSpans } from './city-docks.js';
 import { buildCityParking, cityParkingAt } from './city-parking.js';
 import { cityParkLayout, paintCityPark } from './city-surfaces.js';
 import { buildCityRoads } from './city-roads.js';
@@ -102,7 +103,7 @@ export class CityChunk {
     this.scenery = { blocks: { vertices: [], colors: [] }, details: { vertices: [], colors: [] }, streets: { vertices: [], colors: [] }, lit: { vertices: [], colors: [] }, skyline: { vertices: [], colors: [] },
       boxes: [], furniture: new Map(), parked: new Map(), bark: new Map(), leaves: new Map() };
     this.buildTerrain(); this.buildRoad(); this.buildRiver(); reserveCityLandmarks(this, this.discoveries);
-    this.buildBlocks(); this.buildStreets(); buildPromenade(this); buildCityParking(this); buildCityRoads(this); buildNeighborhoods(this);
+    this.buildBlocks(); this.buildStreets(); buildPromenade(this); buildCityDocks(this); buildCityParking(this); buildCityRoads(this); buildNeighborhoods(this);
     buildCityDiscoveries(this, this.discoveries);
     this.finishScenery();
     this.planting = null;
@@ -508,7 +509,7 @@ export class CityChunk {
     for (let s = this.start; s < this.start + CHUNK_LENGTH; s += 4) {
       const street = crossStreetAt(s + 2), edge = STREET_HALF_WIDTH - .3;
       const spans = nearStreet(street.index) ? [[s, Math.min(s + 4, street.center - edge)], [Math.max(s, street.center + edge), s + 4]] : [[s, s + 4]];
-      for (const [from, to] of spans) {
+      for (const [from, to] of spans.flatMap(([from, to]) => to > from ? dockRailingSpans(from, to) : [])) {
         if (to <= from) continue;
         const mid = (from + to) / 2, u = quayOffset(mid) + .55;
         if (!cityDiscoveryClears(mid, u, this.discoveries.filter(site => site.kind !== 'river-bridge'), (to - from) / 2)) continue;

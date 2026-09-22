@@ -12,6 +12,8 @@ import { finalizeChunkTransforms } from './chunk-transforms.js';
 import { updateResidentChunks } from './resident.js';
 import { solidPost, solidSpan, solidRocks } from './colliders.js';
 import { VolcanicAtmosphere } from './volcanic-atmosphere.js';
+import { volcanicDiscoveries, volcanicDiscoveryClears } from './volcanic-discoveries.js';
+import { buildVolcanicDiscoveries } from './volcanic-discovery-scenery.js';
 
 const palette = colors => colors.map(c => new THREE.Color(c));
 const rockMaterial = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 1 });
@@ -235,6 +237,7 @@ export class VolcanicChunk {
   constructor(index) {
     this.index = index; this.start = index * CHUNK_LENGTH; this.owned = []; this.features = { vents: [], colliders: [], lavafalls: [], columns: [], bridges: [] };
     this.group = new THREE.Group(); this.group.name = `volcanic-chunk-${index}`;
+    this.discoveries = volcanicDiscoveries(this.start - 128, this.start + CHUNK_LENGTH + 128);
     // Rock, molten rock and spilled light each merge into one mesh per chunk.
     this.rock = surface(); this.lava = { ...surface(), flow: [], flowCoordinates: [] }; this.glow = surface(); this.rocks = []; this.pebbles = []; this.tops = [];
     this.flowSurface = new FlowSurface(VOLCANIC_STEP, -Infinity); this.spillways = []; this.flowPaths = [];
@@ -245,13 +248,14 @@ export class VolcanicChunk {
     this.sampleFormations();
     this.buildLavafalls(); this.buildSurfaceFlows(); this.buildFissures(); this.buildCrust(); this.buildChannelBanks(); this.buildRocks(); this.buildTalus(); this.buildCreekBanks(); this.buildGroundCover(); this.buildTrees();
     buildVolcanicBridge(this);
+    buildVolcanicDiscoveries(this, this.discoveries);
     this.addMesh(this.rock, basaltMaterial, 'volcanic-formations', true);
     this.addMesh(this.lava, lavaMaterial, 'volcanic-lava');
     this.addMesh(this.glow, glowMaterial, 'volcanic-glow');
     instances(this.group, 'volcanic-boulders', rockGeometry, rockMaterial, this.rocks);
     instances(this.group, 'volcanic-pebbles', pebbleGeometry, rockMaterial, this.pebbles, false);
     this.buildSmoke();
-    for (const key of ['rock', 'lava', 'glow', 'rocks', 'pebbles', 'tops', 'ground', 'flowSurface', 'flowPaths', 'flowCoverage', 'spillways', 'groundSurface', 'screeBeds']) delete this[key];
+    for (const key of ['rock', 'lava', 'glow', 'rocks', 'pebbles', 'tops', 'ground', 'flowSurface', 'flowPaths', 'flowCoverage', 'spillways', 'groundSurface', 'screeBeds', 'discoveries']) delete this[key];
     solidRocks(this, [rockGeometry]);
     finalizeChunkTransforms(this.group);
   }
@@ -272,6 +276,7 @@ export class VolcanicChunk {
   }
   // A point on the drawn terrain, which differs from the analytic surface between its coarse vertices.
   onGround(s, u, lift = 0) {
+    if (!volcanicDiscoveryClears(s, u, this.discoveries)) return null;
     const p = this.at(s, u), y = this.ground(p.x, p.z);
     if (y === null) return null;
     p.y = y + lift; return p;
@@ -290,7 +295,8 @@ export class VolcanicChunk {
   }
   buildTerrain() {
     const crossing = volcanicCrossing(this.start + 64), dense = crossing.centre > this.start && crossing.centre < this.start + CHUNK_LENGTH;
-    const spacing = dense ? 2 : VOLCANIC_STEP;
+    const platforms = this.discoveries.some(site => site.platform && site.s > this.start-38 && site.s < this.start+CHUNK_LENGTH+38);
+    const spacing = dense || platforms ? 2 : VOLCANIC_STEP;
     const data = { ...surface(), smooth: [] }, rows = CHUNK_LENGTH / spacing, first = this.start / VOLCANIC_STEP;
     const vertices = Array.from({ length: rows + 1 }, (_, r) => volcanicColumns(this.start + r * spacing).map((_, c) => {
       const p = volcanicVertex(first + r * spacing / VOLCANIC_STEP, c, r === 0 || r === rows ? 3 : spacing === 2 ? .7 : 3); p.z += this.start;
@@ -304,14 +310,21 @@ export class VolcanicChunk {
     }));
     // Add cross-slope samples only where the wide channel needs them. The
     // original rows remain available for the cliff rim and exact chunk seams.
-    const splits = vertices[0].slice(0, -1).map((p, c) => dense && Math.abs(p.u) > 7 && Math.abs(p.u) < 78
-      && vertices.some(row => row[c + 1].u - row[c].u > 3.2));
+    const splits = vertices[0].slice(0, -1).map((p, c) => {
+      const gap = Math.max(...vertices.map(row => row[c+1].u-row[c].u));
+      if(platforms && Math.abs(p.u)<85 && Math.abs(vertices[0][c+1].u)<85 && Math.abs(p.u)>7) return Math.max(1,Math.ceil(gap/1.5));
+      return dense && Math.abs(p.u)>7 && Math.abs(p.u)<78 && gap>3.2 ? 2 : 1;
+    });
     const facets = vertices.map((row, r) => row.flatMap((a, c) => {
-      if (!splits[c]) return [a];
-      const b = row[c + 1], mid = { normal: a.normal.clone().lerp(b.normal, .5).normalize() };
-      for (const key of ['s', 'u', 'x', 'y', 'z', 'band']) mid[key] = (a[key] + b[key]) / 2;
-      if (r > 0 && r < rows && crossingInfluence(mid.s, mid.u, 2) > .01) mid.y = volcanicTerrainHeight(mid.s, mid.u);
-      return [a, mid];
+      if (!splits[c] || splits[c]===1) return [a];
+      const b = row[c + 1], points=[a];
+      for(let i=1;i<splits[c];i++) {
+        const t=i/splits[c],mid={normal:a.normal.clone().lerp(b.normal,t).normalize()};
+        for (const key of ['s', 'u', 'x', 'y', 'z', 'band']) mid[key] = lerp(a[key],b[key],t);
+        if (r > 0 && r < rows && (platforms || crossingInfluence(mid.s, mid.u, 2) > .01)) mid.y = volcanicTerrainHeight(mid.s, mid.u);
+        points.push(mid);
+      }
+      return points;
     }));
     const heat = p => {
       if (crossingInfluence(p.s, p.u, 2) > .15) {
@@ -520,6 +533,7 @@ export class VolcanicChunk {
       const bridge = volcanicCrossing(s);
       if (s > bridge.start - 4 && s < bridge.end + 4) continue;
       if (side < 0 && besideRail(s)) continue;
+      if (!volcanicDiscoveryClears(s, side * 7.8, this.discoveries)) continue;
       const p = this.at(s, side * 7.8);
       matrix.position.set(p.x, p.y + .5, p.z); matrix.rotation.set(0, 0, 0); matrix.scale.set(1, 1, 1); matrix.updateMatrix();
       bake(data, postGeometry, matrix.matrix, postColor); solidPost(this, p.x, p.z, .13);
@@ -532,6 +546,7 @@ export class VolcanicChunk {
       const bridge = volcanicCrossing(s);
       if (s > bridge.start - 8 && s < bridge.end + 4) continue;
       if (!besideRail(s)) continue;
+      if (!volcanicDiscoveryClears(s + 2, -9.2, this.discoveries, 2)) continue;
       const a = this.at(s, -9.2, roadHeight(s) + .85), b = this.at(s + 4, -9.2, roadHeight(s + 4) + .85);
       const length = Math.hypot(b.x - a.x, b.z - a.z), yaw = Math.atan2(b.x - a.x, b.z - a.z);
       for (const [height, width, tint] of [[-.13, .11, railShade], [0, .2, railColor], [.13, .11, railColor]]) {
@@ -652,6 +667,8 @@ export class VolcanicChunk {
       for (let j = Math.max(0, Math.floor(probe.near / CELL) - 1); j <= Math.floor(probe.far / CELL) + 1; j++) {
         const seed = riftSeed(i, j, side);
         if (seed.s < this.start || seed.s >= this.start + CHUNK_LENGTH) continue;
+        // Leave room for discoveries at the rim while retaining the other islands.
+        if (!volcanicDiscoveryClears(seed.s, side * seed.d, this.discoveries, CELL * .65)) continue;
         const { near, far, level, rise } = riftProfile(seed.s, side), across = (seed.d - near) / (far - near), random = seededRandom(seed.key + 7800);
         if (seed.kind < (side < 0 ? .34 : POOL)) {
           // Open lava, with a few worn stumps standing in it.
@@ -719,6 +736,7 @@ export class VolcanicChunk {
   }
   // A fluted spatter cone with a molten crater, a plume, and a skirt of fallen rock.
   cone(s, u, radius, height, base, random, solid = false, landmark = false) {
+    if (!volcanicDiscoveryClears(s, u, this.discoveries, radius * 1.5)) return null;
     if (crossingInfluence(s, u, radius * 1.3) > .1) return null;
     const c = this.at(s, u, base), flutes = 7 + Math.floor(random() * 4), count = flutes * 2, spin = random() * Math.PI * 2;
     const ridge = Array.from({ length: count }, (_, k) => (k % 2 ? .76 + random() * .1 : 1) * (.93 + random() * .14));
@@ -900,6 +918,7 @@ export class VolcanicChunk {
   // A blunt, asymmetric summit with broken shoulders, rather than another
   // flat tabletop. Its buried skirt joins the surrounding mountain slope.
   crag(s, u, radius, height, random, baseHeight) {
+    if (!volcanicDiscoveryClears(s, u, this.discoveries, radius * 1.5)) return;
     const base = baseHeight === undefined ? this.onGround(s, u) : this.at(s, u, baseHeight), count = 7, spin = random() * Math.PI * 2;
     if (!base) return;
     const lean = (random() - .5) * radius * .55;
@@ -928,6 +947,7 @@ export class VolcanicChunk {
       const s = this.start + (n ? 110 : 56) + random() * 6, { near } = riftProfile(s, 1), { toe, upper } = shelfSteps(s, 1);
       const d = n ? toe + 3 : upper + 2, along = n ? 12 + random() * 4 : 18 + random() * 4, creek = creekSection(s);
       const across = n ? 5 + random() * 3 : Math.min(13, (near - toe) * .4), spin = random() * .4;
+      if (!volcanicDiscoveryClears(s, d, this.discoveries, Math.max(along, across))) continue;
       const outline = Array.from({ length: 7 }, (_, k) => {
         const angle = spin + k * Math.PI * 2 / 7, r = .85 + random() * .2;
         const at = s + Math.cos(angle) * along * r;
@@ -949,6 +969,7 @@ export class VolcanicChunk {
       const s = this.start + 10 + n * 28 + random() * 22, { far } = riftProfile(s, side), headland = side > 0 && (n === 0 || n === 2);
       const radius = (headland ? 9 : 5) + random() * (headland ? 8 : 9);
       const distance = random() ** 1.5 * 130, d = headland ? far + radius * .75 + 1 : far + 8 + radius + distance;
+      if (!volcanicDiscoveryClears(s, side * d, this.discoveries, radius * 2)) continue;
       const p = this.onGround(s, side * d);
       if (!p || crossingInfluence(s, side * d, radius * 1.5) > .1 || this.features.vents.some(v => Math.hypot(v.x - p.x, v.z - p.z) < v.radius * 1.5 + radius * 1.4)) continue;
       if (side > 0 && n === 1) { this.crag(s, d, radius * 1.1, 8 + radius * 1.1, random); continue; }
@@ -1320,12 +1341,13 @@ export class VolcanicChunk {
     }
   }
   buildSmoke() {
-    const positions = [], anchors = [], cycles = [], indices = [], source = puffGeometry.attributes.position, faces = puffGeometry.index, puffs = 14;
+    const positions = [], anchors = [], cycles = [], kinds = [], indices = [], source = puffGeometry.attributes.position, faces = puffGeometry.index, puffs = 14;
     for (const vent of this.features.vents) for (let n = 0; n < puffs; n++) {
       const first = positions.length / 3;
       for (let i = 0; i < source.count; i++) {
         positions.push(source.getX(i), source.getY(i), source.getZ(i));
         anchors.push(vent.x, vent.y, vent.z); cycles.push(n / puffs + randomAt(Math.floor(vent.s), 79910), vent.size);
+        kinds.push(vent.steam ? 1 : 0);
       }
       for (let i = 0; i < faces.count; i++) indices.push(first + faces.getX(i));
     }
@@ -1333,6 +1355,7 @@ export class VolcanicChunk {
     g.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
     g.setAttribute('smokeAnchor', new THREE.Float32BufferAttribute(anchors, 3));
     g.setAttribute('smokeCycle', new THREE.Float32BufferAttribute(cycles, 2));
+    g.setAttribute('smokeKind', new THREE.Float32BufferAttribute(kinds, 1));
     g.setIndex(new THREE.Uint16BufferAttribute(indices, 1));
     // Include the complete shader motion in the CPU bounds for culling and AO.
     g.boundingBox = new THREE.Box3();

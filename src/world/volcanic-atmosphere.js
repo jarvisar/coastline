@@ -85,7 +85,7 @@ export class VolcanicAtmosphere {
     }
     const vents = [];
     for (const chunk of chunks.values()) for (const vent of chunk.features.vents) {
-      if (Math.abs(vent.s - s) < 170) vents.push({ ...vent, z: vent.z - chunk.start });
+      if (!vent.steam && Math.abs(vent.s - s) < 170) vents.push({ ...vent, z: vent.z - chunk.start });
     }
     // Embers rise only from local vents. Each one cools and disappears before
     // its cycle restarts, while ash travels mostly sideways instead of falling.
