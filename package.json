@@ -8,6 +8,7 @@
     "dev": "vite --host",
     "build": "vite build",
     "preview": "vite preview --host",
+    "showcase:slices": "node scripts/showcase-slices.mjs",
     "test": "node --import ./tests/world-seed.js --test tests/*.test.js",
     "test:browser": "node scripts/browser-test.mjs",
     "test:ao": "node scripts/ambient-occlusion-test.mjs",

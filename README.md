@@ -1,5 +1,7 @@
 # Coastline
 
+![Coastline routes: coast, desert, alpine, jungle, plains, and volcanic rift](showcase/scene-slices.png)
+
 Endless driving game built with [Three.js](https://threejs.org/). Supports keyboard, touch, controllers, and browser VR.
 
 [Play in your browser](https://jarvisar.github.io/coastline/) or download a [desktop build](https://github.com/jarvisar/coastline/releases).
@@ -87,6 +89,10 @@ Open the HTTPS site in the Quest browser and choose **Enter VR**. Local headset 
 VR starts in third-person. In menus, use stick up/down and A, or point and pull a trigger. B goes back. Exiting VR pauses the game. Custom paint entry uses the regular page.
 
 ## Development
+
+Regenerate the six-slice route image with `npm run showcase:slices`. It starts its own server and captures coast, desert, alpine, jungle, plains, and volcanic scenery into `showcase/scene-slices.png` (3840 × 2160, 16:9, no UI), plus `scene-slices-preview.png`. All six captures use the normal scenic camera angle and different slices of one shared landscape view. A common seed preserves the road bends; small vertical adjustments to screenshot columns compensate for the routes' different elevations. Game geometry is unchanged.
+
+Set `SEED` to change the world (default `4817`), `POSITION` to choose another stretch of road (default `-1100`), or `OUTPUT` to change the PNG destination. The default seed and position keep the diagonal road visible across all six slices. Chrome uses the standard Windows location; set `CHROME_PATH` for another installation, or install Playwright Chromium with `npx playwright install chromium` on other platforms.
 
 Scenery is in [src/world/](src/world/), driving in [vehicle.js](src/vehicle.js), and scene setup in [main.js](src/main.js). Geometry and audio are generated in code.
 
