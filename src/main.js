@@ -113,20 +113,24 @@ async function boot() {
     const traffic = new Traffic(scene, vehicle.route, vehicle.s, journey);
     const soundScene = { player: vehicle, traffic, interior: false, heading: 0 };
     const autodrive = new Autodrive();
-    const touchControls = $('.touch-controls');
-    let touchControlsTimer;
-    function revealTouchControls() {
-      clearTimeout(touchControlsTimer);
-      touchControls.classList.remove('autodrive-hidden');
-      touchControls.inert = false;
-      if (autodrive.enabled) touchControlsTimer = setTimeout(() => {
-        touchControls.classList.add('autodrive-hidden');
-        touchControls.inert = true;
+    const drivingControls = document.querySelectorAll('.touch-controls, .drive-actions');
+    let drivingControlsTimer;
+    function revealDrivingControls() {
+      clearTimeout(drivingControlsTimer);
+      for (const controls of drivingControls) {
+        controls.classList.remove('autodrive-hidden');
+        controls.inert = false;
+      }
+      if (autodrive.enabled && !paused) drivingControlsTimer = setTimeout(() => {
+        for (const controls of drivingControls) {
+          controls.classList.add('autodrive-hidden');
+          controls.inert = true;
+        }
       }, 3000);
     }
     // Capture taps even when a menu or the joystick handles the event itself.
     window.addEventListener('pointerdown', () => {
-      if (autodrive.enabled) revealTouchControls();
+      if (autodrive.enabled) revealDrivingControls();
     }, { capture: true, passive: true });
     $('#autodrive').addEventListener('click', () => action('autodrive'));
     const trafficStorageKey = 'coastline-traffic';
@@ -161,6 +165,7 @@ async function boot() {
     }
     function setPaused(value) {
       paused = value; input.clear(); frameClock.suspend();
+      revealDrivingControls();
       if (!paused && autodrive.enabled) start();
       if (paused) { clearTimeout(toastTimer); $('#toast').classList.remove('show'); }
       audio.setPaused(paused);
@@ -406,7 +411,7 @@ async function boot() {
       if (name === 'car') { openCars(); return; }
       if (name === 'autodrive') {
         const enabled = autodrive.toggle();
-        revealTouchControls();
+        revealDrivingControls();
         // D-pad Up also begins the hidden code, so this shortcut must keep its progress.
         if (enabled) input.clear({ preserveKonami: true });
         $('#autodrive').setAttribute('aria-pressed', String(enabled));
