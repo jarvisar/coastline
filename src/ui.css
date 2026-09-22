@@ -113,10 +113,9 @@ body[data-controller=true] .controller-hint { display: block; }
 .stick-guide { position: absolute; inset: 15px; border: 1px dashed #25473e55; border-radius: 50%; pointer-events: none; }
 .stick-thumb { position: absolute; left: calc(50% - 24px); top: calc(50% - 24px); width: 48px; height: 48px; border: 1px solid #25473e30; border-radius: 50%; background: var(--cream); box-shadow: 0 3px 10px #183f3626; transform: translate(var(--stick-x, 0px), var(--stick-y, 0px)); pointer-events: none; }
 #touch-stick.active .stick-thumb { background: var(--ink); border-color: var(--cream); }
-/* A touch on the scene moves the stick under the thumb; release glides it home. */
-#touch-stick { transform: translate(var(--stick-dx, 0px), var(--stick-dy, 0px)); transition: transform .22s ease-out, opacity .15s; }
-#touch-stick.active { transition: opacity .15s; opacity: 1; }
-@media (prefers-reduced-motion: reduce) { #touch-stick { transition: none; } }
+/* The stick anchors wherever the thumb lands; touch-stick.js sets left/top. */
+#touch-stick { position: fixed; transform: translate(-50%, -50%); pointer-events: none; }
+#touch-stick[hidden] { display: none; }
 #stick-help { align-self: center; font-size: 12px; border-radius: 10px; background: #f9f8eebf; backdrop-filter: blur(12px); }
 .stick-help-line { font-size: 11px; }
 body[data-journey=snow] :is(#touch-stick, #stick-help) { background: #17273ee8; border-color: #93acc64a; }

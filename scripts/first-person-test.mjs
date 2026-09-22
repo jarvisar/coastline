@@ -18,10 +18,12 @@ try {
   await page.locator('#reset').tap();
   await page.waitForFunction(() => !window.__coastline.changingJourney);
   const client = await page.context().newCDPSession(page);
-  const rect = await page.locator('#touch-stick').boundingBox();
-  const center = { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2, id: 1 };
+  // The stick anchors wherever the thumb lands on the scene.
+  const viewport = page.viewportSize();
+  const center = { x: viewport.width * .7, y: viewport.height * .6, id: 1 };
   const heading = await page.evaluate(() => window.__coastline.vehicle.heading);
-  await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ ...center, x: center.x + 20, y: center.y - 30 }] });
+  await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [center] });
+  await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ ...center, x: center.x + 20, y: center.y - 30 }] });
   await page.waitForFunction(heading => window.__coastline.vehicle.speed > 1 && window.__coastline.vehicle.heading > heading + .1, heading);
   await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
   await page.waitForFunction(() => window.__coastline.vehicle.speed === 0);

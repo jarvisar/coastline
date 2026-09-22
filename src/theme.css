@@ -11,6 +11,10 @@ body {
   --line: #a0afa3;
   --ui-line: var(--line);
   --surface-glass: color-mix(in srgb, var(--surface) 96%, transparent);
+  /* Driving overlays let the scenery show through, as they did before the
+     shared theme, while their text keeps 4.5:1 over black or white scenery.
+     Menus and the stick caption's muted line keep the near-solid glass. */
+  --surface-hud: color-mix(in srgb, var(--surface) 82%, transparent);
 }
 body[data-journey=desert] {
   --surface: #fff2dd; --surface-card: #fff9ef; --surface-control: #f5e6ce;
@@ -72,14 +76,15 @@ body[data-journey] .start-button:hover { background: var(--action-hover); }
 #welcome .start-button { background-color: #f4f0e4; }
 
 body[data-journey] :is(.drive-actions, .controls, #stick-help, #toast, #vr-error) {
-  color: var(--ink); background: var(--surface-glass); border-color: var(--line); text-shadow: none;
+  color: var(--ink); background: var(--surface-hud); border-color: var(--line); text-shadow: none;
 }
+body[data-journey] #stick-help { background: var(--surface-glass); }
 body[data-journey] .drive-actions button { color: var(--ink); background: transparent; }
 body[data-journey] .drive-actions button:hover,
 body[data-journey] .chooser-heading .icon-button:hover { background: var(--surface-hover); }
 body[data-journey] .chooser-heading .icon-button { color: var(--ink); border-color: var(--line); background: var(--surface-control); }
 body[data-journey] :is(kbd, .paint-swatch) { border-color: var(--line); }
-body[data-journey] #touch-stick { opacity: 1; background: var(--surface-glass); border-color: var(--line); }
+body[data-journey] #touch-stick { background: var(--surface-hud); border-color: var(--line); }
 body[data-journey] .stick-guide { border-color: var(--muted); }
 body[data-journey] .stick-thumb { background: var(--ink); border-color: var(--surface); }
 body[data-journey] #touch-stick.active .stick-thumb { background: var(--muted); border-color: var(--ink); }

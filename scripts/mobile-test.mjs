@@ -19,7 +19,7 @@ try {
       // Subpixel layout reports a 44 px control as 43.999… often enough to
       // flake, so compare against the target size with a hair of tolerance.
       const TARGET = 44 - .05;
-      const selectors = document.querySelector('#welcome').classList.contains('hidden') ? ['#pause', '#change-journey', '#view', '#reset', '#touch-stick'] : ['#change-journey', '#start'];
+      const selectors = document.querySelector('#welcome').classList.contains('hidden') ? ['#pause', '#change-journey', '#view', '#reset'] : ['#change-journey', '#start'];
       const rects = selectors.map(selector => ({ selector, rect: document.querySelector(selector).getBoundingClientRect() }));
       for (const { selector, rect } of rects) {
         if (rect.width < TARGET || rect.height < TARGET) failures.push(`${selector} has a small touch target (${rect.width.toFixed(2)} x ${rect.height.toFixed(2)} at ${innerWidth} x ${innerHeight})`);
@@ -58,15 +58,13 @@ try {
   // check below needs a stationary car; reset before testing joystick input.
   await page.evaluate(() => window.__coastline.action('reset'));
   await page.waitForFunction(() => !window.__coastline.changingJourney);
-  // The joystick's caption is a caption: it hugs two lines, clears the stick,
-  // and its dismiss button stays a 44px target while looking like a small one.
+  // The joystick's caption is a caption: it hugs two lines, and its dismiss
+  // button stays a 44px target while looking like a small one.
   const captionIssues = await page.evaluate(() => {
     const failures = [];
     const help = document.querySelector('#stick-help'), close = help.querySelector('.dismiss-control-help');
     const h = help.getBoundingClientRect(), c = close.getBoundingClientRect();
-    const stick = document.querySelector('#touch-stick').getBoundingClientRect();
     if (h.height > 60) failures.push(`the caption is ${h.height.toFixed(1)}px tall`);
-    if (h.bottom > stick.top + 1) failures.push('the caption sits over the joystick');
     if (h.right > innerWidth + 1 || h.left < 0) failures.push('the caption runs off screen');
     if (c.bottom > h.bottom || c.top < h.top) failures.push('the dismiss button escapes the caption');
     for (const [dx, dy] of [[-21, -21], [21, 21], [-21, 21], [21, -21]]) {
@@ -76,40 +74,31 @@ try {
     return failures;
   });
   assert.deepEqual(captionIssues, [], 'joystick caption');
-  checks.push('joystick caption sizing, clearance and dismiss target');
+  checks.push('joystick caption sizing and dismiss target');
   const client = await page.context().newCDPSession(page);
   const point = async selector => { const r = await page.locator(selector).boundingBox(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; };
-  const center = { ...await point('#touch-stick'), id: 1 };
-  const stickRadius = (await page.locator('#touch-stick').boundingBox()).width * .3;
+  // The stick is hidden until a thumb lands on the scene, then anchors exactly there.
+  assert.ok(await page.locator('#touch-stick').isHidden(), 'the stick is hidden until touched');
+  const center = { x: 270, y: 520, id: 1 };
   await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [center] });
   await frames();
+  const anchored = await point('#touch-stick');
+  assert.ok(Math.hypot(anchored.x - center.x, anchored.y - center.y) < 1, `the stick anchors under the thumb (${anchored.x}, ${anchored.y})`);
+  const stickRadius = (await page.locator('#touch-stick').boundingBox()).width * .3;
   assert.equal(await page.evaluate(() => window.__coastline.vehicle.speed), 0, 'touching the center does not accelerate');
   await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ ...center, y: center.y - stickRadius }] });
   await page.waitForFunction(() => window.__coastline.vehicle.speed > 3);
   assert.ok(await page.evaluate(() => window.__coastline.input.state.touchStick.y > .9));
+  const moved = await point('#touch-stick');
+  assert.ok(Math.hypot(moved.x - center.x, moved.y - center.y) < 1, 'the base stays anchored while dragging');
   await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ ...center, x: center.x + 160 }] });
   await frames();
   assert.equal(await page.evaluate(() => window.__coastline.input.state.touchStick.x), 1, 'pointer capture tracks drags beyond the stick');
   await client.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] });
   await page.waitForFunction(() => window.__coastline.vehicle.speed === 0);
   assert.deepEqual(await page.evaluate(() => window.__coastline.input.state.touchStick), { x: 0, y: 0 });
-  checks.push('joystick deadzone, drag outside bounds, touch cancellation and stopping');
-  // A touch on open scenery summons the stick under the thumb, and release sends it home.
-  const floating = { x: 120, y: 520, id: 1 };
-  await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [floating] });
-  await frames();
-  assert.equal(await page.evaluate(() => window.__coastline.input.state.touchStick.y), 0, 'the summoned stick starts centered under the thumb');
-  const summoned = await point('#touch-stick');
-  assert.ok(Math.hypot(summoned.x - floating.x, summoned.y - floating.y) < 1, `the stick appears under the thumb (${summoned.x}, ${summoned.y})`);
-  await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ ...floating, y: floating.y - stickRadius }] });
-  await frames();
-  assert.ok(await page.evaluate(() => window.__coastline.input.state.touchStick.y > .9), 'dragging the summoned stick drives');
-  await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
-  await page.waitForFunction(() => window.__coastline.vehicle.speed === 0);
-  await page.waitForTimeout(400);
-  const home = await point('#touch-stick');
-  assert.ok(Math.hypot(home.x - center.x, home.y - center.y) < 1, 'the stick returns to its resting spot');
-  checks.push('floating joystick appears under the thumb and returns home on release');
+  assert.ok(await page.locator('#touch-stick').isHidden(), 'the stick hides once released');
+  checks.push('joystick anchors under the thumb, deadzone, drag outside bounds, cancellation, stopping and hiding');
   async function frames() { await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))); }
   await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ ...center, y: center.y - 30 }] });
   await frames();
@@ -126,7 +115,9 @@ try {
   await page.locator('#view').tap();
   assert.match(await page.locator('#view').getAttribute('aria-label'), /Extra close view/);
   const heldStick = { ...center, y: center.y - 30 };
-  await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [heldStick] });
+  // The stick appears centered under the thumb, so a drag gives it direction.
+  await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [center] });
+  await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [heldStick] });
   await page.waitForFunction(() => window.__coastline.vehicle.speed > 1);
   const viewPoint = { ...await point('#view'), id: 2 };
   await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [heldStick, viewPoint] });
