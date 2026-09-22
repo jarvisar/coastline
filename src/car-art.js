@@ -48,7 +48,15 @@ function roadCarParts(entry) {
       [cz - cabinLength / 2 + glassInset, cabinY + glassInset], [cz - cabinLength / 2 + .24 + glassInset, roofY - glassInset],
       [cz + cabinLength / 2 - .12 - glassInset, roofY - glassInset], [cz + cabinLength / 2 - glassInset, cabinY + glassInset],
     ], GLASS),
-    slab(-l / 2, l / 2, .6, .72, TRIM, 2),
+    ...(entry.kind === 'built' ? [
+      slab(cz + .115, cz + .205, cabinY, roofY, PAINT, 0),
+      slab(-l * .2, l * .2, .605, .695, '#46514f', 0),
+      slab(cz + .26, cz + .5, 1.075, 1.14, TRIM, 1),
+    ] : []),
+    ...(entry.kind === 'built' ? [
+      slab(-l / 2 - .065, -l / 2 + .065, .595, .725, TRIM, 1),
+      slab(l / 2 - .065, l / 2 + .065, .595, .725, TRIM, 1),
+    ] : [slab(-l / 2, l / 2, .6, .72, TRIM, 2)]),
     // Lamps at each end.
     slab(-l / 2 - .02, -l / 2 + .16, .9, 1.12, '#ffeec2', 2),
     slab(l / 2 - .16, l / 2 + .02, .9, 1.1, '#c4483a', 2),
@@ -169,21 +177,31 @@ const SPECIAL_ART = {
     ];
   },
   rig(shape) {
-    const draw = pen({ scale: 35, ground: 128 }), { slab, shape2d, shadow } = draw;
+    const draw = pen({ scale: 32, ground: 128 }), { slab, shape2d, shadow } = draw;
     return [
-      shadow(3.2),
-      slab(-2.9, 3, .6, .9, CARBON, 2),
-      slab(1.55, 2.65, .9, 1.04, CARBON, 1), slab(2.49, 2.55, .45, .95, CARBON, 1),
-      slab(.5, 1.8, 1.03, 2.875, PAINT, 3),
-      shape2d([[.5, 2.86], [.5, 2.97], [1.8, 3.37], [1.8, 2.86]], PAINT),
-      slab(-1.1, .5, 1.03, 1.98, PAINT, 3),
-      ...cabin(draw, -1.05, .45, 1.975, 2.725),
-      slab(-.86, .38, 2.72, 2.84, PAINT, 2), slab(-.84, -.72, 2.84, 2.91, AMBER, 1),
-      slab(-2.95, -1.05, 1.03, 1.98, PAINT, 4),
-      slab(.29, .47, 1.1, 3.4, TRIM, 2),
-      slab(-3.03, -2.93, 1.08, 1.92, TRIM, 1), slab(-3.1, -2.85, .55, .85, TRIM, 2),
-      slab(-.35, .95, .52, 1.12, TRIM, 8),
-      slab(-2.64, -2.5, 1.04, 1.28, LAMP, 2), slab(2.96, 3.06, .7, .86, TAIL, 1),
+      shadow(3.8),
+      slab(-3.5, 3.6, .6, .9, CARBON, 2),
+      slab(2, 3.3, .97, 1.07, ENGINE, 1), slab(2.22, 3.18, 1.07, 1.17, CARBON, 2),
+      slab(3.09, 3.15, .45, .95, CARBON, 1),
+      slab(-.1, 1.2, 1.03, 2.875, PAINT, 3),
+      shape2d([[-.1, 2.86], [-.1, 2.97], [1.2, 3.37], [1.2, 2.86]], PAINT),
+      slab(-1.7, -.1, 1.03, 1.98, PAINT, 3),
+      ...cabin(draw, -1.65, -.15, 1.975, 2.725),
+      slab(-1.46, -.22, 2.72, 2.84, PAINT, 2), slab(-1.44, -1.32, 2.84, 2.91, AMBER, 1),
+      slab(-1.615, -1.265, 2.72, 2.82, PAINT, 1),
+      shape2d([[-3.55, 1.03], [-3.55, 1.86], [-1.65, 1.975], [-1.65, 1.03]], PAINT),
+      slab(-2.19, -1.71, 1.605, 1.775, CARBON, 1),
+      slab(-1.65, -.15, 1.87, 1.97, CANVAS, 0), slab(-.075, 1.175, 1.87, 1.97, CANVAS, 0),
+      slab(.29, .81, 2.3, 2.66, GLASS, 2),
+      slab(-.625, -.375, 1.795, 1.865, TRIM, 1),
+      slab(-.31, -.13, 1.1, 3.4, TRIM, 2),
+      slab(-.31, -.13, 3.37, 3.42, CARBON, 1),
+      slab(-3.63, -3.53, 1.08, 1.92, TRIM, 1), slab(-3.7, -3.45, .55, .85, TRIM, 2),
+      slab(-.95, .35, .52, 1.12, TRIM, 8),
+      slab(-1.34, -.62, .86, .98, TRIM, 1), slab(-1.305, -.655, 1.07, 1.17, CARBON, 1),
+      slab(-3.225, -1.975, 1.08, 1.285, PAINT, 3),
+      slab(-2.755, -2.605, 1.165, 1.255, AMBER, 1),
+      slab(-3.275, -3.225, 1.04, 1.28, LAMP, 2), slab(3.595, 3.645, .7, .86, TAIL, 1),
       ...tyres(draw, shape.wheels),
     ];
   },
@@ -244,7 +262,8 @@ function accessories(entry, draw) {
     ];
     // The default car carries an empty rack: its kit changes with the scenery.
     case 'classic': return [rack(cz - .9, cz + .9)];
-    case 'wagon': return [rack(cz - 1.1, cz + 1.1)];
+    case 'wagon': return [rack(cz - 1.1, cz + 1.1), slab(cz + cabinLength / 2 - .215, cz + cabinLength / 2 + .015, roofY - .02, roofY + .055, PAINT, 1)];
+    case 'hatchback': return [slab(cz + cabinLength / 2 - .215, cz + cabinLength / 2 + .015, roofY - .02, roofY + .055, PAINT, 1)];
     case 'pickup': return [
       slab(cz + cabinLength / 2, l / 2, 1.22, 1.62, 'var(--car-paint)', 2),
       slab(cz + cabinLength / 2 + .08, l / 2 - .08, 1.24, 1.32, '#414c4b', 1),

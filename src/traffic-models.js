@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { mergeGeometries, mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { stableShadowDepth } from './world/shadow-depth.js';
 import { joinCoplanarFaces } from './world/surface-joins.js';
 
@@ -35,9 +35,23 @@ export function vehicleGeometry(spec, { separateWheels = false } = {}) {
     parts[category].push(geometry);
   }
   const box = (size, location, category = 'paint', color) => add(new THREE.BoxGeometry(...size), location, category, color);
+  // Surface trim only needs its visible face. This also keeps the many parked
+  // copies in city chunks within their existing triangle budget.
+  const trimFace = (size, location, yaw, color) => {
+    const geometry = new THREE.PlaneGeometry(...size);
+    geometry.rotateY(yaw); add(geometry, location, 'details', color);
+  };
   const { width: w, length: l, cabin: [cw, ch, cl], cabinZ: cz, name, drop = 0 } = spec;
   const roofY = 1.22 + ch;
-  box([w, .65, l], [0, .89, 0]);
+  // A narrow shoulder catches the light without bevel meshes or extra materials.
+  const shell = new THREE.BoxGeometry(w, .65, l, 1, 2, 1);
+  const shellVertices = shell.attributes.position;
+  for (let i = 0; i < shellVertices.count; i++) {
+    if (shellVertices.getY(i) > 0) shellVertices.setX(i, shellVertices.getX(i) * .95);
+    if (shellVertices.getY(i) < 0) shellVertices.setZ(i, shellVertices.getZ(i) * .98);
+  }
+  shell.computeVertexNormals();
+  add(shell, [0, .89, 0], 'paint');
   box([w * .94, .13, l - .14], [0, 1.24, 0]);
   // Slightly sloped glass keeps the silhouettes in the player's faceted style.
   const glass = new THREE.BoxGeometry(cw, ch, cl);
@@ -48,14 +62,30 @@ export function vehicleGeometry(spec, { separateWheels = false } = {}) {
   }
   glass.computeVertexNormals();
   add(glass, [0, 1.22 + ch / 2, cz], 'details', '#344e55');
-  box([cw * .96 + .09, .14, cl - .23], [0, roofY + .02, cz + .06]);
+  box([cw * .94 + .09, .12, cl - .26], [0, roofY + .02, cz + .06]);
+  const lampHeight = name === 'sports' ? .14 : name === 'van' ? .28 : .22;
   for (const side of [-1, 1]) {
-    box([.085, ch, .12], [side * (cw / 2 - .02), 1.22 + ch / 2, cz + .16]);
+    // Painted pillars follow the glass rake instead of standing proud of it.
+    for (const [z, rake] of [[-cl / 2 + .02, .24], [.16, 0], [cl / 2 - .02, -.12]]) {
+      const pillar = new THREE.BoxGeometry(.085, ch, .09), p = pillar.attributes.position;
+      // The roof, beltline and glass enclose three faces of each pillar.
+      const exposed = [side > 0 ? 0 : 1, 4, 5];
+      pillar.setIndex(exposed.flatMap(face => Array.from(pillar.index.array.slice(face * 6, face * 6 + 6))));
+      pillar.clearGroups();
+      for (let i = 0; i < p.count; i++) if (p.getY(i) > 0) {
+        p.setX(i, p.getX(i) - side * cw * .03);
+        p.setZ(i, p.getZ(i) + rake);
+      }
+      pillar.computeVertexNormals();
+      add(pillar, [side * cw / 2, 1.22 + ch / 2, cz + z], 'paint');
+    }
     box([.09, .12, cl], [side * cw / 2, 1.25, cz]);
     box([.19, .15, .25], [side * (w / 2 + .06), 1.46, cz - cl / 2 + .2]);
     box([.07, .065, .24], [side * (w / 2 + .01), 1.11, cz + .38], 'details', '#c6c9bd');
-    box([.39, .23, .04], [side * w * .32, 1.01, -l / 2 - .022], 'headlights');
+    trimFace([.47, lampHeight + .08], [side * w * .32, 1.01, -l / 2 - .04], Math.PI, '#2b3434');
+    box([.39, lampHeight, .04], [side * w * .32, 1.01, -l / 2 - .042], 'headlights');
     box([.3, .2, .04], [side * w * .35, 1.01, l / 2 + .022], 'taillights');
+    trimFace([l * .4, .09], [side * (w / 2 + .003), .65, 0], side * Math.PI / 2, '#46514f');
     for (const z of [-l * .3, l * .3]) {
       if (separateWheels) { wheels.push({ x: side * w / 2, y: WHEEL.y, z, front: z < 0 }); continue; }
       const tire = new THREE.CylinderGeometry(WHEEL.radius, WHEEL.radius, WHEEL.width, 10); tire.rotateZ(Math.PI / 2);
@@ -65,12 +95,14 @@ export function vehicleGeometry(spec, { separateWheels = false } = {}) {
     }
   }
   for (const z of [-l / 2, l / 2]) box([w * .97, .13, .13], [0, .66, z], 'details', '#bbc0b6');
-  box([.68, .19, .04], [0, .99, -l / 2 - .023], 'details', '#2b3434');
-  box([.49, .17, .04], [0, .96, l / 2 + .023], 'details', '#e9e2cb');
+  trimFace([.68, .19], [0, .99, -l / 2 - .043], Math.PI, '#2b3434');
+  trimFace([.62, .035], [0, 1.015, -l / 2 - .065], Math.PI, '#bbc0b6');
+  trimFace([.49, .17], [0, .96, l / 2 + .043], 0, '#e9e2cb');
   if (name === 'pickup') {
     box([w - .3, .08, 1.85], [0, 1.33, 1.27], 'details', '#414c4b');
     for (const side of [-1, 1]) box([.16, .34, 2.02], [side * (w / 2 - .08), 1.47, 1.28]);
     box([w, .34, .15], [0, 1.47, l / 2 - .08]);
+    box([.34, .065, .035], [0, 1.52, l / 2 + .012], 'details', '#414c4b');
   }
   if (name === 'van') {
     // Solid rear quarter panels distinguish the van from the long-window wagon.
@@ -79,6 +111,9 @@ export function vehicleGeometry(spec, { separateWheels = false } = {}) {
     box([cw * .69, .5, .025], [0, roofY - .37, cz + cl / 2 + .055], 'details', '#344e55');
   }
   if (name === 'wagon') for (const x of [-.65, .65]) box([.065, .11, 2.35], [x, roofY + .14, cz], 'details', '#46514f');
+  if (name === 'hatchback' || name === 'wagon') {
+    box([cw * .94, .075, .23], [0, roofY + .015, cz + cl / 2 - .1]);
+  }
   if (name === 'sports') {
     // A splitter, skirts and a rear wing read as quick from the miniature view.
     box([w * .9, .1, .4], [0, .63, -l / 2 - .12], 'details', '#2f3a3c');
@@ -88,7 +123,10 @@ export function vehicleGeometry(spec, { separateWheels = false } = {}) {
     box([.56, .1, 1], [0, 1.29, -l * .26]);
   }
   const merged = Object.fromEntries(Object.entries(parts).map(([key, geometries]) => {
-    const geometry = joinCoplanarFaces(mergeGeometries(geometries));
+    const joined = joinCoplanarFaces(mergeGeometries(geometries));
+    // Compact unused pillar vertices as well as repeated corners in the batch.
+    const geometry = mergeVertices(joined, 1e-6);
+    joined.dispose();
     // A lowered body sits closer to unchanged wheels, so drop only the shell.
     if (drop) geometry.translate(0, -drop, 0);
     for (const part of geometries) part.dispose();

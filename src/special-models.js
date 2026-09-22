@@ -25,8 +25,8 @@ export const SPECIAL_SHAPES = {
     wheels: { front: { radius: .36, width: .2, x: .86, z: -1.5 }, rear: { radius: .56, width: .46, x: .78, z: 1.15 } },
   },
   rig: {
-    name: 'rig', width: 2.5, length: 6.2, eye: [0, 2.5, -1.25], chaseLift: 2.2,
-    wheels: { front: { radius: .52, width: .3, x: 1.08, z: -2 }, rear: { radius: .52, width: .62, x: .94, z: 1.9 } },
+    name: 'rig', width: 2.5, length: 7.4, eye: [0, 2.5, -1.85], chaseLift: 2.2,
+    wheels: { front: { radius: .52, width: .3, x: 1.08, z: -2.6 }, rear: { radius: .52, width: .62, x: .94, z: 2.5 } },
   },
   micro: {
     name: 'micro', width: 1.5, length: 2.4, eye: [0, 1.3, -.72],
@@ -174,27 +174,48 @@ const BUILDERS = {
   // A long-nose tractor unit running bobtail: a sleeper, twin stacks and
   // a fifth wheel with nothing on it.
   rig({ box, tapered, glass, tube }) {
-    box([1, .3, 5.9], [0, .75, .05], 'details', DARK);
-    box([1.7, .95, 1.9], [0, 1.5, -2]);
-    box([1.3, .85, .08], [0, 1.5, -2.98], 'details', CHROME);
-    box([2.4, .3, .25], [0, .7, -2.97], 'details', CHROME);
-    box([2.2, .95, 1.6], [0, 1.5, -.3]);
-    glass([2.05, .75, 1.5], [0, 2.35, -.3]);
-    box([2, .12, 1.25], [0, 2.78, -.24]);
-    box([2.1, 1.85, 1.3], [0, 1.95, 1.15]);
-    tapered([2, .5, 1.3], [0, 3.12, 1.15], { at: -1, y: .2, lift: -.2 });
-    box([1, .12, 1.1], [0, .98, 2.1], 'details', DARK);
+    // Original hood and cab proportions, with the extra length behind the
+    // sleeper. The cab sits .6 m farther forward within the same footprint.
+    box([1, .3, 7.1], [0, .75, .05], 'details', DARK);
+    tapered([1.7, .95, 1.9], [0, 1.5, -2.6], { at: -1, x: .88, y: .88, lift: -.055 });
+    box([1.3, .85, .08], [0, 1.5, -3.58], 'details', CHROME);
+    box([1.08, .67, .035], [0, 1.5, -3.635], 'details', DARK);
+    for (const x of [-.4, -.2, 0, .2, .4]) box([.055, .63, .025], [x, 1.5, -3.665], 'details', CHROME);
+    box([.22, .085, .035], [0, 1.93, -3.632], 'details', CHROME);
+    box([.055, .035, 1.65], [0, 1.933, -2.54], 'details', CHROME, -.057);
+    box([2.4, .3, .25], [0, .7, -3.57], 'details', CHROME);
+    box([2.2, .95, 1.6], [0, 1.5, -.9]);
+    glass([2.05, .75, 1.5], [0, 2.35, -.9]);
+    box([2, .12, 1.25], [0, 2.78, -.84]);
+    // A split windscreen and short sun visor give the cab a classic truck face.
+    box([.07, .79, .075], [0, 2.35, -1.53], 'details', CHROME, .31);
+    box([2.08, .1, .35], [0, 2.77, -1.44]);
+    box([2.1, 1.85, 1.3], [0, 1.95, .55]);
+    tapered([2, .5, 1.3], [0, 3.12, .55], { at: -1, y: .2, lift: -.2 });
+    box([1.5, .1, 1.3], [0, 1.02, 2.65], 'details', ENGINE);
+    tube(.48, .1, [0, 1.12, 2.7], 'y', DARK);
+    box([.13, .018, .44], [0, 1.18, 3], 'details', ENGINE);
     for (const side of [-1, 1]) {
-      box([.4, .25, 1.15], [side * 1.05, 1.16, -2]);
-      box([.09, .75, .12], [side * 1, 2.35, -.15]);
-      box([.2, .3, .14], [side * 1.2, 2.2, -.95]);
-      box([.35, .24, .05], [side * 1.05, 1.16, -2.6], 'headlights');
-      box([.3, .16, .05], [side * .34, .78, 3.02], 'taillights');
-      tube(.09, 2.3, [side * 1.14, 2.25, .38], 'y', CHROME);
-      tube(.3, 1.3, [side * .92, .82, .3], 'z', CHROME);
-      box([.62, .5, .04], [side * .94, .7, 2.52], 'details', DARK);
+      tapered([.4, .25, 1.25], [side * 1.05, 1.16, -2.6], { at: -1, y: .6, lift: -.04 });
+      box([.09, .75, .12], [side * 1, 2.35, -.75]);
+      box([.12, .34, .16], [side * 1.19, 2.2, -1.55], 'details', CHROME);
+      box([.2, .045, .07], [side * 1.13, 2.04, -1.55], 'details', DARK);
+      box([.04, .07, .25], [side * 1.115, 1.83, -.5], 'details', CHROME);
+      box([.045, .1, 1.5], [side * 1.11, 1.92, -.9], 'details', CANVAS);
+      box([.045, .1, 1.25], [side * 1.065, 1.92, .55], 'details', CANVAS);
+      box([.045, .36, .52], [side * 1.065, 2.48, .55], 'details', GLASS);
+      box([.28, .12, .72], [side * 1.1, .92, -.98], 'details', CHROME);
+      box([.23, .1, .65], [side * 1.08, 1.12, -.98], 'details', DARK);
+      box([.035, .17, .48], [side * .83, 1.69, -1.95], 'details', DARK);
+      box([.08, .09, .15], [side * 1.22, 1.21, -2.68], 'details', AMBER);
+      box([.35, .24, .05], [side * 1.05, 1.16, -3.25], 'headlights');
+      box([.3, .16, .05], [side * .34, .78, 3.62], 'taillights');
+      tube(.09, 2.3, [side * 1.14, 2.25, -.22], 'y', CHROME);
+      tube(.065, .025, [side * 1.14, 3.411, -.22], 'y', DARK);
+      tube(.3, 1.3, [side * .92, .82, -.3], 'z', CHROME);
+      box([.62, .5, .04], [side * .94, .7, 3.12], 'details', DARK);
     }
-    for (const x of [-.7, -.35, 0, .35, .7]) box([.12, .07, .1], [x, 2.87, -.78], 'details', AMBER);
+    for (const x of [-.7, -.35, 0, .35, .7]) box([.12, .07, .1], [x, 2.87, -1.38], 'details', AMBER);
   },
 
   // A bubble of glass on a roller skate, with the weekend's luggage on top.
