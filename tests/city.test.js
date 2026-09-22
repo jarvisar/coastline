@@ -207,7 +207,7 @@ test('building walls face outward and follow facade details through road bends',
 
 test('window facades face the road on both banks and remain visible from either end', () => {
   const material = new THREE.MeshBasicMaterial();
-  for (const s0 of [-320, 180, 1025]) for (const u0 of [-222, 44]) for (const kind of ['punched', 'ribbon']) {
+  for (const s0 of [-320, 180, 1025]) for (const u0 of [-222, -170, 14, 44, 94]) for (const kind of ['punched', 'ribbon']) {
     const chunk = Object.create(CityChunk.prototype); chunk.start = 0;
     chunk.scenery = { blocks: { vertices: [], colors: [] }, lit: { vertices: [], colors: [] } };
     const b = { s0, s1: s0 + 23, u0, u1: u0 + 22, height: 30, wall: '#888888', lit: .05 };

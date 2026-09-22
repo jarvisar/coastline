@@ -10,8 +10,9 @@ import { CITY_STEP, CITY_COLUMN_COUNT, KERB, PAVEMENT_LIFT, cityVertex, cityPosi
 import { createRiverMaterial, animateWater } from './water.js';
 import { terrainSampler } from './coastal-assets.js';
 import { cityAssets, cityTrees, parkedCars, PARKED_PAINTS } from './city-assets.js';
-import { dressBuilding, buildShopfront, rooftopTank, dressSkyline } from './city-architecture.js';
+import { dressBuilding, buildShopfront, rooftopTank, dressSkyline, buildingFacades, facadePanel, buildParapet, buildRoofDetails } from './city-architecture.js';
 import { buildPromenade } from './city-promenade.js';
+import { reserveCityWaterfront, waterfrontClears } from './city-waterfront.js';
 import { buildCityDocks, dockRailingSpans } from './city-docks.js';
 import { buildCityParking, cityParkingAt } from './city-parking.js';
 import { cityParkLayout, paintCityPark } from './city-surfaces.js';
@@ -103,10 +104,10 @@ export class CityChunk {
     this.scenery = { blocks: { vertices: [], colors: [] }, details: { vertices: [], colors: [] }, streets: { vertices: [], colors: [] }, lit: { vertices: [], colors: [] }, skyline: { vertices: [], colors: [] },
       boxes: [], furniture: new Map(), parked: new Map(), bark: new Map(), leaves: new Map() };
     this.buildTerrain(); this.buildRoad(); this.buildRiver(); reserveCityLandmarks(this, this.discoveries);
-    this.buildBlocks(); this.buildStreets(); buildPromenade(this); buildCityDocks(this); buildCityParking(this); buildCityRoads(this); buildNeighborhoods(this);
+    this.buildBlocks(); reserveCityWaterfront(this); this.buildStreets(); buildPromenade(this); buildCityDocks(this); buildCityParking(this); buildCityRoads(this); buildNeighborhoods(this);
     buildCityDiscoveries(this, this.discoveries);
     this.finishScenery();
-    this.planting = null;
+    this.planting = null; this.waterfrontSites = null;
     finalizeChunkTransforms(this.group);
   }
   addMesh(g, mat, name, shadows = false) {
@@ -273,47 +274,41 @@ export class CityChunk {
   // Face the boulevard on either bank, with end windows for both driving
   // directions. All panes are baked into the existing opaque/lit batches.
   windows(b, y0, seed, kind) {
-    const { s0, s1, u0, u1 } = b, { blocks, lit } = this.scenery;
-    const storeys = Math.floor((b.height - 1.2) / 3.2), first = b.shop ? 1 : 0;
-    const detailed = u0 > 0 && u0 < 40, distant = u0 >= 90 || u0 < -190, surround = new THREE.Color(b.wall).lerp(new THREE.Color('#c8c1b3'), .48);
-    const facing = u1 < 0 ? 1 : -1, front = facing > 0 ? u1 : u0;
-    const frontPoint = (s, depth, y) => this.at(s, front + facing * depth, y);
-    const frontNormal = [facing, 0, 0];
+    const { u0 } = b, { blocks, lit } = this.scenery;
+    const near = u0 > 0 && u0 < 40, middle = u0 > -240 && u0 < 90;
+    const floorHeight = middle ? 3.2 : 4.2;
+    const storeys = Math.floor((b.height - 1.2) / floorHeight), first = b.shop ? 1 : 0;
+    const surround = new THREE.Color(b.wall).lerp(new THREE.Color('#c8c1b3'), near ? .48 : .36);
+    const sill = surround.clone().multiplyScalar(.82);
     let n = 0;
-    const pane = (points, outward, salt) => {
-      const on = randomAt(seed, 3061 + salt) < b.lit;
-      this.quad(on ? lit : blocks, points, on ? new THREE.Color(pick(LIT, seed + salt)) : GLASS.clone().multiplyScalar(.92 + randomAt(seed, 3062 + salt) * .16), outward);
-    };
-    for (let k = first; k < storeys; k++) {
-      const yLow = y0 + 1.0 + k * 3.2, yHigh = yLow + (detailed ? 1.85 : 1.55);
-      if (kind === 'ribbon') {
-        // Ribbon strips in bays, so a lit office is one bay, not a whole floor.
-        for (let s = s0 + .5; s < s1 - .5; s += 6) {
-          const e = Math.min(s + 5.7, s1 - .5);
-          pane([frontPoint(s, .05, yLow), frontPoint(e, .05, yLow), frontPoint(e, .05, yHigh), frontPoint(s, .05, yHigh)], frontNormal, ++n);
+    for (const [index, face] of buildingFacades(this, b).entries()) {
+      const spacing = near ? 3.2 : middle ? 4.6 : 6.2;
+      const count = Math.max(1, Math.floor((face.length - 1.4) / (kind === 'ribbon' ? 6.8 : spacing)));
+      const pitch = (face.length - 1.4) / count, width = kind === 'ribbon' ? pitch - .35 : near ? 1.3 : middle ? 1.6 : 1.9;
+      for (let floor = first; floor < storeys; floor++) {
+        const low = y0 + 1 + floor * floorHeight, high = low + (middle ? 1.85 : 2.3);
+        for (let bay = 0; bay < count; bay++) {
+          const from = .7 + bay * pitch + (pitch - width) / 2, to = from + width;
+          const on = randomAt(seed, 3061 + ++n) < b.lit;
+          if (kind !== 'ribbon' && (middle || index === 0)) {
+            // A single surround and sill plane replace tiny solid boxes. Wider
+            // bay spacing pays for richer facades in the middle and rear rows.
+            facadePanel(this, blocks, face, from - .14, to + .14, low - .14, high + .13, surround, .035);
+            if (near && index === 0) facadePanel(this, blocks, face, from - .2, to + .2, low - .16, low - .04, sill, .075);
+          }
+          facadePanel(this, on ? lit : blocks, face, from, to, low, high,
+            on ? new THREE.Color(pick(LIT, seed + n)) : GLASS.clone().multiplyScalar(.92 + randomAt(seed, 3062 + n) * .16), .055);
+          if (near || (middle && index === 0)) {
+            if (kind === 'ribbon') {
+              const center = (from + to) / 2;
+              facadePanel(this, blocks, face, center - .045, center + .045, low, high, sill, .075);
+            } else facadePanel(this, blocks, face, from, to, low + .92, low + 1, sill, .075);
+          }
         }
-        for (const [end, direction] of [[s0, -1], [s1, 1]]) for (let u = u0 + .5; u < u1 - .5; u += 6) {
-          const e = Math.min(u + 5.7, u1 - .5);
-          const s = end + direction * .05;
-          pane([this.at(s, u, yLow), this.at(s, e, yLow), this.at(s, e, yHigh), this.at(s, u, yHigh)], [0, 0, -direction], ++n);
-        }
-        continue;
-      }
-      for (let s = s0 + 1.3; s + 1.3 <= s1 - .9; s += detailed ? 3.15 : distant ? 3.8 : 2.8) {
-        if (detailed) {
-          this.quad(blocks, [this.at(s - .14, u0 - .035, yLow - .13), this.at(s + 1.44, u0 - .035, yLow - .13), this.at(s + 1.44, u0 - .035, yHigh + .14), this.at(s - .14, u0 - .035, yHigh + .14)], surround, [-1, 0, 0]);
-          this.prism(blocks, s - .2, s + 1.5, u0 - .22, u0, yLow - .16, yLow - .04, surround);
-        }
-        pane([frontPoint(s, .05, yLow), frontPoint(s + 1.3, .05, yLow), frontPoint(s + 1.3, .05, yHigh), frontPoint(s, .05, yHigh)], frontNormal, ++n);
-        if (detailed) this.quad(blocks, [this.at(s, u0 - .07, yLow + .92), this.at(s + 1.3, u0 - .07, yLow + .92), this.at(s + 1.3, u0 - .07, yLow + 1), this.at(s, u0 - .07, yLow + 1)], surround.clone().multiplyScalar(.8), [-1, 0, 0]);
-      }
-      for (const [end, direction] of [[s0, -1], [s1, 1]]) for (let u = u0 + 1.4; u + 1.3 <= u1 - 1; u += detailed ? 3.2 : distant ? 3.8 : 2.9) {
-        const outward = [0, 0, -direction], s = end + direction * .05, frameS = end + direction * .035;
-        if (detailed) this.quad(blocks, [this.at(frameS, u - .14, yLow - .13), this.at(frameS, u + 1.44, yLow - .13), this.at(frameS, u + 1.44, yHigh + .14), this.at(frameS, u - .14, yHigh + .14)], surround, outward);
-        pane([this.at(s, u, yLow), this.at(s, u + 1.3, yLow), this.at(s, u + 1.3, yHigh), this.at(s, u, yHigh)], outward, ++n);
       }
     }
   }
+
   // One building: walls, roof, parapet or gable, roof furniture and windows.
   building(b, seed) {
     const { blocks } = this.scenery, { s0, s1, u0, u1 } = b;
@@ -325,10 +320,11 @@ export class CityChunk {
     const color = new THREE.Color(b.wall);
     this.prism(blocks, s0, s1, u0, u1, y0, y1, color, { top: b.roof !== 'gable', shade: b.shade });
     if (b.simple) {
-      // Infill uses the existing batch, with a roof cap and broad window
-      // bays instead of shopfronts, stone trim or rooftop equipment.
-      this.prism(blocks, s0, s1, u0, u1, y1, y1 + .35, new THREE.Color(b.roofColor));
+      this.quad(blocks, [this.at(s0, u0, y1 + .02), this.at(s1, u0, y1 + .02), this.at(s1, u1, y1 + .02), this.at(s0, u1, y1 + .02)], new THREE.Color(b.roofColor), [0, 1, 0]);
+      buildParapet(this, b, y1, color, .45);
       this.windows(b, y0, seed, 'ribbon');
+      dressBuilding(this, { ...b, windows: 'ribbon' }, y0, y1, seed);
+      buildRoofDetails(this, b, y1, seed);
       return;
     }
     if (b.roof === 'gable') {
@@ -342,15 +338,26 @@ export class CityChunk {
     } else {
       const roof = new THREE.Color(b.roofColor), p = color.clone().multiplyScalar(.9);
       this.quad(blocks, [this.at(s0, u0, y1 + .02), this.at(s1, u0, y1 + .02), this.at(s1, u1, y1 + .02), this.at(s0, u1, y1 + .02)], roof, [0, 1, 0]);
-      for (const [a, c, d, e] of [[s0, s1, u0, u0 + .45], [s0, s1, u1 - .45, u1], [s0, s0 + .45, u0, u1], [s1 - .45, s1, u0, u1]]) this.prism(blocks, a, c, d, e, y1, y1 + .7, p, { shade: 1 });
+      buildParapet(this, b, y1, p);
+      buildRoofDetails(this, b, y1, seed);
       // Tanks, plant and stair heads on the flat roofs.
-      const inset = 1.4, tank = rooftopTank(b, seed);
-      for (let k = 0, count = 1 + Math.floor(randomAt(seed, 3081) * 3); k < count; k++) {
-        const w = 1.4 + randomAt(seed, 3082 + k) * 2.2, d = 1.4 + randomAt(seed, 3086 + k) * 2, h = .9 + randomAt(seed, 3090 + k) * 1.8;
-        if (s1 - s0 < w + inset * 2 + 1 || u1 - u0 < d + inset * 2 + 1) break;
-        const rs = s0 + inset + randomAt(seed, 3094 + k) * (s1 - s0 - w - inset * 2), ru = u0 + inset + randomAt(seed, 3098 + k) * (u1 - u0 - d - inset * 2);
+      const inset = 1.4, tank = rooftopTank(b, seed), count = 1 + Math.floor(randomAt(seed, 3081) * 3);
+      const serviceStart = s0 + (s1 - s0) * .58, slotDepth = (u1 - u0 - inset * 2) / count;
+      for (let k = 0; k < count; k++) {
+        const w = Math.min(1.4 + randomAt(seed, 3082 + k) * 2.2, s1 - inset - serviceStart);
+        const d = Math.min(1.4 + randomAt(seed, 3086 + k) * 2, slotDepth - .55), h = .9 + randomAt(seed, 3090 + k) * 1.8;
+        if (w < 1.2 || d < 1.2) continue;
+        // Keep mechanical plant beside the roof lantern / terrace, not inside it.
+        // Separate depth slots prevent the units from intersecting one another.
+        const rs = serviceStart + randomAt(seed, 3094 + k) * (s1 - inset - serviceStart - w);
+        const ru = u0 + inset + k * slotDepth + randomAt(seed, 3098 + k) * (slotDepth - d - .55);
         if (tank && Math.abs(rs + w / 2 - tank.s) < w / 2 + 1.8 && Math.abs(ru + d / 2 - tank.u) < d / 2 + 1.8) continue;
         this.prism(blocks, rs, rs + w, ru, ru + d, y1, y1 + h, new THREE.Color(k ? '#8d9195' : '#6f7377'), {});
+        for (let vent = 0; vent < 3; vent++) {
+          const a = rs + .2 + (w - .4) * vent / 3;
+          this.quad(blocks, [this.at(a, ru + .2, y1 + h + .025), this.at(a + (w - .4) * .2, ru + .2, y1 + h + .025),
+            this.at(a + (w - .4) * .2, ru + d - .2, y1 + h + .025), this.at(a, ru + d - .2, y1 + h + .025)], new THREE.Color('#424f54'), [0, 1, 0]);
+        }
       }
     }
     if (b.windows !== 'none') this.windows(b, y0, seed, b.windows);
@@ -424,6 +431,10 @@ export class CityChunk {
         this.prism(skyline, s, s + w, u, u + d, base, base + height, color, { back: false, sides: true });
         this.solidLot(s, s + w, u, u + d);
         dressSkyline(this, { s0: s, s1: s + w, u0: u, u1: u + d }, base, base + height, color, lane);
+        if (r(5) < .55) {
+          const inset = 2.5 + r(6) * 2;
+          this.prism(skyline, s + inset, s + w - inset, u + inset, u + d - inset, base + height, base + height + 3 + r(7) * 7, color.clone().multiplyScalar(.94), { back: false });
+        }
       }
     }
   }
@@ -479,31 +490,32 @@ export class CityChunk {
     const random = seededRandom(this.index + 30231), { boxes } = this.scenery;
     const yaw = s => -roadFrame(s).angle, across = s => yaw(s) + Math.PI / 2;
     const street = s => { const c = crossStreetAt(s); return Math.abs(s - c.center) < STREET_HALF_WIDTH + 2; };
+    const clear = (s, u, radius = 1) => this.clearAt(s, u, radius) && waterfrontClears(s, u, this.waterfrontSites, radius);
     // Street lamps face the road from both pavements; benches, trees and
     // shelters keep the promenade side, with trees also along the far pavement.
     for (let s = Math.ceil((this.start - 4) / 26) * 26 + 5; s < this.start + CHUNK_LENGTH + 4; s += 26) {
       if (!this.inChunk(s) || street(s)) continue;
-      if (this.clearAt(s, 7.4)) this.furniture('lamp', s, 7.4, yaw(s));
+      if (clear(s, 7.4)) this.furniture('lamp', s, 7.4, yaw(s));
       const u = cityParkingAt(s, 3) ? -17.2 : -7.4;
-      if (this.clearAt(s, u)) this.furniture('lamp', s, u, yaw(s) + Math.PI);
+      if (clear(s, u)) this.furniture('lamp', s, u, yaw(s) + Math.PI);
     }
     for (let s = Math.ceil((this.start - 4) / 18) * 18 + 9; s < this.start + CHUNK_LENGTH + 4; s += 18) {
       const t = s + (randomAt(Math.round(s), 3201) - .5) * 4;
       if (!this.inChunk(t) || street(t)) continue;
       const u = cityParkingAt(t, 4) ? -17.2 : -10.4;
-      if (randomAt(Math.round(s), 3202) < .8 && this.clearAt(t, u, 2)) this.tree(t, u, 5.5 + randomAt(Math.round(s), 3203) * 3, TREE_GREENS[Math.abs(Math.round(s / 18)) % 4], random() * 6.28);
-      if (randomAt(Math.round(s), 3204) < .65 && this.clearAt(t, 10.2, 2)) this.tree(t, 10.2, 5 + randomAt(Math.round(s), 3205) * 2.5, TREE_GREENS[(Math.abs(Math.round(s / 18)) + 1) % 4], random() * 6.28);
+      if (randomAt(Math.round(s), 3202) < .8 && clear(t, u, 2)) this.tree(t, u, 5.5 + randomAt(Math.round(s), 3203) * 3, TREE_GREENS[Math.abs(Math.round(s / 18)) % 4], random() * 6.28);
+      if (randomAt(Math.round(s), 3204) < .65 && clear(t, 10.2, 2)) this.tree(t, 10.2, 5 + randomAt(Math.round(s), 3205) * 2.5, TREE_GREENS[(Math.abs(Math.round(s / 18)) + 1) % 4], random() * 6.28);
     }
     for (let s = Math.ceil((this.start - 4) / 36) * 36 + 20; s < this.start + CHUNK_LENGTH + 4; s += 36) {
       const u = cityParkingAt(s, 3) ? -18.4 : -12.8;
-      if (!this.inChunk(s) || street(s) || randomAt(Math.round(s), 3211) > .65 || !this.clearAt(s, u, 1.5)) continue;
+      if (!this.inChunk(s) || street(s) || randomAt(Math.round(s), 3211) > .65 || !clear(s, u, 1.5)) continue;
       this.furniture('bench', s, u, yaw(s));
     }
     for (let s = Math.ceil((this.start - 4) / 176) * 176 + 60; s < this.start + CHUNK_LENGTH + 4; s += 176) {
       if (!this.inChunk(s) || street(s)) continue;
-      if (randomAt(Math.round(s), 3221) < .7 && this.clearAt(s, 8.6, 2.5)) this.furniture('shelter', s, 8.6, yaw(s));
+      if (randomAt(Math.round(s), 3221) < .7 && clear(s, 8.6, 2.5)) this.furniture('shelter', s, 8.6, yaw(s));
       const u = cityParkingAt(s, 4) ? -18.2 : -8.6;
-      if (randomAt(Math.round(s), 3222) < .5 && this.clearAt(s, u, 2.5)) this.furniture('shelter', s, u, yaw(s) + Math.PI);
+      if (randomAt(Math.round(s), 3222) < .5 && clear(s, u, 2.5)) this.furniture('shelter', s, u, yaw(s) + Math.PI);
     }
     // The quay railing follows the wandering embankment in four-metre runs.
     for (let s = this.start; s < this.start + CHUNK_LENGTH; s += 4) {
@@ -538,7 +550,7 @@ export class CityChunk {
       // Cars parked along the side streets, nose to the kerb.
       for (const k of [-1, 1]) for (let u = 17; u < 34; u += 6.2) {
         const s = center + k * 4.15;
-        if (!this.inChunk(s) || randomAt(index * 4 + k, Math.round(u) + 3231) > .5 || !this.clearAt(s, u, 2)) continue;
+        if (!this.inChunk(s) || randomAt(index * 4 + k, Math.round(u) + 3231) > .5 || !clear(s, u, 2)) continue;
         this.parkedCar(s, u, across(s), index * 100 + Math.round(u) + k * 7, .075);
       }
     }
@@ -546,7 +558,7 @@ export class CityChunk {
     // to the pull-offs so their placement always agrees with the bay markings.
     for (const alley of [(BANDS[0].back + BANDS[1].front) / 2]) {
       for (let s = Math.ceil((this.start - 4) / 22) * 22 + 6; s < this.start + CHUNK_LENGTH + 4; s += 22) {
-        if (!this.inChunk(s) || street(s) || randomAt(Math.round(s), Math.round(alley) + 3241) > .4 || !this.clearAt(s, alley, 2)) continue;
+        if (!this.inChunk(s) || street(s) || randomAt(Math.round(s), Math.round(alley) + 3241) > .4 || !clear(s, alley, 2)) continue;
         this.parkedCar(s, alley - 1.6, yaw(s) + (randomAt(Math.round(s), 3242) < .5 ? 0 : Math.PI), Math.round(s) * 3 + Math.round(alley), .075);
       }
     }

@@ -3,6 +3,7 @@ import { CHUNK_LENGTH, randomAt, lerp } from './route.js';
 import { blockAt, blockBoundary, nearStreet, bankStreetRange, cityGroundHeight, cityStreetHeight, STREET_HALF_WIDTH } from './city-route.js';
 import { drapeCityLawn } from './city-surfaces.js';
 import { dockRailingSpans } from './city-docks.js';
+import { quayLifeRing } from './city-waterfront.js';
 
 const WALLS = ['#887970', '#96968e', '#78878b', '#8a6960', '#a99d85', '#71808a'];
 const ROOFS = ['#555e63', '#626866', '#6b625c'];
@@ -51,6 +52,7 @@ export function buildNeighborhoods(chunk) {
     const base = Math.min(...corners.map(p => p.y)) - .2, top = Math.max(...corners.map(p => p.y)) + height;
     const color = new THREE.Color(WALLS[Math.floor(randomAt(seed, 3691) * WALLS.length)]);
     const roof = new THREE.Color(ROOFS[Math.floor(randomAt(seed, 3692) * ROOFS.length)]);
+    const stone = color.clone().lerp(new THREE.Color('#c6bfae'), .45), glass = new THREE.Color('#40545d');
     const at = (i, y) => ({ ...corners[i], y });
     for (let i = 0; i < 4; i++) {
       const j = (i + 1) % 4, outward = [[-1, 0, 0], [0, 0, -1], [1, 0, 0], [0, 0, 1]][i];
@@ -59,8 +61,14 @@ export function buildNeighborhoods(chunk) {
       if (i === (u1 < 0 ? 0 : 2)) continue;
       const a = corners[i], b = corners[j], length = Math.hypot(b.x - a.x, b.z - a.z);
       const point = (distance, y) => ({ x: lerp(a.x, b.x, distance / length) + outward[0] * .04, y, z: lerp(a.z, b.z, distance / length) + outward[2] * .04 });
+      const panel = (from, to, low, high, tint) => chunk.quad(target, [point(from, low), point(to, low), point(to, high), point(from, high)], tint, outward);
+      // Broad trim carries the detail into the last residential rows, where
+      // individual window frames would cost geometry without reading on screen.
+      panel(0, length, base + .15, base + .6, stone);
+      panel(0, length, top - .55, top - .12, stone);
+      for (const d of [.12, length - .5]) panel(d, d + .38, base + .6, top - .55, stone);
       for (let y = base + 1.3; y < top - 1.8; y += 3.4) for (let d = 1.5; d < length - 2.2; d += 4.2) {
-        chunk.quad(target, [point(d, y), point(d + 1.65, y), point(d + 1.65, y + 1.5), point(d, y + 1.5)], new THREE.Color('#40545d'), outward);
+        panel(d, d + 1.65, y, y + 1.5, glass);
       }
     }
     chunk.quad(target, [0, 1, 2, 3].map(i => at(i, top)), roof, [0, 1, 0]);
@@ -68,9 +76,13 @@ export function buildNeighborhoods(chunk) {
     for (let i = 0; i < 4; i++) {
       const j = (i + 1) % 4, center = { x: (corners[0].x + corners[2].x) / 2, z: (corners[0].z + corners[2].z) / 2 };
       const inset = k => ({ x: lerp(corners[k].x, center.x, .045), y: top + .025, z: lerp(corners[k].z, center.z, .045) });
-      chunk.quad(target, [at(i, top + .025), at(j, top + .025), inset(j), inset(i)], color.clone().multiplyScalar(.92), [0, 1, 0]);
+      chunk.quad(target, [at(i, top + .025), at(j, top + .025), inset(j), inset(i)], stone, [0, 1, 0]);
     }
-    if (randomAt(seed, 3693) < .55) chunk.prism(target, s0 + 2, s0 + 4.4, u0 + 2, u0 + 4.8, top, top + 1.3, roof.clone().multiplyScalar(1.16));
+    if (randomAt(seed, 3693) < .7) {
+      const w = Math.min(5.2, (s1 - s0) * .28), h = 1.6 + randomAt(seed, 3694) * 1.4;
+      chunk.prism(target, s0 + 2, s0 + 2 + w, u0 + 2, u0 + 6, top, top + h, color);
+      chunk.prism(target, s0 + 1.85, s0 + 2.15 + w, u0 + 1.85, u0 + 6.15, top + h, top + h + .18, stone);
+    }
   }
 
   for (let block = first; block <= last; block++) {
@@ -124,6 +136,8 @@ export function buildNeighborhoods(chunk) {
       chunk.beam(boxes, point(from, 0), point(from, 1.04), .085, '#414b4d');
       for (const lift of [.5, 1.02]) chunk.beam(boxes, point(from, lift), point(to, lift), .075, '#414b4d');
       chunk.quad(details, [[from, -133.35], [to, -133.35], [to, -132.65], [from, -132.65]].map(([a, b]) => chunk.at(a, b, cityGroundHeight(a, b) + .035)), new THREE.Color('#a4a7a0'), [0, 1, 0]);
+      chunk.quad(details, [[from, -135.8], [to, -135.8], [to, -133.6], [from, -133.6]].map(([a, b]) => chunk.at(a, b, cityGroundHeight(a, b) + .037)), new THREE.Color('#a6a799'), [0, 1, 0]);
+      if (s % 80 === 0 && to - from > 4) quayLifeRing(chunk, (from + to) / 2, -133, cityGroundHeight((from + to) / 2, -133) + 1.3, 1);
     }
   }
 }

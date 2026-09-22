@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { CHUNK_LENGTH, roadFrame, randomAt } from './route.js';
-import { blockAt, blockBoundary, crossStreetAt, nearStreet, bankStreetRange, cityStreetYaw, quayOffset, cityGroundHeight, cityStreetHeight, pavementHeight, bridgeSurfaceHeight,
+import { blockAt, blockBoundary, crossStreetAt, nearStreet, bankStreetRange, cityStreetYaw, quayOffset, cityGroundHeight, cityRoadHeight, cityStreetHeight, pavementHeight, bridgeSurfaceHeight,
   SIDE_ROAD_HALF_WIDTH, STREET_HALF_WIDTH, BANK_ROADS, INLAND_ROADS, FAR_BANK_TOP, RIVER_BED } from './city-route.js';
 import { cityDiscoveryClears } from './city-discoveries.js';
 
@@ -39,10 +39,34 @@ export function buildCityRoads(chunk) {
     }
   }
 
+  function laneArrow(s, u, direction, height = groundHeight, lift = .028) {
+    if (!chunk.inChunk(s)) return;
+    const point = (along, across) => chunk.at(s + along * direction, u + across, height(s + along * direction, u + across) + lift);
+    chunk.quad(streets, [point(-1.8, -.17), point(.55, -.17), point(.55, .17), point(-1.8, .17)], WHITE, [0, 1, 0]);
+    const tip = point(1.7, 0);
+    chunk.quad(streets, [point(.35, -.85), point(.35, .85), tip, tip], WHITE, [0, 1, 0]);
+  }
+
   const roads = [...INLAND_ROADS, ...BANK_ROADS.map(u => ({ u, halfWidth: ROAD_HALF }))];
   const landDiscoveries = chunk.discoveries.filter(site => site.kind !== 'river-bridge');
   const first = blockAt(chunk.start - 24), last = blockAt(end + 24) + 1;
   const centers = Array.from({ length: last - first + 1 }, (_, i) => blockBoundary(first + i));
+  // Quiet asphalt repairs and slotted kerb drains add scale close to the car.
+  // Flush, opaque polygons share the existing road batch and never add solids.
+  const repair = new THREE.Color('#55595b'), drain = new THREE.Color('#333e43'), slots = new THREE.Color('#707a7b');
+  for (let n = Math.floor((chunk.start - 3) / 32); n * 32 < end + 3; n++) {
+    const s = n * 32 + 5;
+    if (Math.abs(s - crossStreetAt(s).center) < 18) continue;
+    for (const side of [-1, 1]) {
+      const u = side * 5.65;
+      patch(streets, s - .65, s + .65, u - .2, u + .2, drain, cityRoadHeight, .092);
+      for (let k = 0; k < 4; k++) patch(streets, s - .48 + k * .29, s - .4 + k * .29, u - .17, u + .17, slots, cityRoadHeight, .095);
+    }
+    if (randomAt(n, 3656) < .42) {
+      const u = randomAt(n, 3657) < .5 ? -2.8 : 2.8;
+      patch(streets, s - 2.2, s + .8, u - .7, u + .6, repair, cityRoadHeight, .084);
+    }
+  }
   for (const { u, halfWidth: w } of roads) {
     const walk = u > 0 && u < 100 ? 1 : 2.5;
     const boundaries = centers.flatMap(s => [s - ROAD_HALF, s + ROAD_HALF, s - 9, s + 9]);
@@ -71,6 +95,16 @@ export function buildCityRoads(chunk) {
     if (s + STREET_HALF_WIDTH < chunk.start || s - STREET_HALF_WIDTH > end) continue;
     const height = (t, u) => crossRoadHeight(t, u, crossing);
     const bankRange = bankStreetRange(index), ranges = [[5.5, 160], [bankRange.from, bankRange.to]];
+    for (const direction of [-1, 1]) {
+      const approach = s - direction * 21;
+      laneArrow(approach, direction * 2.8, direction, cityRoadHeight, .092);
+      const stop = s - direction * 13.5, u = direction * 2.8;
+      patch(streets, stop - .17, stop + .17, u - 2.2, u + 2.2, WHITE, cityRoadHeight, .092);
+      for (const avenue of BANK_ROADS.slice(0, 2)) {
+        if (avenue < bankRange.from || avenue > bankRange.to) continue;
+        laneArrow(s - direction * 15, avenue + direction * 2.6, direction);
+      }
+    }
     const boundaries = roads.flatMap(road => [road.u - road.halfWidth, road.u + road.halfWidth, road.u - 9, road.u + 9]);
     boundaries.push(-14, -8, 8, 14, FAR_BANK_TOP - 2, quayOffset(s) + 1.5);
     for (const [from, to] of ranges) {
