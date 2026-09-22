@@ -6,7 +6,7 @@ import { waterClock } from './water.js';
 
 // Small hand-built silhouettes, with the same flat faces and muted palette as
 // the coast. Bake colors into shared geometry rather than adding draw calls.
-class Parts {
+export class Parts {
   constructor() { this.parts = []; }
   add(g, p, color, rotation = [0, 0, 0]) {
     if (g.index) { const flat = g.toNonIndexed(); g.dispose(); g = flat; }
@@ -106,8 +106,25 @@ function whale() {
   return p.finish();
 }
 
+function routeShield() {
+  // California's green spade-shaped State Route 1 marker on a steel post,
+  // facing traffic along +z. A white border frames the shield and its "1".
+  const p = new Parts(), green = '#2f6e4b', white = '#f1f0e8';
+  p.box([0, 1.25, 0], [.1, 2.5, .1], '#8e9597');
+  const badge = (scale, z, color) => {
+    p.box([0, 2.62, z], [.86 * scale, .5 * scale, .04], color);
+    const tip = new THREE.CylinderGeometry(.61 * scale, .61 * scale, .04, 4, 1);
+    tip.rotateX(Math.PI / 2); tip.scale(1, .62, 1);
+    p.add(tip, [0, 2.36, z], color);
+  };
+  badge(1, .07, white); badge(.86, .1, green);
+  p.box([.03, 2.5, .13], [.11, .48, .02], white);
+  p.box([-.05, 2.7, .13], [.14, .09, .02], white, [0, 0, .45]);
+  return p.finish();
+}
+
 export const discoveryAssets = {
-  lighthouse: lighthouse(), cottage: cottage(), boat: boat(), whale: whale(),
+  lighthouse: lighthouse(), cottage: cottage(), boat: boat(), whale: whale(), routeShield: routeShield(),
   box: new THREE.BoxGeometry(1, 1, 1),
   foundation: new THREE.CylinderGeometry(1, 1.05, 1, 8),
 };

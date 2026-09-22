@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { randomAt, roadHeight, smoothstep } from './route.js';
 import { riftProfile, creekSection, volcanicPosition } from './volcanic-route.js';
 import { volcanicPalette } from './volcanic-palette.js';
+import { VolcanicBackdrop, CRATER } from './volcanic-backdrop.js';
 
 const ASH = 140, EMBERS = 24, WIDTH = 320, HEIGHT = 110, DEPTH = 340;
 const wrap = (value, extent) => value - Math.floor(value / extent) * extent - extent / 2;
@@ -14,14 +15,15 @@ export class VolcanicAtmosphere {
     this.skyGeometry = new THREE.SphereGeometry(1000, 32, 16);
     this.skyMaterial = new THREE.ShaderMaterial({ side: THREE.BackSide, depthWrite: false, toneMapped: false,
       uniforms: { horizon: { value: new THREE.Color(volcanicPalette.horizon) }, zenith: { value: new THREE.Color(volcanicPalette.zenith) },
-        glow: { value: new THREE.Color(volcanicPalette.cloud) }, time: { value: 0 } },
+        glow: { value: new THREE.Color(volcanicPalette.cloud) }, time: { value: 0 },
+        eruption: { value: CRATER.clone().normalize() }, eruptionColor: { value: new THREE.Color(volcanicPalette.eruption) } },
       vertexShader: `varying vec3 vSkyDirection;
         void main() {
           vSkyDirection = normalize(position);
           vec4 clip = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
           gl_Position = clip.xyww;
         }`,
-      fragmentShader: `uniform vec3 horizon; uniform vec3 zenith; uniform vec3 glow; uniform float time; varying vec3 vSkyDirection;
+      fragmentShader: `uniform vec3 horizon; uniform vec3 zenith; uniform vec3 glow; uniform float time; uniform vec3 eruption; uniform vec3 eruptionColor; varying vec3 vSkyDirection;
         float cloudHash(vec2 p) {
           return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
         }
@@ -45,13 +47,19 @@ export class VolcanicAtmosphere {
           float bank = smoothstep(.015, .14, elevation) * (1.0 - smoothstep(.55, .95, elevation));
           vec3 ash = mix(glow, zenith * .8, smoothstep(.12, .65, elevation) * .7);
           color = mix(color, ash, cloud * bank * .78);
+          // The eruption on the horizon lights the ash around it from below.
+          // Nothing is added at the horizon itself, where fogged land meets sky.
+          float bearing = max(0.0, dot(direction, eruption));
+          float fire = (pow(bearing, 40.0) * .65 + pow(bearing, 7.0) * .35) * smoothstep(0.0, .07, elevation);
           float underlight = (1.0 - smoothstep(.12, .4, elevation)) * bank * broad;
-          color += vec3(.025, .007, .002) * underlight;
+          color += vec3(.025, .007, .002) * underlight * (1.0 + 7.0 * pow(bearing, 6.0));
+          color += eruptionColor * fire * (.55 + .45 * cloud);
           gl_FragColor = vec4(color, 1.0);
           #include <colorspace_fragment>
         }` });
     this.sky = new THREE.Mesh(this.skyGeometry, this.skyMaterial); this.sky.name = 'volcanic-ash-sky';
     this.sky.renderOrder = -1000; this.sky.frustumCulled = false; this.sky.userData.ambientOcclusion = false; this.group.add(this.sky);
+    this.backdrop = new VolcanicBackdrop(this.group);
     const count = ASH + EMBERS, colors = [], sizes = [], kinds = [];
     this.seeds = new Float32Array(count * 4);
     for (let i = 0; i < count; i++) {
@@ -91,6 +99,7 @@ export class VolcanicAtmosphere {
     const anchor = volcanicPosition(s, -14, roadHeight(s) + 20), positions = this.geometry.attributes.position, alpha = this.geometry.attributes.fleckAlpha;
     this.points.position.set(anchor.x, anchor.y, anchor.z + origin);
     this.sky.position.set(anchor.x, roadHeight(s), anchor.z + origin);
+    this.backdrop.update(time, anchor.x, roadHeight(s), anchor.z + origin);
     this.skyMaterial.uniforms.time.value = time;
     for (let i = 0; i < ASH; i++) {
       const n = i * 4, phase = this.seeds[n + 3] * Math.PI * 2;
@@ -139,7 +148,7 @@ export class VolcanicAtmosphere {
     }
   }
   dispose() {
-    this.group.removeFromParent(); this.geometry.dispose(); this.material.dispose(); this.skyGeometry.dispose(); this.skyMaterial.dispose();
+    this.group.removeFromParent(); this.geometry.dispose(); this.material.dispose(); this.skyGeometry.dispose(); this.skyMaterial.dispose(); this.backdrop.dispose();
     for (const light of this.lights) light.dispose();
   }
 }

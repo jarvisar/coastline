@@ -39,13 +39,11 @@ const p = new THREE.Vector3(), before = new THREE.Vector3(), after = new THREE.V
 export class CoastalBirds {
   constructor(chunk) {
     this.start = chunk.start; this.phase = randomAt(chunk.index, 1761) * Math.PI * 2;
-    // Pick a clear cruising height once, including tilted rocks and their crowns.
-    // The margin covers the gentle bobbing and wings without per-frame collisions.
-    this.flightHeight = 22;
-    for (const object of chunk.group.children) if (object.name === 'tidal-sea-stacks') {
-      if (!object.boundingBox) object.computeBoundingBox();
-      this.flightHeight = Math.max(this.flightHeight, object.boundingBox.max.y + 5);
-    }
+    // Pick a clear cruising height once, over the tallest sea stack's crown
+    // (the chunk records it; inland boulders share the stacks' batches but
+    // lie far from the gulls' offshore circuit). The margin covers the gentle
+    // bobbing and wings without per-frame collisions.
+    this.flightHeight = Math.max(22, (chunk.seaStackTop ?? 0) + 5);
     this.mesh = new THREE.InstancedMesh(geometry, material, 4);
     this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.mesh.name = 'coastal-gulls';

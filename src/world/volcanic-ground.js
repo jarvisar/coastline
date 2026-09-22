@@ -4,8 +4,8 @@ import { randomAt, lerp, smoothstep, clamp, roadHeight } from './route.js';
 // Dry ash, oxidised fines and exposed basalt are separate deposits. Their
 // colours stay muted so the molten rock remains the brightest part of the scene.
 const ash = new THREE.Color('#504b50');
-const weathered = new THREE.Color('#62595a');
-const basalt = new THREE.Color('#363b45');
+const weathered = new THREE.Color('#696061');
+const basalt = new THREE.Color('#31364a');
 const cinder = new THREE.Color('#493d3e');
 const shoulder = new THREE.Color('#6c605b');
 
@@ -28,7 +28,7 @@ export function groundColor(p) {
   const detail = field(p.s, p.u, 5, 4, 80303);
   const elevation = clamp((p.y - roadHeight(p.s)) / 25, 0, 1);
   const color = ash.clone().lerp(weathered, smoothstep(.36, .75, deposit) * .75);
-  color.lerp(basalt, smoothstep(.44, .77, exposed) * (.7 + elevation * .2));
+  color.lerp(basalt, smoothstep(.44, .77, exposed) * (.78 + elevation * .2));
   color.lerp(cinder, (1 - smoothstep(.22, .5, deposit)) * .3);
   // Windblown fines gather beside the tarmac, with an irregular outer edge.
   const edge = 8.2 + field(p.s, Math.sign(p.u) * 5, 13, 10, 80304) * 4;

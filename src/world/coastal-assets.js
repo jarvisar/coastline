@@ -123,6 +123,33 @@ export const coastalPines = [pine(1), pine(2)];
 export const coastalCypress = coastalTree();
 export const coastalMontereyPine = coastalTree(true);
 
+function scrub(seed) {
+  // Coastal sage and coyote brush grow as low, lumpy mounds of overlapping
+  // lobes, bleached lighter on top by sun and salt. The base sits at y = 0.
+  const lobes = [
+    [[0, .46, 0, .74, .54, .7], [.56, .32, .24, .52, .38, .48], [-.5, .3, -.2, .56, .4, .52], [.06, .28, -.58, .46, .34, .42]],
+    [[0, .42, 0, .7, .5, .76], [.46, .34, -.36, .54, .42, .46], [-.44, .28, .36, .5, .34, .48]],
+  ][seed - 1];
+  const parts = lobes.map(([x, y, z, sx, sy, sz], i) => {
+    const g = new THREE.IcosahedronGeometry(1, 0);
+    g.scale(sx, sy, sz); g.rotateY(i * 1.3 + seed); g.translate(x, y, z);
+    g.computeVertexNormals();
+    const colors = [], normals = g.attributes.normal;
+    for (let j = 0; j < normals.count; j += 3) {
+      const up = (normals.getY(j) + normals.getY(j + 1) + normals.getY(j + 2)) / 3;
+      const shade = .74 + Math.max(0, up) * .3 + randomAt(j + i * 60, seed + 2291) * .06;
+      for (let k = 0; k < 3; k++) colors.push(shade, shade, shade * .95);
+    }
+    g.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    return g;
+  });
+  const result = mergeGeometries(parts);
+  for (const part of parts) part.dispose();
+  result.computeBoundingSphere();
+  return result;
+}
+export const coastalScrub = [scrub(1), scrub(2)];
+
 function sedge() {
   const vertices = [], colors = [];
   for (let blade = 0; blade < 9; blade++) {
@@ -153,19 +180,23 @@ export const coastalSedge = sedge();
 // only visits a few nearby faces instead of raycasting the whole chunk.
 export function terrainSampler(mesh, topmost = false) {
   const positions = mesh.geometry.attributes.position, buckets = new Map(), step = 16;
+  // Integer cell keys avoid building a string for every face and every
+  // lookup. They repeat every 524 km, far beyond any one chunk's faces.
+  const cell = (x, z) => ((Math.floor(x / step) & 0x7fff) << 15) | (Math.floor(z / step) & 0x7fff);
   for (let i = 0; i < positions.count; i += 3) {
-    const points = [0, 1, 2].map(j => new THREE.Vector3().fromBufferAttribute(positions, i + j));
-    const lowX = Math.floor(Math.min(...points.map(p => p.x)) / step), highX = Math.floor(Math.max(...points.map(p => p.x)) / step);
-    const lowZ = Math.floor(Math.min(...points.map(p => p.z)) / step), highZ = Math.floor(Math.max(...points.map(p => p.z)) / step);
+    const a = { x: positions.getX(i), y: positions.getY(i), z: positions.getZ(i) };
+    const b = { x: positions.getX(i + 1), y: positions.getY(i + 1), z: positions.getZ(i + 1) };
+    const c = { x: positions.getX(i + 2), y: positions.getY(i + 2), z: positions.getZ(i + 2) }, points = [a, b, c];
+    const lowX = Math.floor(Math.min(a.x, b.x, c.x) / step), highX = Math.floor(Math.max(a.x, b.x, c.x) / step);
+    const lowZ = Math.floor(Math.min(a.z, b.z, c.z) / step), highZ = Math.floor(Math.max(a.z, b.z, c.z) / step);
     for (let x = lowX; x <= highX; x++) for (let z = lowZ; z <= highZ; z++) {
-      const key = `${x},${z}`;
-      if (!buckets.has(key)) buckets.set(key, []);
-      buckets.get(key).push(points);
+      const key = ((x & 0x7fff) << 15) | (z & 0x7fff), bucket = buckets.get(key);
+      if (bucket) bucket.push(points); else buckets.set(key, [points]);
     }
   }
-  return (x, z) => {
+  const sample = (x, z) => {
     let height = null;
-    for (const [a, b, c] of buckets.get(`${Math.floor(x / step)},${Math.floor(z / step)}`) ?? []) {
+    for (const [a, b, c] of buckets.get(cell(x, z)) ?? []) {
       const det = (b.z - c.z) * (a.x - c.x) + (c.x - b.x) * (a.z - c.z);
       if (Math.abs(det) < 1e-8) continue;
       const u = ((b.z - c.z) * (x - c.x) + (c.x - b.x) * (z - c.z)) / det;
@@ -178,4 +209,34 @@ export function terrainSampler(mesh, topmost = false) {
     }
     return height;
   };
+  // The face under a point, as a height function over its plane: small
+  // details can then drape over the rendered ground with a single lookup.
+  // Neighbouring details usually share a face, so try the last one first.
+  const planeOf = ([a, b, c]) => {
+    const det = (b.z - c.z) * (a.x - c.x) + (c.x - b.x) * (a.z - c.z);
+    if (Math.abs(det) < 1e-8) return null;
+    const plane = (x, z) => {
+      const u = ((b.z - c.z) * (x - c.x) + (c.x - b.x) * (z - c.z)) / det;
+      const v = ((c.z - a.z) * (x - c.x) + (a.x - c.x) * (z - c.z)) / det;
+      return u * a.y + v * b.y + (1 - u - v) * c.y;
+    };
+    plane.contains = (x, z) => {
+      const u = ((b.z - c.z) * (x - c.x) + (c.x - b.x) * (z - c.z)) / det;
+      const v = ((c.z - a.z) * (x - c.x) + (a.x - c.x) * (z - c.z)) / det;
+      return u >= -.00001 && v >= -.00001 && u + v <= 1.00001;
+    };
+    return plane;
+  };
+  const planes = new WeakMap();
+  let last = null;
+  sample.plane = (x, z) => {
+    if (last?.contains(x, z)) return last;
+    for (const triangle of buckets.get(cell(x, z)) ?? []) {
+      if (!planes.has(triangle)) planes.set(triangle, planeOf(triangle));
+      const plane = planes.get(triangle);
+      if (plane?.contains(x, z)) return (last = plane);
+    }
+    return null;
+  };
+  return sample;
 }

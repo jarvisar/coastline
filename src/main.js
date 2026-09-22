@@ -575,7 +575,7 @@ async function boot() {
     for (const name of ['pause', 'view']) $(`#${name}`).addEventListener('pointerup', event => {
       if (event.pointerType === 'touch') { event.preventDefault(); action(name); }
     });
-    $('#start').addEventListener('click', () => { start(); if (!controlHelpDismissed()) toast(input.gamepad.connected ? 'Left stick to steer · RT / R2 gas · LT / L2 brake' : window.matchMedia('(any-pointer: coarse)').matches ? 'Drag the stick where you want to go · release to stop' : 'W / ↑ to accelerate · S / ↓ to brake'); });
+    $('#start').addEventListener('click', () => { start(); if (!controlHelpDismissed()) toast(input.gamepad.connected ? 'Left stick to steer · RT / R2 gas · LT / L2 brake' : window.matchMedia('(any-pointer: coarse)').matches ? 'Touch anywhere and drag where you want to go · release to stop' : 'W / ↑ to accelerate · S / ↓ to brake'); });
     window.addEventListener('keydown', event => {
       if (event.key !== 'Enter' || event.ctrlKey || event.metaKey || event.altKey || event.defaultPrevented) return;
       if (started || paused || changingJourney || document.querySelector('dialog[open]')) return;
@@ -634,7 +634,7 @@ async function boot() {
       $('#view').title = `${rendering.viewLabel} · Change camera (V)`;
       $('#view').setAttribute('aria-label', `${rendering.viewLabel}. Change camera`);
       const thirdPerson = rendering.camera.isPerspectiveCamera;
-      $('.stick-help-copy').firstChild.textContent = thirdPerson ? '↑ Drive · ↔ Steer' : 'Drag to drive';
+      $('.stick-help-copy').firstChild.textContent = thirdPerson ? '↑ Drive · ↔ Steer' : 'Drag anywhere to drive';
       $('.stick-help-line').textContent = thirdPerson ? '↓ Brake · Release to stop' : 'Release to stop';
       $('#touch-stick').setAttribute('aria-label', thirdPerson ? 'Virtual joystick: up to accelerate, left and right to steer, down to brake or reverse, release to stop' : 'Virtual joystick');
     }

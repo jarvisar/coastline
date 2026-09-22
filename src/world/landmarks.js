@@ -15,6 +15,13 @@ function geometry(vertices, colors, colorSize = 3) {
   result.computeVertexNormals(); result.computeBoundingSphere(); return result;
 }
 
+// An open-spandrel arch after the Big Sur original: twin ribs leap the inlet
+// from footings on the gorge walls, slender paired columns carry the deck
+// above them, and tall two-legged pylons mark the springings. The approaches
+// stand on column bents, and solid abutments meet the ground at either end.
+const ARCH_HALF_SPAN = 30, RIB_U = 4.1, RIB_HALF = .7;
+const SPANDRELS = [5, 10, 15, 20, 25], APPROACHES = [35.5, 40.5];
+
 function buildBridge(chunk, bridge) {
   const first = Math.max(chunk.start, bridge.start - 12);
   const last = Math.min(chunk.start + CHUNK_LENGTH, bridge.end + 12);
@@ -24,10 +31,73 @@ function buildBridge(chunk, bridge) {
     for (const p of [a, b, c, b, d, c]) vertices.push(p.x, p.y, p.z + chunk.start);
   }
   function point(s, u, y) { return positionAt(s, u, y); }
+  const at = (value, s) => typeof value === 'function' ? value(s) : value;
+  // A block between two stations along the road, bent to follow its curve.
+  function block(s0, s1, u0, u1, bottom, top) {
+    const c = (s, u, y) => point(s, u, at(y, s));
+    for (const u of [u0, u1]) quad(c(s0, u, bottom), c(s1, u, bottom), c(s0, u, top), c(s1, u, top));
+    for (const s of [s0, s1]) quad(c(s, u0, bottom), c(s, u1, bottom), c(s, u0, top), c(s, u1, top));
+    for (const y of [bottom, top]) quad(c(s0, u0, y), c(s1, u0, y), c(s0, u1, y), c(s1, u1, y));
+  }
+  const inChunk = s => s >= chunk.start && s < chunk.start + CHUNK_LENGTH;
+  const deckUnder = s => roadHeight(s) - 1;
+  // The arch is a parabola through both springings, level at its crown, where
+  // the ribs tuck under the deck slab. Ribs thicken toward their footings.
+  const feet = new Map([-1, 1].map(side => [side, Math.max(.8, groundHeight(bridge.center + side * ARCH_HALF_SPAN, 0) + .5)]));
+  const springing = side => feet.get(side);
+  const crown = roadHeight(bridge.center) - 1.15;
+  const archDepth = d => 1.05 + 1.25 * Math.pow(Math.min(1, Math.abs(d) / ARCH_HALF_SPAN), 1.6);
+  const archTop = s => {
+    const d = s - bridge.center, t = Math.min(1, Math.abs(d) / ARCH_HALF_SPAN), foot = springing(d < 0 ? -1 : 1) + archDepth(d);
+    return crown - (crown - foot) * t * t;
+  };
+  const archBottom = s => archTop(s) - archDepth(s - bridge.center);
+  for (let s = Math.max(first, bridge.center - ARCH_HALF_SPAN); s < Math.min(last, bridge.center + ARCH_HALF_SPAN); s++) {
+    const end = Math.min(s + 1, last);
+    for (const side of [-1, 1]) {
+      const u0 = side * (RIB_U - RIB_HALF), u1 = side * (RIB_U + RIB_HALF);
+      for (const u of [u0, u1]) quad(point(s, u, archBottom(s)), point(end, u, archBottom(end)), point(s, u, archTop(s)), point(end, u, archTop(end)));
+      for (const y of [archTop, archBottom]) quad(point(s, u0, y(s)), point(end, u0, y(end)), point(s, u1, y(s)), point(end, u1, y(end)));
+    }
+  }
+  for (const side of [-1, 1]) {
+    for (const d of SPANDRELS) {
+      const s = bridge.center + side * d;
+      if (!inChunk(s) || deckUnder(s) - archTop(s) < .9) continue;
+      // Paired columns stand on the ribs; a cap beam ties them under the slab
+      // and a strut braces the ribs, so the pair reads as one frame.
+      // Each member ends inside the one it meets, so no two faces share a plane.
+      for (const u of [-RIB_U, RIB_U]) block(s - .4, s + .4, u - .45, u + .45, archTop(s) - .3, deckUnder(s) - .2);
+      block(s - .45, s + .45, -RIB_U - .5, RIB_U + .5, deckUnder(s) - .6, deckUnder(s) + .1);
+      block(s - .35, s + .35, -RIB_U, RIB_U, archTop(s) - .75, archTop(s) - .15);
+    }
+    const pylon = bridge.center + side * ARCH_HALF_SPAN;
+    if (inChunk(pylon)) {
+      const foot = springing(side);
+      // Footing on the gorge wall, then two tall legs joined by a recessed web.
+      block(pylon - 2.6, pylon + 2.6, -6.2, 6.2, Math.min(-2, groundHeight(pylon, 0) - 1.5), foot + .4);
+      for (const u of [-1, 1]) block(pylon - 1.45, pylon + 1.45, u > 0 ? 3 : -5.45, u > 0 ? 5.45 : -3, foot, deckUnder(pylon) + .1);
+      block(pylon - .8, pylon + .8, -3.3, 3.3, foot + .2, deckUnder(pylon) - .1);
+      // Cornice bands at the top of the pylon and at the springing.
+      for (const [low, high] of [[deckUnder(pylon) - 1.6, deckUnder(pylon) - .9], [foot + 2.2, foot + 2.8]]) {
+        block(pylon - 1.65, pylon + 1.65, -5.65, 5.65, low, high);
+      }
+    }
+    for (const d of APPROACHES) {
+      const s = bridge.center + side * d;
+      if (!inChunk(s)) continue;
+      const ground = Math.min(groundHeight(s, -RIB_U), groundHeight(s, RIB_U)) - .5;
+      if (deckUnder(s) - ground < 1.5) continue;
+      for (const u of [-RIB_U, RIB_U]) block(s - .5, s + .5, u - .5, u + .5, ground, deckUnder(s) - .2);
+      block(s - .55, s + .55, -RIB_U - .55, RIB_U + .55, deckUnder(s) - .7, deckUnder(s) + .1);
+      if (deckUnder(s) - ground > 9) block(s - .35, s + .35, -RIB_U, RIB_U, (ground + deckUnder(s)) / 2 - .3, (ground + deckUnder(s)) / 2 + .3);
+    }
+  }
+  // Only the abutments are solid down to the ground; elsewhere the edge beam
+  // is a shallow fascia and the structure beneath stays open.
   function bottom(s, u) {
-    if (s <= bridge.start || s >= bridge.end) return Math.min(roadHeight(s) - 1.3, groundHeight(s, u) - .4);
-    const across = (s - bridge.start) % 24 - 12;
-    return Math.abs(across) > 10 ? -2 : roadHeight(s) - 13.4 + Math.sqrt(100 - across * across);
+    const fascia = roadHeight(s) - 1.3;
+    return Math.abs(s - bridge.center) > 43 ? Math.min(fascia, groundHeight(s, u) - .4) : fascia;
   }
   for (let s = first; s < last; s++) {
     const end = Math.min(s + 1, last);

@@ -79,7 +79,10 @@ export function createRendering(canvas, graphics = new Graphics()) {
   let snowy = false;
   let journey = 'coast';
   const fogProfiles = {
-    coast: { color: '#b9def3', near: 600, far: 1150, thirdNear: 170, thirdFar: 300 },
+    // The coast range stands 100-250 m inland; the driving views see its spurs
+    // before the haze takes them. The shortest resident window still ends
+    // past `thirdFar` ahead, and the sea mesh reaches 420 m offshore.
+    coast: { color: '#b9def3', near: 600, far: 1150, thirdNear: 190, thirdFar: 380 },
     desert: { color: '#dab49b', near: 460, far: 860, thirdNear: 210, thirdFar: 350 },
     snow: { color: '#243949', near: 340, far: 760, thirdNear: 190, thirdFar: 330 },
     jungle: { color: '#9ab89a', near: 320, far: 780, thirdNear: 110, thirdFar: 250 },
@@ -192,10 +195,12 @@ export function createRendering(canvas, graphics = new Graphics()) {
       return;
     }
     if (id === 'volcanic') {
-      // Cool dusk fill separates ash shelves from the warm light at their feet.
+      // A lower, warm sun through the ash models every shelf and block;
+      // a weaker, cooler fill keeps their shadowed walls apart from the warm
+      // light at their feet.
       scene.background.set(volcanicPalette.horizon); updateFog();
-      sky.color.set(volcanicPalette.skyLight); sky.groundColor.set(volcanicPalette.groundLight); sky.intensity = 1.9;
-      sun.color.set(volcanicPalette.sun); sun.intensity = 2.05; sunOffset.set(-155, 220, 85);
+      sky.color.set(volcanicPalette.skyLight); sky.groundColor.set(volcanicPalette.groundLight); sky.intensity = 1.65;
+      sun.color.set(volcanicPalette.sun); sun.intensity = 2.55; sunOffset.set(-175, 185, 110);
       renderer.toneMappingExposure = 1.1;
       return;
     }
@@ -205,8 +210,11 @@ export function createRendering(canvas, graphics = new Graphics()) {
     scene.background.set(desert ? '#dfb399' : '#b5dff5'); updateFog();
     sky.color.set(desert ? '#e5d8d0' : '#c4e5ff'); sky.groundColor.set(desert ? '#79635a' : '#365544');
     sky.intensity = desert ? 1.27 : 1.12;
-    sun.color.set(desert ? '#ffe0bc' : '#fff4df'); sun.intensity = desert ? 2.45 : 2.85;
-    sunOffset.set(...(desert ? [-170, 150, 120] : [-145, 230, 95]));
+    // The coast's afternoon sun stands about 43 degrees up, over the sea, so
+    // trees and headlands lay readable shadows inland; it burns a little
+    // brighter to keep the flat meadows as lit as under a higher sun.
+    sun.color.set(desert ? '#ffe0bc' : '#fff1da'); sun.intensity = desert ? 2.45 : 3.1;
+    sunOffset.set(...(desert ? [-170, 150, 120] : [-190, 215, 125]));
     renderer.toneMappingExposure = desert ? .92 : 1.02;
   }
   setJourney('coast');

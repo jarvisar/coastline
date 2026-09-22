@@ -3,6 +3,7 @@
 ## Rendering and loading
 
 - Routes load on demand in the page and worker. The PWA caches all routes for offline use.
+- Up to three workers build chunks: one per spare core, two below 4 GB of reported memory, one below 2 GB. A worker that fails or stays silent for 20 seconds is dropped alone and a timed-out job moves to another worker. Chunks are built on the page only when no worker is left.
 - Static scenery matrices update on attachment or an origin shift. Moving objects still update each frame.
 - Worker instances reuse transferred matrix buffers.
 - Scenery batches use the smaller of two enclosing spheres for culling.
@@ -16,6 +17,8 @@
 Auto detects the display's refresh rate from animation-frame timestamps. It uses the 20th-percentile interval over 1.5 seconds, so occasional dropped frames don't lower the target. The previous 60 FPS target could increase detail on a 120 Hz display despite uneven delivery. Manual presets stay fixed.
 
 Alpine cabin light positions are generated in the worker. This removes a repeated terrain survey from the main thread during chunk changes.
+
+Previously one worker failure or timeout disabled chunk workers for the rest of the visit. Every later chunk was then built on the main thread, which stalled a slow device for up to a second at each chunk boundary.
 
 ## Measurements
 
@@ -68,6 +71,36 @@ Measured with seed `4817`, Balanced quality, and Chrome/SwiftShader after moving
 Draw calls and triangle counts were unchanged. Six route captures matched exactly. Alpine differed in 163 color channels at particle edges: maximum 6/255, mean 0.00036/255 across the image, from GPU rounding.
 
 `test:weather` compares shader output with the original motion equations across more than 260,000 coordinates, including large positions, long sessions, and time rebases. The recorded maximum error was below 0.001 metres.
+
+### Pacific Coast scenery
+
+The Pacific Coast added wildflower drifts, coastal scrub, sloops, an open-spandrel arch bridge, overlook walls, Route 1 signs, and a sky for the driving views. Measured with seed `4817`, High quality, 1440 × 1000, and Chrome/SwiftShader, using the camera positions from `scripts/pacific-review.mjs`:
+
+| View | Draw calls before | After | Triangles before | After |
+| --- | ---: | ---: | ---: | ---: |
+| Medium, route position 24 | 251 | 280 | 352,363 | 471,866 |
+| Scenic, position 148 | 296 | 334 | 404,764 | 554,386 |
+| Close, position 600 | 219 | 250 | 288,804 | 403,804 |
+| Third-person, position 500 | 252 | 288 | 310,526 | 429,784 |
+
+Petals are flat triangles merged into one mesh per chunk and draped on the rendered terrain faces. The sky collapses under the orthographic cameras, so the overhead views don't draw it. A coastal chunk takes about 1.5 times as long to build as before; the chunk worker absorbs this during normal driving.
+
+### Route loading
+
+A route change waits for its resident chunks to be built. Commit `5ea95a6` ran `joinCoplanarFaces` on each Volcanic chunk's rock and lava and on City's blocks and streets. The join compared each face with every face on its plane and allocated objects and string keys per face, so those two routes took several seconds to load.
+
+The join now reads faces into typed arrays and uses integer keys. It checks only later faces in the same 8 m cell and sizes its output before writing it. Its output is byte-identical on 121 batches captured from all seven routes. `terrainSampler` uses integer cell keys, and every route's chunks hash the same as before.
+
+Measured in Node with seed `4817`: the time to build the nine chunks around each route's start position, best of three runs.
+
+| Route | Before `5ea95a6` | `4f7669f` | After |
+| --- | ---: | ---: | ---: |
+| Volcanic | 1,511 ms | 4,290 ms | 1,596 ms |
+| City | 294 ms | 2,653 ms | 638 ms |
+| Desert | 749 ms | 750 ms | 749 ms |
+| Coast | 187 ms | 185 ms | 324 ms |
+
+Coast now includes the Pacific Coast scenery above, and Volcanic its added terrain and backdrop. With three worker threads, the same nine chunks built 1.4 times faster for City and twice as fast for Volcanic, best of four. That timing includes each worker's first load of the route.
 
 ## Profiling and tests
 

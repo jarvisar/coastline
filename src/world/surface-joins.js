@@ -9,64 +9,122 @@ import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 export function joinCoplanarFaces(geometry) {
   if (geometry.groups.length) throw new Error('Join material batches separately');
   const source = geometry.index ? geometry.toNonIndexed() : geometry;
-  const attributes = Object.entries(source.attributes), position = source.attributes.position;
+  const attributes = Object.entries(source.attributes), position = source.attributes.position, faces = Math.floor(position.count / 3);
+  // Faces are read once into flat arrays. A chunk's rock or street batch holds
+  // tens of thousands of them, and objects per face cost more than the joins.
+  const corner = new Float64Array(faces * 9), normal = new Float64Array(faces * 3), distance = new Float64Array(faces);
+  const first = new Uint8Array(faces), second = new Uint8Array(faces), bounds = new Float64Array(faces * 4), plane = [0, 0];
+  for (let v = 0; v < faces * 3; v++) { corner[v * 3] = position.getX(v); corner[v * 3 + 1] = position.getY(v); corner[v * 3 + 2] = position.getZ(v); }
+  // Faces by quantized normal, then 10 m plane band, then grid cell.
   const triangles = [], buckets = new Map();
-  const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), edge = new THREE.Vector3();
-  for (let i = 0; i < position.count; i += 3) {
-    a.fromBufferAttribute(position, i); b.fromBufferAttribute(position, i + 1); c.fromBufferAttribute(position, i + 2);
-    const normal = b.clone().sub(a).cross(edge.subVectors(c, a));
-    if (normal.lengthSq() < 1e-16) continue;
-    normal.normalize();
-    const components = normal.toArray().map(Math.abs), dominant = components.indexOf(Math.max(...components));
-    const axes = [0, 1, 2].filter(axis => axis !== dominant);
-    const points = [a, b, c].map(p => [p.getComponent(axes[0]), p.getComponent(axes[1])]);
-    const triangle = { i, normal, vertices: [a.toArray(), b.toArray(), c.toArray()], distance: normal.dot(a), axes, points,
-      min: [0, 1].map(j => Math.min(...points.map(p => p[j]))),
-      max: [0, 1].map(j => Math.max(...points.map(p => p[j]))) };
-    const quantized = normal.toArray().map(v => Math.round(v * 100));
-    triangle.key = quantized.join(',');
-    const [low, high] = planeRange(triangle.vertices, quantized);
-    for (let plane = low; plane <= high; plane++) {
-      const key = `${triangle.key}/${plane}`;
-      if (!buckets.has(key)) buckets.set(key, []);
-      buckets.get(key).push(triangle);
+  for (let f = 0; f < faces; f++) {
+    const p = f * 9, ax = corner[p], ay = corner[p + 1], az = corner[p + 2];
+    const ux = corner[p + 3] - ax, uy = corner[p + 4] - ay, uz = corner[p + 5] - az;
+    const vx = corner[p + 6] - ax, vy = corner[p + 7] - ay, vz = corner[p + 8] - az;
+    let nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+    const lengthSq = nx * nx + ny * ny + nz * nz;
+    if (lengthSq < 1e-16) continue;
+    const scale = 1 / (Math.sqrt(lengthSq) || 1);
+    nx *= scale; ny *= scale; nz *= scale;
+    normal[f * 3] = nx; normal[f * 3 + 1] = ny; normal[f * 3 + 2] = nz;
+    distance[f] = nx * ax + ny * ay + nz * az;
+    // Project onto the two axes the face is least steep across.
+    const x = Math.abs(nx), y = Math.abs(ny), z = Math.abs(nz), dominant = x >= y && x >= z ? 0 : y >= z ? 1 : 2;
+    const s = first[f] = dominant === 0 ? 1 : 0, t = second[f] = dominant === 2 ? 1 : 2;
+    bounds[f * 4] = Math.min(corner[p + s], corner[p + 3 + s], corner[p + 6 + s]);
+    bounds[f * 4 + 1] = Math.min(corner[p + t], corner[p + 3 + t], corner[p + 6 + t]);
+    bounds[f * 4 + 2] = Math.max(corner[p + s], corner[p + 3 + s], corner[p + 6 + s]);
+    bounds[f * 4 + 3] = Math.max(corner[p + t], corner[p + 3 + t], corner[p + 6 + t]);
+    const qx = Math.round(nx * 100), qy = Math.round(ny * 100), qz = Math.round(nz * 100), code = normalCode(qx, qy, qz);
+    planeRange(corner, p, qx, qy, qz, plane);
+    if (!buckets.has(code)) buckets.set(code, new Map());
+    const planes = buckets.get(code);
+    for (let band = plane[0]; band <= plane[1]; band++) {
+      if (!planes.has(band)) planes.set(band, new Map());
+      const cells = planes.get(band);
+      // Broad, level ground puts thousands of faces on one plane. A coarse
+      // grid over each plane keeps a face's search to its own neighbourhood.
+      const x0 = cell(bounds[f * 4]), x1 = cell(bounds[f * 4 + 2]), z0 = cell(bounds[f * 4 + 1]), z1 = cell(bounds[f * 4 + 3]);
+      for (let cx = x0; cx <= x1; cx++) for (let cz = z0; cz <= z1; cz++) {
+        const key = cellKey(cx, cz), list = cells.get(key);
+        if (list) list.push(f); else cells.set(key, [f]);
+      }
     }
-    triangles.push(triangle);
+    triangles.push(f);
   }
-  const output = attributes.map(() => []);
+  // Bounds that meet, then the actual planes: quantized normals are only a
+  // broad phase, and nearby parallel surfaces and intersecting slopes must
+  // stay intact.
+  const overlaps = (f, m) => {
+    const a = f * 4, b = m * 4;
+    if (bounds[a] >= bounds[b + 2] - 1e-7 || bounds[a + 2] <= bounds[b] + 1e-7
+      || bounds[a + 1] >= bounds[b + 3] - 1e-7 || bounds[a + 3] <= bounds[b + 1] + 1e-7) return false;
+    const nx = normal[f * 3], ny = normal[f * 3 + 1], nz = normal[f * 3 + 2];
+    // A millimeter accommodates normals reconstructed from very thin
+    // Float32 trim faces. Deliberately raised surface layers stay apart.
+    for (let j = m * 9; j < m * 9 + 9; j += 3) if (Math.abs(nx * corner[j] + ny * corner[j + 1] + nz * corner[j + 2] - distance[f]) > .001) return false;
+    return nx * normal[m * 3] + ny * normal[m * 3 + 1] + nz * normal[m * 3 + 2] >= .999999;
+  };
   let changed = false;
-  const vertex = i => attributes.flatMap(([, attribute]) => Array.from({ length: attribute.itemSize }, (_, j) => attribute.getComponent(i, j)));
+  const stride = attributes.reduce((sum, [, attribute]) => sum + attribute.itemSize, 0);
+  const vertex = i => {
+    const values = new Array(stride);
+    let offset = 0;
+    for (const [, attribute] of attributes) for (let j = 0; j < attribute.itemSize; j++) values[offset++] = attribute.getComponent(i, j);
+    return values;
+  };
+  const corners = f => [[vertex(f * 3), vertex(f * 3 + 1), vertex(f * 3 + 2)]];
   const positionOffset = attributes.slice(0, attributes.findIndex(([name]) => name === 'position')).reduce((sum, [, attr]) => sum + attr.itemSize, 0);
-  for (const triangle of triangles) {
-    const project = v => triangle.axes.map(axis => v[positionOffset + axis]);
-    let pieces = [[vertex(triangle.i), vertex(triangle.i + 1), vertex(triangle.i + 2)]];
+  const projection = f => {
+    const s = positionOffset + first[f], t = positionOffset + second[f];
+    return v => [v[s], v[t]];
+  };
+  // Most faces overlap nothing. They are read in full only once another face
+  // actually clips them, or when the joined batch is finally rebuilt.
+  const clipped = new Array(faces).fill(null), seen = new Int32Array(faces).fill(-1), masks = [], bins = [[], [], []];
+  for (const f of triangles) {
     // Float32 rotations can put an otherwise shared normal on either side
     // of a bin boundary. Search that neighboring bin as well.
-    const bins = triangle.normal.toArray().map(v => {
-      const scaled = v * 100, rounded = Math.round(scaled), remainder = scaled - rounded;
-      return Math.abs(remainder) > .4 ? [rounded, rounded + Math.sign(remainder)] : [rounded];
-    });
-    const candidates = new Set();
-    for (const x of bins[0]) for (const y of bins[1]) for (const z of bins[2]) {
-      const [low, high] = planeRange(triangle.vertices, [x, y, z]);
-      for (let plane = low; plane <= high; plane++) {
-        for (const mask of buckets.get(`${x},${y},${z}/${plane}`) ?? []) candidates.add(mask);
+    for (let j = 0; j < 3; j++) {
+      const scaled = normal[f * 3 + j] * 100, rounded = Math.round(scaled), remainder = scaled - rounded;
+      bins[j].length = 0; bins[j].push(rounded);
+      if (Math.abs(remainder) > .4) bins[j].push(rounded + Math.sign(remainder));
+    }
+    // Faces whose bounds can meet this one share a cell with it. They clip it
+    // in the order a search of whole planes finds them: by normal bin, then
+    // plane, then build order. A face met again in a later bin or plane was
+    // already considered at its first.
+    const x0 = cell(bounds[f * 4]), x1 = cell(bounds[f * 4 + 2]), z0 = cell(bounds[f * 4 + 1]), z1 = cell(bounds[f * 4 + 3]);
+    let group = 0;
+    masks.length = 0;
+    for (const qx of bins[0]) for (const qy of bins[1]) for (const qz of bins[2]) {
+      const planes = buckets.get(normalCode(qx, qy, qz));
+      if (!planes) continue;
+      planeRange(corner, f * 9, qx, qy, qz, plane);
+      for (let band = plane[0]; band <= plane[1]; band++, group++) {
+        const cells = planes.get(band);
+        if (!cells) continue;
+        for (let cx = x0; cx <= x1; cx++) for (let cz = z0; cz <= z1; cz++) {
+          // Lists are in build order, and only later faces can clip this one.
+          const list = cells.get(cellKey(cx, cz));
+          if (list) for (let k = list.length - 1; k >= 0 && list[k] > f; k--) {
+            const m = list[k];
+            if (seen[m] === f) continue;
+            seen[m] = f;
+            if (overlaps(f, m)) masks.push(group, m);
+          }
+        }
       }
     }
-    for (const mask of candidates) {
-      if (mask.i <= triangle.i ||
-          triangle.min.some((v, j) => v >= mask.max[j] - 1e-7 || triangle.max[j] <= mask.min[j] + 1e-7)) continue;
-      // Quantized normals are only a broad phase. Verify the actual planes;
-      // nearby parallel surfaces and intersecting slopes must stay intact.
-      let coplanar = true;
-      for (let j = 0; j < 3; j++) {
-        a.fromBufferAttribute(position, mask.i + j);
-        // A millimeter accommodates normals reconstructed from very thin
-        // Float32 trim faces. Deliberately raised surface layers stay apart.
-        if (Math.abs(triangle.normal.dot(a) - triangle.distance) > .001) { coplanar = false; break; }
-      }
-      if (!coplanar || triangle.normal.dot(mask.normal) < .999999) continue;
-      const outline = [0, 1, 2].map(j => { a.fromBufferAttribute(position, mask.i + j); return triangle.axes.map(axis => a.getComponent(axis)); });
+    if (!masks.length) continue;
+    const order = [];
+    for (let k = 0; k < masks.length; k += 2) order.push(k);
+    order.sort((p, q) => masks[p] - masks[q] || masks[p + 1] - masks[q + 1]);
+    const project = projection(f), s = first[f], t = second[f];
+    let pieces = corners(f);
+    for (const k of order) {
+      const m = masks[k + 1] * 9;
+      const outline = [0, 3, 6].map(j => [corner[m + j + s], corner[m + j + t]]);
       const next = [];
       for (const polygon of pieces) {
         const { inside, outside } = subtract(polygon, outline, project);
@@ -76,33 +134,51 @@ export function joinCoplanarFaces(geometry) {
       pieces = next;
       if (!pieces.length) break;
     }
-    // Clipping can leave extra points along a straight edge. Remove those
-    // before triangulating so repeated railings do not gain needless faces.
-    for (const piece of pieces) {
-      const polygon = [...piece];
-      for (let i = polygon.length - 1; i >= 0 && polygon.length >= 3; i--) {
-        if (Math.abs(cross(project(polygon[(i + polygon.length - 1) % polygon.length]),
-          project(polygon[i]), project(polygon[(i + 1) % polygon.length]))) < 1e-9) polygon.splice(i, 1);
+    clipped[f] = pieces;
+  }
+  if (changed) {
+    // Each face kept whole is its index; a clipped one leaves the triangles of
+    // its remaining pieces.
+    const emitted = [];
+    for (const f of triangles) {
+      const pieces = clipped[f];
+      if (!pieces) {
+        // An untouched face is copied as it is, unless it is too thin to keep.
+        const p = f * 9, s = first[f], t = second[f];
+        const a = [corner[p + s], corner[p + t]], b = [corner[p + 3 + s], corner[p + 3 + t]], c = [corner[p + 6 + s], corner[p + 6 + t]];
+        if (Math.abs(cross(b, c, a)) >= 1e-9 && Math.abs(cross(a, b, c)) >= 1e-9 && Math.abs(cross(c, a, b)) >= 1e-9 && area([a, b, c]) >= 1e-10) emitted.push(f);
+        continue;
       }
-      for (let j = 1; j < polygon.length - 1; j++) {
-        const face = [polygon[0], polygon[j], polygon[j + 1]];
-        if (area(face.map(project)) < 1e-10) continue;
-        for (const v of face) {
-          let offset = 0;
-          attributes.forEach(([, attribute], k) => {
-            for (let n = 0; n < attribute.itemSize; n++) output[k].push(v[offset++]);
-          });
+      const project = projection(f);
+      // Clipping can leave extra points along a straight edge. Remove those
+      // before triangulating so repeated railings do not gain needless faces.
+      for (const piece of pieces) {
+        const polygon = [...piece];
+        for (let i = polygon.length - 1; i >= 0 && polygon.length >= 3; i--) {
+          if (Math.abs(cross(project(polygon[(i + polygon.length - 1) % polygon.length]),
+            project(polygon[i]), project(polygon[(i + 1) % polygon.length]))) < 1e-9) polygon.splice(i, 1);
+        }
+        for (let j = 1; j < polygon.length - 1; j++) {
+          const face = [polygon[0], polygon[j], polygon[j + 1]];
+          if (area(face.map(project)) >= 1e-10) emitted.push(face);
         }
       }
     }
-  }
-  if (changed) {
     geometry.setIndex(null);
-    attributes.forEach(([name, attribute], i) => {
-      const result = new THREE.BufferAttribute(new attribute.array.constructor(output[i].length), attribute.itemSize, attribute.normalized);
-      for (let j = 0; j < output[i].length; j++) result.setComponent(Math.floor(j / attribute.itemSize), j % attribute.itemSize, output[i][j]);
+    let offset = 0;
+    for (const [name, attribute] of attributes) {
+      const size = attribute.itemSize, from = offset;
+      const result = new THREE.BufferAttribute(new attribute.array.constructor(emitted.length * 3 * size), size, attribute.normalized), array = result.array;
+      // Plain arrays take the values as they are; normalized ones re-encode them.
+      const put = attribute.normalized ? (i, n, value) => result.setComponent(i, n, value) : (i, n, value) => { array[i * size + n] = value; };
+      let i = 0;
+      for (const face of emitted) {
+        if (typeof face === 'number') for (let v = face * 3; v < face * 3 + 3; v++, i++) for (let n = 0; n < size; n++) put(i, n, attribute.getComponent(v, n));
+        else for (const v of face) { for (let n = 0; n < size; n++) put(i, n, v[from + n]); i++; }
+      }
       geometry.setAttribute(name, result);
-    });
+      offset += size;
+    }
     geometry.boundingBox = null; geometry.boundingSphere = null;
     if (source !== geometry) {
       const indexed = mergeVertices(geometry, 1e-6);
@@ -116,9 +192,20 @@ export function joinCoplanarFaces(geometry) {
 }
 
 const cross = (a, b, p) => (b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0]);
-function planeRange(vertices, normal) {
-  const distances = vertices.map(p => (p[0] * normal[0] + p[1] * normal[1] + p[2] * normal[2]) / 10);
-  return [Math.floor(Math.min(...distances) - .001), Math.floor(Math.max(...distances) + .001)];
+// Small integer keys, which a Map finds without allocating. A quantized normal
+// has components within ±101. Grid cells wrap every 262 km; faces that far
+// apart can share a list, but never overlap, so they are passed over.
+const normalCode = (x, y, z) => ((x + 128) * 256 + y + 128) * 256 + z + 128;
+const CELL = 8;
+const cell = value => Math.floor(value / CELL);
+const cellKey = (x, z) => ((x & 0x7fff) << 15) | (z & 0x7fff);
+function planeRange(corner, p, x, y, z, range) {
+  let low = Infinity, high = -Infinity;
+  for (let j = p; j < p + 9; j += 3) {
+    const distance = (corner[j] * x + corner[j + 1] * y + corner[j + 2] * z) / 10;
+    low = Math.min(low, distance); high = Math.max(high, distance);
+  }
+  range[0] = Math.floor(low - .001); range[1] = Math.floor(high + .001);
 }
 function area(points) {
   if (points.length < 3) return 0;

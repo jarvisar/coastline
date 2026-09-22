@@ -209,6 +209,46 @@ test('the left basin exposes broad lava flows around rooted cliff islands', () =
   assert.ok(islands / samples > .04, 'large cliff islands still frame the flows');
 });
 
+test('cooling crust floats in slabs on the open basin and never rides onto land', () => {
+  let crust = 0;
+  for (const index of [-4, 0, 4, 10]) {
+    const chunk = new VolcanicChunk(index);
+    try {
+      const ground = terrainSampler(chunk.group.getObjectByName('volcanic-basalt'));
+      const rock = terrainSampler(chunk.group.getObjectByName('volcanic-formations'), true);
+      for (let s = chunk.start + 4; s < chunk.start + CHUNK_LENGTH - 4; s += 2) {
+        const { near, far, level } = riftProfile(s, -1);
+        for (let d = near + 10; d < far - 10; d += 2) {
+          const p = volcanicPosition(s, -d), z = p.z + chunk.start, top = rock(p.x, z);
+          if (top === null || top <= level || top > level + 1.2) continue;
+          crust++;
+          assert.ok(ground(p.x, z) < level, `crust rests on the bed, not the bank, at ${s}`);
+        }
+      }
+    } finally { chunk.dispose(); }
+  }
+  assert.ok(crust > 200, 'cooling reaches skin over');
+});
+
+test('heat haze rises from the basin in the existing glow batch', () => {
+  for (const index of [-4, 0, 10]) {
+    const chunk = new VolcanicChunk(index);
+    try {
+      assert.equal(chunk.group.children.filter(child => child.material === chunk.group.getObjectByName('volcanic-glow').material).length, 1, 'no extra draw call');
+      const { position, haze } = chunk.group.getObjectByName('volcanic-glow').geometry.attributes;
+      assert.equal(haze.count, position.count);
+      let bands = 0;
+      for (let i = 0; i < haze.count; i++) {
+        if (haze.getX(i) < .5) continue;
+        bands++;
+        const level = riftProfile(chunk.start - position.getZ(i), -1).level;
+        assert.ok(position.getY(i) > level - 2 && position.getY(i) < level + 68, 'bands stand on the lava and fade out above it');
+      }
+      assert.ok(bands > 0 && bands < haze.count, 'haze shares the batch with the shoreline glow');
+    } finally { chunk.dispose(); }
+  }
+});
+
 test('neighboring volcanic terrain and lava meshes share exact boundary vertices', () => {
   for (const index of [-9, 0, 65]) {
     const a = new VolcanicChunk(index), b = new VolcanicChunk(index + 1);

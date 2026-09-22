@@ -102,7 +102,8 @@ test('desert streaming and repeated world changes release scene objects and owne
     const world = new World(scene); world.update(24);
     for (const chunk of world.chunks.values()) for (const source of chunk.owned) source.addEventListener('dispose', () => disposed++);
     for (const s of [250, 1025, 9000, -300]) {
-      world.update(s); assert.equal(world.chunks.size, 9); assert.equal(scene.children.length, 9);
+      // The coast's sky is resident alongside its streamed chunks.
+      world.update(s); assert.equal(world.chunks.size, 9); assert.equal(scene.children.filter(child => child !== world.sky?.group).length, 9);
       assert.ok(Math.abs(-s + world.origin) <= 1024);
     }
     world.dispose(); assert.equal(scene.children.length, 0);

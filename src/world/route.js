@@ -140,46 +140,80 @@ function fieldNoise(s, u, span, salt) {
   const at = (i, j) => randomAt(i * 1031 + j, salt);
   return lerp(lerp(at(cs, cu), at(cs + 1, cu), ts), lerp(at(cs, cu + 1), at(cs + 1, cu + 1), ts), tu);
 }
-export function mountainHeight(s, u) {
-  // Unequal flanks and offset shoulders make branching ridges, with broad
-  // feet that merge into the meadow instead of a row of isolated cones.
-  const cell = Math.floor(s / 192);
-  let height = 0;
-  for (let index = cell - 1; index <= cell + 1; index++) {
-    const center = index * 192 + 96 + (randomAt(index, 715) - .5) * 60;
-    const cross = 131 + randomAt(index, 716) * 39;
-    const along = 92 + randomAt(index, 718) * 38, across = 91 + randomAt(index, 719) * 31;
-    const lean = (randomAt(index, 1724) - .5) * .8;
-    const du = (u - cross) / across;
-    const ds = (s - center) / (along * (s < center ? .86 : 1.14)) + du * lean;
-    const ribs = Math.sin(ds * 7 + du * 4 + index) * .07 * smoothstep(.08, .65, Math.abs(du));
-    const cone = Math.max(0, 1 - Math.hypot(ds, du * (du < 0 ? .94 : .76)) + ribs);
-    height += (48 + randomAt(index, 717) * 35) * Math.pow(cone, 1.48);
-    const shoulder = Math.max(0, 1 - Math.hypot(ds - .38, (du + .28) * 1.35));
-    height += (12 + randomAt(index, 1725) * 10) * shoulder * shoulder;
+// The coast range behind the road, after the Santa Lucia front: spur ridges
+// run down from a high main crest toward the sea, separated by steep canyons.
+// Each spur bends as it descends and ends in a blunt nose at its own distance
+// from the road, so the range reads as broad sunlit and shaded planes rather
+// than a scatter of cones. `spur` is 1 on a crest line and 0 in a canyon.
+const SPUR_SPACING = 132;
+export function coastRange(s, u) {
+  const rise = smoothstep(24, 160, u);
+  if (rise === 0) return { height: 0, spur: 0, rise: 0 };
+  const t = s + 24 * Math.sin(u / 61 + s / 410) + (fieldNoise(s, u, 97, 1741) - .5) * 30;
+  const cell = Math.floor(t / SPUR_SPACING);
+  let spur = 0;
+  for (let i = cell - 1; i <= cell + 1; i++) {
+    const center = i * SPUR_SPACING + 24 + randomAt(i, 1742) * 84;
+    const half = 50 + randomAt(i, 1743) * 32, toe = 24 + randomAt(i, 1744) * 36;
+    // A sharp crest over concave flanks: the canyons between are V-shaped.
+    const across = Math.max(0, 1 - Math.abs(t - center) / half);
+    spur = Math.max(spur, Math.pow(across, 1.4) * smoothstep(toe, toe + 40, u) * (.72 + randomAt(i, 1745) * .28));
   }
-  const spine = 155 + 23 * Math.sin(s / 233 + 1.3);
-  height += 16 * smoothstep(0, 1, 1 - Math.abs(u - spine) / 123) * (.35 + coastNoise(s, 131, 1723) * .65);
-  return height;
+  // Saddles and summits along the main crest, which the spur heads join.
+  const crestU = 165 + 22 * Math.sin(s / 263 + 1.3), summit = .7 + .6 * fieldNoise(s, 0, 160, 1746);
+  const floor = rise * (16 + 12 * fieldNoise(s, u, 140, 1747));
+  const ridge = spur * Math.pow(rise, .5) * (44 + 30 * summit) * (.85 + .3 * fieldNoise(s, u, 38, 1748));
+  const crest = (1 - smoothstep(0, 60, Math.abs(u - crestU))) * summit * 20;
+  // Past the crest the range starts down its far side.
+  const beyond = 1 - .35 * smoothstep(crestU + 10, crestU + 70, u);
+  return { height: (floor + ridge + crest) * beyond, spur, rise };
 }
+export function mountainHeight(s, u) { return coastRange(s, u).height; }
 export function hillsideSteepness(s) {
   // Some stretches of hill rise straight behind the roadside terrace; others
   // open into gradual meadow before the ridge.
   return smoothstep(.35, .8, coastNoise(s, 230, 1721));
 }
 export function rockCover(s, u) {
-  // Bare rock on the summits and in cohesive patches across the hill flanks,
-  // rather than on isolated steep facets.
+  // Bare rock breaks out along the high spur crests and the main crest's
+  // summits, with a few smaller patches on the upper flanks; the canyons and
+  // the low meadow keep their turf.
   const shelter = smoothstep(1.1, 3.4, pondRadius(s, u));
   const gorge = 1 - .8 * (1 - smoothstep(46, 125, Math.abs(s - bridgeAt(s).center)));
-  const summit = smoothstep(36, 65, mountainHeight(s, u) * shelter * gorge + (fieldNoise(s, u, 42, 1703) - .5) * 17);
-  const patches = smoothstep(.6, .8, fieldNoise(s, u, 48, 1701) * .8 + fieldNoise(s, u, 19, 1702) * .2) * smoothstep(35, 75, u) * shelter;
-  return clamp(summit + patches, 0, 1);
+  const { spur, rise } = coastRange(s, u);
+  const crest = smoothstep(.62, .9, spur * Math.pow(rise, .6) + (fieldNoise(s, u, 42, 1703) - .5) * .3) * smoothstep(.35, .7, rise);
+  const patches = smoothstep(.66, .82, fieldNoise(s, u, 48, 1701) * .8 + fieldNoise(s, u, 19, 1702) * .2) * smoothstep(60, 120, u) * spur;
+  return clamp((crest + patches) * shelter * gorge, 0, 1);
 }
 export function coastalGrove(s, u) {
   // A shared habitat field makes tree groups and their darker understory agree.
   // Broad clearings separate sheltered groves; exposed headlands stay open.
-  return fieldNoise(s, u, 54, 1751) * .72 + fieldNoise(s, u, 23, 1752) * .28;
+  // Up in the range, forest keeps to the canyon floors and the flanks that
+  // face away from the sun; sunward slopes and spur crests stay open grass,
+  // so each ridge reads from far off.
+  const habitat = fieldNoise(s, u, 54, 1751) * .72 + fieldNoise(s, u, 23, 1752) * .28;
+  if (u < 30) return habitat;
+  const { spur, rise } = coastRange(s, u);
+  // The sun stands to the south, toward falling s: a slope that climbs with s faces it.
+  const sunward = clamp((coastRange(s + 5, u).height - coastRange(s - 5, u).height) / 10 * 1.8, -1, 1);
+  const forest = .5 - sunward * .38 + (1 - spur) * .2 - spur * .22 + (habitat - .5) * .35;
+  return lerp(habitat, forest, smoothstep(30, 85, u) * Math.min(1, rise * 4));
+}
+// Where the coast range dominates the ground's color, from 0 on the terrace.
+export const rangeInfluence = u => smoothstep(28, 90, u);
+export function wildflowers(s, u) {
+  // Spring bloom lies in broad drifts on open turf, never under the groves or
+  // on the mown verge. Poppies take the sunny terrace, lupine the swales, and
+  // mustard the upper meadow, so neighbouring drifts rarely share a color.
+  const open = (1 - smoothstep(.44, .6, coastalGrove(s, u))) * smoothstep(8.5, 15, Math.abs(u));
+  const poppy = smoothstep(.57, .76, fieldNoise(s, u, 43, 1781)) * open;
+  const lupine = smoothstep(.58, .78, fieldNoise(s + 17, u, 61, 1782)) * open * (1 - poppy * .8);
+  const mustard = smoothstep(.6, .8, fieldNoise(s, u - 23, 79, 1783)) * open * smoothstep(24, 60, u) * (1 - Math.max(poppy, lupine) * .8);
+  return { poppy, lupine, mustard };
+}
+export function icePlant(s) {
+  // Succulent mats hang over the bluff in long, broken runs.
+  return smoothstep(.45, .65, coastNoise(s, 29, 1791)) * smoothstep(.2, .5, coastNoise(s, 11, 1792));
 }
 export function roadFrame(s) {
   const dx = roadDerivative(s);
@@ -226,7 +260,8 @@ function baseTerrainHeight(s, u, radius) {
   const inland = Math.max(smoothstep(12, 110, u), hillsideSteepness(s) * .7 * shelter * smoothstep(20, 88, u));
   const hill = 13 + 23 * fieldNoise(s, u, 115, 1731) + 12 * fieldNoise(s + u * .4, u, 67, 1732);
   const knolls = (fieldNoise(s, u, 29, 1733) - .5) * 7 * smoothstep(16, 50, u) * shelter;
-  return h + inland * hill * gorge + ripple * smoothstep(7, 26, u) + knolls + mountainHeight(s, u) * inland * shelter * gorge;
+  // The coast range carries its own rise off the terrace, beyond the verge.
+  return h + inland * hill * gorge + ripple * smoothstep(7, 26, u) + knolls + mountainHeight(s, u) * shelter * gorge;
 }
 export function groundHeight(s, u) {
   const pond = pondAt(s), radius = pondRadius(s, u, pond);

@@ -58,14 +58,31 @@ lavaMaterial.customProgramCacheKey = () => 'volcanic-lava-v9';
 // Additive light must fade out in fog instead of blending toward its colour.
 export const glowMaterial = new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false, transparent: true,
   blending: THREE.AdditiveBlending, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 });
+// The same batch carries the heat rising off the basin (`haze` = 1): light
+// scattered in the fumes above the lava. Seen across the ground it glows over
+// the shelf that hides the lava itself; from the overhead views, or edge on,
+// it fades away and leaves the lava clear.
 glowMaterial.onBeforeCompile = shader => {
-  shader.fragmentShader = shader.fragmentShader.replace('#include <fog_fragment>', `
+  shader.uniforms.volcanicTime = volcanicClock;
+  shader.vertexShader = 'uniform float volcanicTime; attribute float haze; varying float vHaze;\n' + shader.vertexShader;
+  shader.vertexShader = shader.vertexShader.replace('#include <fog_vertex>', `#include <fog_vertex>
+    vHaze = 1.0;
+    if (haze > .5) {
+      vec3 hazeWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;
+      vec3 hazeView = isOrthographic ? -vec3(viewMatrix[0][2], viewMatrix[1][2], viewMatrix[2][2]) : normalize(hazeWorld - cameraPosition);
+      float facing = abs(dot(normalize(mat3(modelMatrix) * normal), hazeView));
+      vHaze = pow(1.0 - min(1.0, abs(hazeView.y) * 1.25), 3.0) * smoothstep(.05, .45, facing)
+        * (.86 + .14 * sin(volcanicTime * .7 + hazeWorld.x * .05 + hazeWorld.z * .03));
+    }
+  `);
+  shader.fragmentShader = 'varying float vHaze;\n' + shader.fragmentShader.replace('#include <fog_fragment>', `
+    gl_FragColor.rgb *= vHaze;
     #ifdef USE_FOG
       gl_FragColor.rgb *= 1.0 - smoothstep(fogNear, fogFar, vFogDepth);
     #endif
   `);
 };
-glowMaterial.customProgramCacheKey = () => 'volcanic-glow-v1';
+glowMaterial.customProgramCacheKey = () => 'volcanic-glow-v2';
 
 // Geometry carries the chimney's anchor, phase and scale. Expanding puffs rise
 // in the shader so worker-transferred chunks share one clock and no CPU updates.

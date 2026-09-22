@@ -30,16 +30,21 @@ const puffGeometry = mergeVertices(puff);
 const matrix = new THREE.Object3D();
 const stoneColors = palette(['#50525b', '#5b5659', '#454b57', '#615b5d', '#444550']);
 const cliffColors = palette(['#3c3b46', '#49414a', '#343944', '#51484d']);
+// Wind lays pale ash on every flat summit, so a shelf's top reads apart from its walls.
+const ashColors = palette(['#64626c', '#6b6770', '#5e5e69', '#706b72']);
 const lavaRamp = palette(['#a9250d', '#de3c0b', '#fa6510', '#ff9c26', '#ffdb72']);
 const roadColors = { asphalt: new THREE.Color('#3e3d40'), edge: new THREE.Color('#c4bcb0'), centre: new THREE.Color('#b29855') };
 const railColor = new THREE.Color('#7c7770'), railShade = new THREE.Color('#4e4947'), reflectorColor = new THREE.Color('#edc994');
 const postColor = new THREE.Color('#938b79'), snagColor = new THREE.Color('#231c1d');
 const warmStone = new THREE.Color('#95513b');
 const sulfur = new THREE.Color('#b4a264'), oxidized = new THREE.Color('#79513b'), cooledCrust = new THREE.Color('#29272d');
-const coolingLava = new THREE.Color('#622b2b');
-// Additive light: a hot line where rock meets lava, a softer spill beyond it.
-// It is added to the encoded frame, where a little green already reads as tan.
+// Slabs of cooled crust afloat on the basin, and their scorched sides.
+const crustColors = palette(['#4a4141', '#544946', '#433c3e', '#5b4f4a']), crustSide = new THREE.Color('#2e2424');
+// Additive light: a hot line where rock meets lava, a softer spill beyond it,
+// and the fumes lit above the basin. It is added to the encoded frame, where a
+// little green already reads as tan.
 const rimLight = new THREE.Color(.15, .018, .0005), spillLight = new THREE.Color(.095, .009, .0003), dark = new THREE.Color(0, 0, 0);
+const hazeLight = new THREE.Color(.12, .028, .004);
 registerChunkResources('volcanic', { basaltMaterial, lavaMaterial, glowMaterial, smokeMaterial, rockMaterial, rockGeometry, pebbleGeometry });
 
 // Keep the broad polygon faces, with a little shared shading across their
@@ -89,6 +94,7 @@ function triangle(target, a, b, c, color, heat = COLD, upward = true) {
     const tint = color.isColor ? color : color(p); target.colors.push(tint.r, tint.g, tint.b);
     if (heat !== null) target.heat.push(typeof heat === 'function' ? heat(p) : heat);
     if (target.flow) target.flow.push(p.flow ?? 0);
+    if (target.haze) target.haze.push(p.haze ?? 0);
     if (target.flowCoordinates) target.flowCoordinates.push(p.s ?? 0, p.u ?? 0);
     if (target.smooth) target.smooth.push(p.normal?.x ?? 0, p.normal?.y ?? 0, p.normal?.z ?? 0);
   }
@@ -115,6 +121,7 @@ function geometry(data, weathered = false, join = false) {
   g.setAttribute('color', new THREE.Float32BufferAttribute(data.colors, 3));
   if (data.heat.length) g.setAttribute('heat', new THREE.Float32BufferAttribute(data.heat, 1));
   if (data.flow) g.setAttribute('flow', new THREE.Float32BufferAttribute(data.flow, 1));
+  if (data.haze) g.setAttribute('haze', new THREE.Float32BufferAttribute(data.haze, 1));
   if (data.flowCoordinates) g.setAttribute('flowCoordinates', new THREE.Float32BufferAttribute(data.flowCoordinates, 2));
   g.computeVertexNormals();
   if (data.smooth) {
@@ -159,6 +166,19 @@ function riftSeed(i, j, side) {
   return { s: (i + .5 + (randomAt(i, salt) - .5) * .86) * CELL, d: (j + .5 + (randomAt(i, salt + 1) - .5) * .86) * CELL,
     kind: randomAt(i, salt + 2), key: Math.floor(randomAt(i, salt + 3) * 1e6) };
 }
+// Cooling lava skins over in plates. Seeds on a jittered grid, stretched
+// along the basin's flow, own the plates; units are cells, not metres.
+const PLATE = 17, PLATE_STRETCH = 1.3;
+const plateSeed = (i, j) => [i + .12 + .76 * randomAt(i, j * 29 + 8110), j + .12 + .76 * randomAt(i, j * 29 + 8111)];
+// Long hot currents divide quieter, cooling reaches of the left basin, and
+// its banks stay hottest. Global, so every chunk agrees on the same field.
+function basinField(s, d) {
+  const { near, far } = riftProfile(s, -1);
+  const edge = clamp(Math.min(d - near - 3, far - 3 - d) / 14, 0, 1);
+  const current = Math.sin(s * .032 + d * .095 + 1.6 * Math.sin(s * .018 - d * .024));
+  return { edge, cooling: smoothstep(.15, .88, current) * (.65 + .35 * Math.sin(s * .025 - d * .041) ** 2) };
+}
+
 // Keep the part of a convex outline at least `inset` behind the line through (mx, my) with normal (nx, ny).
 function clip(outline, mx, my, nx, ny, inset = 0) {
   const kept = [], depth = p => (p[0] - mx) * nx + (p[1] - my) * ny + inset;
@@ -245,7 +265,7 @@ export class VolcanicChunk {
     this.group = new THREE.Group(); this.group.name = `volcanic-chunk-${index}`;
     this.discoveries = volcanicDiscoveries(this.start - 128, this.start + CHUNK_LENGTH + 128);
     // Rock, molten rock and spilled light each merge into one mesh per chunk.
-    this.rock = surface(); this.lava = { ...surface(), flow: [], flowCoordinates: [] }; this.glow = surface(); this.rocks = []; this.pebbles = []; this.tops = [];
+    this.rock = surface(); this.lava = { ...surface(), flow: [], flowCoordinates: [] }; this.glow = { ...surface(), haze: [] }; this.rocks = []; this.pebbles = []; this.tops = [];
     this.flowSurface = new FlowSurface(VOLCANIC_STEP, -Infinity); this.spillways = []; this.flowPaths = [];
     this.groundSurface = new FlowSurface(VOLCANIC_STEP, -Infinity); this.screeBeds = [];
     this.buildTerrain(); this.buildLava(); this.buildCreek(); this.buildRift(); this.buildLandmark(); this.buildOutcrops();
@@ -256,6 +276,7 @@ export class VolcanicChunk {
     this.buildCrust(); this.buildChannelBanks(); this.buildRocks(); this.buildTalus(); this.buildCreekBanks(); this.buildGroundCover(); this.buildTrees();
     buildVolcanicBridge(this);
     buildVolcanicDiscoveries(this, this.discoveries);
+    this.buildHaze();
     this.addMesh(this.rock, basaltMaterial, 'volcanic-formations', true);
     this.addMesh(this.lava, lavaMaterial, 'volcanic-lava');
     this.addMesh(this.glow, glowMaterial, 'volcanic-glow');
@@ -396,19 +417,19 @@ export class VolcanicChunk {
       }
     }
   }
+  // The river fans into the basin's existing facets. Carry its warmer
+  // palette through the receiving pool, then return gradually to the broad
+  // basin mosaic instead of exposing a dark, straight shoreline seam.
+  receiving(p) {
+    const crossing = volcanicCrossing(this.start + 64), channel = crossingChannel(crossing, p.u), { near } = riftProfile(p.s, -1);
+    const distance = Math.abs(p.s - channel.s), half = channel.width / 2;
+    return (1 - smoothstep(half - 1, half + 9, distance)) * (1 - smoothstep(near + 6, near + 20, -p.u));
+  }
   buildLava() {
     const rows = 36, step = CHUNK_LENGTH / rows, first = this.index * rows;
     const crossing = volcanicCrossing(this.start + 64);
-    // The river fans into the basin's existing facets. Carry its warmer
-    // palette through the receiving pool, then return gradually to the broad
-    // basin mosaic instead of exposing a dark, straight shoreline seam.
-    const receiving = p => {
-      const channel = crossingChannel(crossing, p.u), { near } = riftProfile(p.s, -1);
-      const distance = Math.abs(p.s - channel.s), half = channel.width / 2;
-      return (1 - smoothstep(half - 1, half + 9, distance)) * (1 - smoothstep(near + 6, near + 20, -p.u));
-    };
     const face = (a, b, c, tint, phase) => triangle(this.lava, a, b, c, p => {
-      const blend = receiving(p);
+      const blend = this.receiving(p);
       if (blend <= 0) return tint;
       const channel = crossingChannel(crossing, p.u), interior = 1 - Math.abs(p.s - channel.s) / (channel.width / 2);
       const warm = lavaColor(.32 + .3 * smoothstep(0, .7, interior) + .065 * Math.sin(p.s * .43 + p.u * .62) * Math.sin(p.s * .17 - p.u * .4));
@@ -424,22 +445,69 @@ export class VolcanicChunk {
       };
       for (let r = 0; r < rows; r++) for (let c = 0; c < columns; c++) {
         const a = vertex(first + r, c), b = vertex(first + r, c + 1), d = vertex(first + r + 1, c), e = vertex(first + r + 1, c + 1);
-        // Long hot currents divide quieter, cooling reaches. The broad field
-        // carries the composition; individual facets only describe its surface.
+        // The broad field carries the composition; facets only describe its
+        // surface. Where the crust has skinned over, the seams between its
+        // slabs expose the hottest melt, so cooling reaches run brighter.
         const tone = .5 + .5 * Math.sin(a.s / 23 + a.u / 31) * Math.sin(a.s / 41 - a.u / 17 + 1.3);
-        const s = (a.s + b.s + d.s + e.s) / 4, u = Math.abs((a.u + b.u + d.u + e.u) / 4), { near, far } = riftProfile(s, side);
-        const edge = clamp(Math.min(u - near - 3, far - 3 - u) / 14, 0, 1);
-        const current = Math.sin(s * .032 + u * .095 + 1.6 * Math.sin(s * .018 - u * .024));
-        const cooling = smoothstep(.15, .88, current) * (.65 + .35 * Math.sin(s * .025 - u * .041) ** 2);
+        const { edge, cooling } = basinField((a.s + b.s + d.s + e.s) / 4, Math.abs((a.u + b.u + d.u + e.u) / 4));
         const shade = k => {
           const grain = randomAt(first + r, c * 2 + k + 7550 + side);
-          return lavaColor(.1 + edge * (.35 + tone * .29) + grain * .065)
-            .lerp(coolingLava, cooling * (.86 + grain * .08));
+          return lavaColor(.1 + edge * (.35 + tone * .29) + grain * .065).lerp(lavaColor(.42 + grain * .3), cooling * .6);
         };
         const phase = k => randomAt(first + r, c * 2 + k + 7570 + side);
         if (randomAt(first + r, c + 7590 + side) < .5) { face(a, b, d, shade(0), phase(0)); face(b, e, d, shade(1), phase(1)); }
         else { face(a, b, e, shade(0), phase(0)); face(a, e, d, shade(1), phase(1)); }
       }
+    }
+  }
+  // Cooling reaches skin over. The crust breaks into slabs along the plate
+  // cells, each pulled back from its neighbours so a glowing seam runs between
+  // them. Hot currents carry only a few small rafts, and the banks, islands
+  // and river mouth stay open. A slab belongs to the chunk holding its seed.
+  buildCrust() {
+    const side = -1, cellS = PLATE * PLATE_STRETCH, random = seededRandom(this.index + 78900);
+    let near = Infinity, far = 0;
+    for (let s = this.start - 40; s <= this.start + CHUNK_LENGTH + 40; s += 8) { const profile = riftProfile(s, side); near = Math.min(near, profile.near); far = Math.max(far, profile.far); }
+    for (let i = Math.floor(this.start / cellS) - 1; i <= Math.floor((this.start + CHUNK_LENGTH) / cellS) + 1; i++) {
+      for (let j = Math.floor(-far / PLATE) - 1; j <= Math.floor(-near / PLATE) + 1; j++) {
+        const [x, y] = plateSeed(i, j), s = x * cellS, d = -y * PLATE;
+        if (s < this.start || s >= this.start + CHUNK_LENGTH) continue;
+        const { edge, cooling } = basinField(s, d), profile = riftProfile(s, side);
+        if (d < profile.near + 8 || d > profile.far - 8 || this.receiving(this.at(s, -d)) > .02) continue;
+        const inset = (lerp(6, 1.9, cooling) + (1 - edge) * 3) / PLATE;
+        let outline = [[x - 3, y - 3], [x + 3, y - 3], [x + 3, y + 3], [x - 3, y + 3]];
+        for (let di = -2; di <= 2 && outline.length > 2; di++) for (let dj = -2; dj <= 2 && outline.length > 2; dj++) {
+          if (!di && !dj) continue;
+          const [ox, oy] = plateSeed(i + di, j + dj), nx = ox - x, ny = oy - y, length = Math.hypot(nx, ny);
+          outline = clip(outline, (x + ox) / 2, (y + oy) / 2, nx / length, ny / length, inset);
+        }
+        if (outline.length < 3) continue;
+        outline = outline.map(([px, py]) => [px * cellS, -py * PLATE]);
+        const [low, high] = riftLimits(outline, side, 2);
+        outline = clip(clip(outline, 0, low, 0, -1), 0, high, 0, 1);
+        if (outline.length < 3 || outlineArea(outline) < 16 || outlineReach(outline).reach < 2.2) continue;
+        this.slab(facet(outline, 5, random), random);
+      }
+    }
+  }
+  // A floating slab of crust: a thin, faintly tilted top with a dull red rim
+  // and a dark centre, and short sides that glow where they meet the melt.
+  slab(outline, random) {
+    const side = -1, { cs, cd } = outlineReach(outline), level = riftProfile(cs, side).level, count = outline.length;
+    const lift = .5 + random() * .3, tiltS = (random() - .5) * .025, tiltD = (random() - .5) * .025;
+    const height = (s, d, extra) => riftProfile(s, side).level + lift + extra + (s - cs) * tiltS + (d - cd) * tiltD;
+    const rim = outline.map(([s, d]) => ({ ...this.at(s, side * d, height(s, d, (random() - .5) * .12)), heat: 2 }));
+    const inner = outline.map(([s, d]) => { const ps = lerp(cs, s, .58), pd = lerp(cd, d, .58); return { ...this.at(ps, side * pd, height(ps, pd, .1)), heat: 6.5 }; });
+    const foot = outline.map(([s, d]) => ({ ...this.at(cs + (s - cs) * 1.06, side * (cd + (d - cd) * 1.06), riftProfile(s, side).level - .6), heat: 0 }));
+    // A slab may drift against an island or bank, but not ride up onto one.
+    const middle = this.at(cs, side * cd, level);
+    if ((this.ground(middle.x, middle.z) ?? -Infinity) > level - .3 || rim.filter(p => (this.ground(p.x, p.z) ?? -Infinity) > level - .3).length > count / 3) return;
+    const centre = { ...this.at(cs, side * cd, height(cs, cd, .16)), heat: 10 }, skin = pick(crustColors, random());
+    for (let k = 0; k < count; k++) {
+      const next = (k + 1) % count, tint = skin.clone().multiplyScalar(.92 + random() * .16);
+      facing(this.rock, foot[k], foot[next], rim[k], centre, crustSide, vertexHeat); facing(this.rock, foot[next], rim[next], rim[k], centre, crustSide, vertexHeat);
+      triangle(this.rock, rim[k], rim[next], inner[k], tint, vertexHeat); triangle(this.rock, rim[next], inner[next], inner[k], tint, vertexHeat);
+      triangle(this.rock, centre, inner[k], inner[next], tint, vertexHeat);
     }
   }
   // Lava, cooling edges and reflected light share the terrain's exact
@@ -453,13 +521,23 @@ export class VolcanicChunk {
       const a = path[i - 1], b = path[i], ds = b.s - a.s, du = b.u - a.u;
       segments.push({ a, b, ds, du, lengthSq: ds * ds + du * du });
     }
+    // Every vertex of every flow asks for its nearest segments; index them
+    // along the road so each looks only at the few that can reach it.
+    const nearby = new Map();
+    for (const segment of segments) {
+      const { a, b } = segment;
+      for (let bin = Math.floor((Math.min(a.s, b.s) - 9) / 4); bin <= Math.floor((Math.max(a.s, b.s) + 9) / 4); bin++) {
+        if (!nearby.has(bin)) nearby.set(bin, []);
+        nearby.get(bin).push(segment);
+      }
+    }
     // Shared color and animation fields cross all junctions. The distance to
     // the entire network keeps a joining tributary's cool edge out of the
     // middle of the creek while retaining warm, irregular low-poly facets.
     const heat = p => .5 + .5 * Math.sin(p.s * .19 + p.u * .31);
     const color = p => {
       let interior = 0;
-      for (const { a, b, ds, du, lengthSq } of segments) {
+      for (const { a, b, ds, du, lengthSq } of nearby.get(Math.floor(p.s / 4)) ?? []) {
         if (p.s < Math.min(a.s, b.s) - 9 || p.s > Math.max(a.s, b.s) + 9) continue;
         const t = clamp(((p.s - a.s) * ds + (p.u - a.u) * du) / (lengthSq || 1), 0, 1);
         const distance = Math.hypot(p.s - a.s - ds * t, p.u - a.u - du * t), width = lerp(a.width, b.width, t) / 2;
@@ -599,7 +677,7 @@ export class VolcanicChunk {
       const v = this.at(cs + (ds + ds / length * shift) * (1 - pull), side * (cd + (dd + dd / length * shift) * (1 - pull)), level);
       v.heat = lit ? glow(level) : COLD; v.out = shift; return v;
     });
-    const stone = pick(stoneColors, random());
+    const stone = pick(stoneColors, random()), ash = pick(ashColors, randomAt(Math.floor(cs), Math.floor(cd) + 8200));
     const waistOut = outline.map(() => flare * .2 + (random() - .5) * 1.8 * relief), waistY = outline.map(() => base + height * (.3 + random() * .3));
     const top = (k, ds, dd) => base + height + clamp(ds * tiltS + dd * tiltD, -height * .12, height * .12);
     const footOut = outline.map(() => flare * (.55 + random() * .9));
@@ -623,7 +701,7 @@ export class VolcanicChunk {
     for (let level = 0; level < rings.length - 1; level++) for (let k = 0; k < count; k++) {
       const next = (k + 1) % count, a = rings[level][k], b = rings[level][next], c = rings[level + 1][k], d = rings[level + 1][next];
       // Faces vary down the walls; the top is one slab of stone, told apart by its facets alone.
-      const color = level < 2 ? pick(cliffColors, random()) : stone.clone().multiplyScalar(.97 + random() * .06), shade = color.clone().multiplyScalar(.97 + random() * .06);
+      const color = level < 2 ? pick(cliffColors, random()) : (level < 3 ? stone : ash).clone().multiplyScalar(.97 + random() * .06), shade = color.clone().multiplyScalar(.97 + random() * .06);
       const face = shellFace;
       if (random() < .5) { face(a, b, c, color); face(b, d, c, shade); } else { face(a, b, d, color); face(a, d, c, shade); }
     }
@@ -631,7 +709,7 @@ export class VolcanicChunk {
     const cap = rings.at(-1);
     const underside = { ...centre, y: (molten ? riftProfile(cs, side).level : base) - 1.5, heat: molten ? 0 : COLD };
     for (let k = 0; k < count; k++) {
-      shellFace(centre, cap[k], cap[(k + 1) % count], stone.clone().multiplyScalar(.96 + random() * .08));
+      shellFace(centre, cap[k], cap[(k + 1) % count], ash.clone().multiplyScalar(.96 + random() * .08));
       shellFace(underside, rings[0][(k + 1) % count], rings[0][k], stone);
     }
     if (molten) {
@@ -766,10 +844,10 @@ export class VolcanicChunk {
           const tier = cell.outline.map(p => [top.s + Math.cos(angle) * offset + (p[0] - seed.s) * shrink, side * top.u + Math.sin(angle) * offset + (p[1] - seed.d) * shrink]);
           if (tier.every(p => Math.hypot(p[0] - top.s, p[1] - side * top.u) < top.reach * .95)) top = this.block(facet(tier, 8, random), side, top.y - .8, 2 + random() * 4.5, random, false);
         }
-        // A few resistant cores survive above the broken shelves as leaning
-        // needles, breaking up the otherwise broad, horizontal island caps.
+        // A few resistant cores survive above the broken shelves as clumps of
+        // columns, breaking up the otherwise broad, horizontal island caps.
         if (top.reach > 5.5 && height > 12 && random() < .24) {
-          this.crag(top.s, top.u, top.reach * .95, top.reach * (1.6 + random() * .7), random, top.y - top.reach * .7);
+          this.spires(top.s, top.u, top.reach, top.reach * (.95 + random() * .45), top.y, random);
           top.reach = 0;
         }
         if (top.reach > 3.5) this.tops.push(top);
@@ -928,7 +1006,7 @@ export class VolcanicChunk {
       }
       const s = this.start + 24 + random() * 80, { far } = riftProfile(s, side);
       const radius = 3.8 + random() * 3.2, d = far + radius + 3 + random() * 7, p = this.onGround(s, side * d);
-      if (p && clearOfSummit(p, radius) && random() < .72) this.cone(s, side * d, radius, radius * (.65 + random() * .25), p.y - radius * .12, random);
+      if (p && clearOfSummit(p, radius) && random() < .55) this.cone(s, side * d, radius, radius * (.65 + random() * .25), p.y - radius * .12, random);
     }
     // And the odd one on a broad block out in the lava.
     for (const top of this.tops) if (top.reach > 7 && random() < .05) {
@@ -994,6 +1072,34 @@ export class VolcanicChunk {
     }
     const peak = this.at(s + lean, u + radius * .12, base.y + height);
     for (let k = 0; k < count; k++) triangle(this.rock, rings[2][k], rings[2][(k + 1) % count], peak, pick(stoneColors, random()));
+  }
+  // The resistant core of a shelf, left standing as a clump of broken basalt
+  // columns. They share a lean and step down from the tallest, and each
+  // snapped top is slanted and dusted with ash like the shelf around it.
+  spires(s, u, reach, height, base, random) {
+    const count = 4 + Math.floor(random() * 3), leanS = (random() - .5) * .16, leanU = (random() - .5) * .16, spin = random() * Math.PI * 2;
+    for (let n = 0; n < count; n++) {
+      const angle = spin + n * 2.4 + random() * .6, out = n ? reach * (.24 + random() * .2) : 0;
+      const cs = s + Math.cos(angle) * out * 1.2, cu = u + Math.sin(angle) * out;
+      const radius = reach * (n ? .2 + random() * .07 : .3), rise = height * (n ? .35 + random() * .45 : 1);
+      const sides = n % 2 ? 5 : 6, twist = random() * Math.PI, breakAngle = random() * Math.PI * 2, slope = .25 + random() * .45;
+      const ring = (scale, y, slant = false) => Array.from({ length: sides }, (_, k) => {
+        const turn = twist + k / sides * Math.PI * 2, x = Math.cos(turn) * radius * scale, z = Math.sin(turn) * radius * scale;
+        const tip = slant ? slope * radius * Math.cos(turn - breakAngle) : 0;
+        return this.at(cs + x + leanS * (y - base), cu + z + leanU * (y - base), y + tip);
+      });
+      // A buried foot, a slight waist where one drum sits on the next, the snapped crown.
+      const rings = [ring(1.08, base - 4), ring(1, base + rise * .55), ring(.95, base + rise * .55 + .12), ring(.9, base + rise, true)];
+      const centre = this.at(cs, cu, base), wall = pick(stoneColors, random()), light = pick(cliffColors, random());
+      for (let band = 0; band < 3; band++) for (let k = 0; k < sides; k++) {
+        const next = (k + 1) % sides, shade = (band === 1 ? light : wall).clone().multiplyScalar(band === 1 ? .8 : .9 + (k % 3) * .08);
+        facing(this.rock, rings[band][k], rings[band][next], rings[band + 1][k], centre, shade, COLD);
+        facing(this.rock, rings[band][next], rings[band + 1][next], rings[band + 1][k], centre, shade, COLD);
+      }
+      const crown = rings[3], middle = { x: crown.reduce((sum, p) => sum + p.x, 0) / sides, y: crown.reduce((sum, p) => sum + p.y, 0) / sides + .05, z: crown.reduce((sum, p) => sum + p.z, 0) / sides };
+      const ash = pick(ashColors, random());
+      for (let k = 0; k < sides; k++) triangle(this.rock, middle, crown[k], crown[(k + 1) % sides], ash.clone().multiplyScalar(.95 + (k % 2) * .08));
+    }
   }
   // Angular masses breaking through the far banks.
   buildOutcrops() {
@@ -1189,33 +1295,6 @@ export class VolcanicChunk {
       }
       if (path.length > 3) this.vein(path.reverse(), .42, .12, random, .85);
       fracture(vent.s + vent.radius * .7, vent.u, 8 + vent.radius, side * .7, .16);
-    }
-  }
-  // Small rafts of cooling crust interrupt the molten mosaic without turning
-  // it into another noise texture. They are static, half-submerged plates.
-  buildCrust() {
-    const random = seededRandom(this.index + 78900);
-    for (const side of [-1]) for (let n = 0; n < 64; n++) {
-      const s = this.start + 9 + random() * (CHUNK_LENGTH - 18), { near, far, level } = riftProfile(s, side);
-      const d = lerp(near + 8, far - 8, random()), centre = this.at(s, side * d, level + .26);
-      if ((this.ground(centre.x, centre.z) ?? Infinity) > level) continue;
-      const radius = 1.1 + random() ** 1.2 * 6.2, spin = random() * 6.28, count = 5 + Math.floor(random() * 3);
-      const ring = Array.from({ length: count }, (_, k) => {
-        const angle = spin + k * Math.PI * 2 / count, r = radius * (.7 + random() * .35);
-        return this.at(s + Math.cos(angle) * r, side * (d + Math.sin(angle) * r * .7), riftProfile(s + Math.cos(angle) * r, side).level + .18);
-      });
-      if (ring.some(p => (this.ground(p.x, p.z) ?? Infinity) > p.y - .2)) continue;
-      const color = pick(cliffColors, random()).clone().multiplyScalar(.65);
-      for (let k = 0; k < ring.length; k++) {
-        const next = (k + 1) % ring.length;
-        // A charcoal skin with a dull red, thin broken edge, above the molten
-        // plane. All heights follow the river's grade, even on large plates.
-        const a = { ...ring[k], x: lerp(centre.x, ring[k].x, .89), z: lerp(centre.z, ring[k].z, .89), y: ring[k].y + .045 };
-        const b = { ...ring[next], x: lerp(centre.x, ring[next].x, .89), z: lerp(centre.z, ring[next].z, .89), y: ring[next].y + .045 };
-        triangle(this.rock, centre, a, b, color, 13);
-        triangle(this.rock, a, ring[k], b, cliffColors[0], 5.5);
-        triangle(this.rock, b, ring[k], ring[next], cliffColors[0], 5.5);
-      }
     }
   }
   buildChannelBanks() {
@@ -1473,6 +1552,28 @@ export class VolcanicChunk {
     }
     g.boundingSphere = g.boundingBox.getBoundingSphere(new THREE.Sphere());
     this.addMesh(g, smokeMaterial, 'volcanic-smoke');
+  }
+  // Fumes over the basin, lit from the lava below, in three bands between its
+  // shores. Each band's top edge wanders, and hot reaches glow brighter than
+  // skinned ones. Neighbouring chunks share every column along their seam.
+  buildHaze() {
+    const side = -1;
+    for (const [band, [share, rise, strength]] of [[.12, 34, 1], [.5, 50, .85], [.86, 40, .65]].entries()) {
+      let previous;
+      for (let s = this.start; s <= this.start + CHUNK_LENGTH; s += 4) {
+        const { near, far, level } = riftProfile(s, side), d = lerp(near + 6, far - 6, share);
+        const hot = 1 - .6 * basinField(s, d).cooling;
+        const top = rise * (.7 + .6 * randomAt(Math.round(s / 4), band + 8400)), color = hazeLight.clone().multiplyScalar(strength * hot);
+        const column = [[0, 1], [.3, .55], [.65, .2], [1, 0]].map(([t, glow]) => ({ ...this.at(s, side * d, level + top * t), light: color.clone().multiplyScalar(glow), haze: 1 }));
+        if (previous) for (let k = 0; k < 3; k++) {
+          // Both faces: the glow batch culls back faces, and the band is seen from either side.
+          for (const [a, b, c] of [[previous[k], previous[k + 1], column[k]], [previous[k + 1], column[k + 1], column[k]]]) {
+            triangle(this.glow, a, b, c, vertexLight, null, false); triangle(this.glow, a, c, b, vertexLight, null, false);
+          }
+        }
+        previous = column;
+      }
+    }
   }
   dispose() {
     this.group.removeFromParent(); for (const g of this.owned) g.dispose();

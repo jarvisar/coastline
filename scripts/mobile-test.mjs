@@ -94,6 +94,22 @@ try {
   await page.waitForFunction(() => window.__coastline.vehicle.speed === 0);
   assert.deepEqual(await page.evaluate(() => window.__coastline.input.state.touchStick), { x: 0, y: 0 });
   checks.push('joystick deadzone, drag outside bounds, touch cancellation and stopping');
+  // A touch on open scenery summons the stick under the thumb, and release sends it home.
+  const floating = { x: 120, y: 520, id: 1 };
+  await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [floating] });
+  await frames();
+  assert.equal(await page.evaluate(() => window.__coastline.input.state.touchStick.y), 0, 'the summoned stick starts centered under the thumb');
+  const summoned = await point('#touch-stick');
+  assert.ok(Math.hypot(summoned.x - floating.x, summoned.y - floating.y) < 1, `the stick appears under the thumb (${summoned.x}, ${summoned.y})`);
+  await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ ...floating, y: floating.y - stickRadius }] });
+  await frames();
+  assert.ok(await page.evaluate(() => window.__coastline.input.state.touchStick.y > .9), 'dragging the summoned stick drives');
+  await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await page.waitForFunction(() => window.__coastline.vehicle.speed === 0);
+  await page.waitForTimeout(400);
+  const home = await point('#touch-stick');
+  assert.ok(Math.hypot(home.x - center.x, home.y - center.y) < 1, 'the stick returns to its resting spot');
+  checks.push('floating joystick appears under the thumb and returns home on release');
   async function frames() { await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))); }
   await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ ...center, y: center.y - 30 }] });
   await frames();

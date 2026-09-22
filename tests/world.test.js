@@ -71,11 +71,16 @@ test('soft roadside limits keep a continuously steered car on safe ground', () =
 
 test('streaming stays bounded, releases meshes, and handles origin shifts and reverse travel', () => {
   const scene = new THREE.Scene(); const world = new CoastalWorld(scene);
+  // The sky is the one resident object that is not a streamed chunk.
+  const streamed = () => scene.children.filter(child => child !== world.sky.group).length;
   for (const s of [0, 130, 270, 1025, 16500, 16400, -130, -1025]) {
     world.update(s);
-    assert.equal(world.chunks.size, 9); assert.equal(scene.children.length, 9);
+    assert.equal(world.chunks.size, 9); assert.equal(streamed(), 9);
     assert.ok(Math.abs(-s + world.origin) <= 1024);
     for (const chunk of world.chunks.values()) assert.ok(Math.abs(chunk.group.position.z) < 1900);
+    // The sky stays centred on the car through every origin shift.
+    const car = positionAt(s, 0);
+    assert.ok(Math.hypot(world.sky.group.position.x - car.x, world.sky.group.position.z - (car.z + world.origin)) < .001);
   }
   world.dispose(); assert.equal(scene.children.length, 0);
 });
@@ -162,7 +167,7 @@ test('the resident window follows the quality level, and reaches the worker', as
     assert.equal(world.center, centre, 'the car has not moved');
     assert.deepEqual([...world.chunks.keys()].sort((a, b) => a - b),
       Array.from({ length: 7 }, (_, i) => centre - 2 + i));
-    assert.equal(scene.children.length, 7, 'the dropped chunks leave the scene');
+    assert.equal(scene.children.filter(child => child !== world.sky.group).length, 7, 'the dropped chunks leave the scene');
 
     setResidentWindow({ behind: 1, ahead: 3 });
     world.update(0);

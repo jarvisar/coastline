@@ -11,7 +11,7 @@ import { PlainsChunk } from '../src/world/plains.js';
 import { CityChunk } from '../src/world/city.js';
 import { VolcanicChunk } from '../src/world/volcanic.js';
 import { packChunk, unpackChunk } from '../src/world/chunk-transfer.js';
-import { ChunkWorker } from '../src/world/chunk-source.js';
+import { ChunkWorker, workerCount } from '../src/world/chunk-source.js';
 
 function snapshot(chunk) {
   const hash = createHash('sha256');
@@ -112,7 +112,7 @@ class FakeWorker {
 }
 
 test('prefetch queues stay bounded and discard late results after reversing or disposal', async () => {
-  const transport = new FakeWorker(), worker = new ChunkWorker(() => transport);
+  const transport = new FakeWorker(), worker = new ChunkWorker(() => transport, 1);
   try {
     transport.send({ type: 'ready', seed: SEED });
     const source = worker.source('coast');
@@ -143,7 +143,7 @@ test('missing workers immediately retain the synchronous fallback', async () => 
 });
 
 test('evicted chunks serve reverse travel without a second worker build', () => {
-  const transport = new FakeWorker(), worker = new ChunkWorker(() => transport);
+  const transport = new FakeWorker(), worker = new ChunkWorker(() => transport, 1);
   const chunk = new CoastalChunk(-4);
   try {
     transport.send({ type: 'ready', seed: SEED });
@@ -160,9 +160,65 @@ test('evicted chunks serve reverse travel without a second worker build', () => 
 });
 
 test('a worker with a mismatched seed cannot supply scenery', async () => {
-  const transport = new FakeWorker(), worker = new ChunkWorker(() => transport);
+  const transport = new FakeWorker(), worker = new ChunkWorker(() => transport, 1);
   const source = worker.source('coast'), prepared = source.prepare(24);
   transport.send({ type: 'ready', seed: (SEED + 1) >>> 0 }); await prepared;
   assert.equal(worker.worker, null); assert.equal(source.pending.size, 0);
   assert.equal(source.take(0), null); worker.dispose();
+});
+
+test('several workers build the first view side by side and a failed one stops alone', async () => {
+  const transports = [], worker = new ChunkWorker(() => { const transport = new FakeWorker(); transports.push(transport); return transport; }, 3);
+  try {
+    assert.equal(transports.length, 3);
+    transports[0].send({ type: 'ready', seed: SEED }); transports[2].send({ type: 'ready', seed: SEED });
+    const source = worker.source('coast'), preparation = source.prepare(24);
+    const building = () => transports.map(transport => transport.messages.filter(message => message.type === 'build').map(message => message.index));
+    // Nearest first, one job per ready worker; the slow one joins when it is ready.
+    assert.deepEqual(building(), [[0], [], [1]]);
+    transports[1].send({ type: 'ready', seed: SEED });
+    assert.deepEqual(building(), [[0], [-1], [1]]);
+    const finish = transport => { const { id } = transport.messages.findLast(message => message.type === 'build'); transport.send({ type: 'chunk', id, chunk: {} }); };
+    finish(transports[2]);
+    assert.ok(source.cache.has(1)); assert.deepEqual(building()[2], [1, 2]);
+    // A reply to another worker's job is a fault in that worker alone. Its own
+    // job is given up, to be built on the page; the others keep building.
+    transports[1].send({ type: 'chunk', id: transports[2].messages.at(-1).id, chunk: {} });
+    assert.ok(transports[1].terminated); assert.ok(!transports[0].terminated && !transports[2].terminated);
+    assert.equal(worker.lanes.length, 2); assert.ok(!source.pending.has(-1));
+    finish(transports[0]); finish(transports[2]);
+    assert.ok(source.cache.has(0) && source.cache.has(2));
+    // With the last worker gone every job falls back to the page.
+    transports[0].onerror({ preventDefault() {} }); transports[2].send({ type: 'error', message: 'boom' });
+    assert.equal(worker.worker, null); assert.equal(source.pending.size, 0); assert.equal(worker.queue.length, 0);
+    await preparation;
+  } finally { worker.dispose(); }
+});
+
+test('a silent worker hands its job to another', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const transports = [], worker = new ChunkWorker(() => { const transport = new FakeWorker(); transports.push(transport); return transport; }, 2);
+  try {
+    for (const transport of transports) transport.send({ type: 'ready', seed: SEED });
+    const source = worker.source('coast'); source.prefetch(0, new Map(Array.from({ length: 8 }, (_, i) => [i - 3, {}])));
+    const [first] = transports[0].messages.filter(message => message.type === 'build');
+    assert.equal(first.index, 5);
+    const reply = () => { const { id } = transports[1].messages.at(-1); transports[1].send({ type: 'chunk', id, chunk: {} }); };
+    // The second worker keeps answering; the first says nothing for 20 s.
+    t.mock.timers.tick(10000); reply(); t.mock.timers.tick(10000);
+    assert.ok(transports[0].terminated); assert.equal(worker.lanes.length, 1);
+    assert.ok(source.pending.has(5)); assert.equal(worker.queue[0].index, 5, 'the job is next in line');
+    reply();
+    assert.equal(transports[1].messages.at(-1).index, 5, 'the remaining worker builds it');
+  } finally { worker.dispose(); }
+});
+
+test('worker count follows spare cores and reported memory', () => {
+  assert.equal(workerCount({ hardwareConcurrency: 8, deviceMemory: 8 }), 3);
+  assert.equal(workerCount({ hardwareConcurrency: 4 }), 3);
+  assert.equal(workerCount({ hardwareConcurrency: 8, deviceMemory: 2 }), 2);
+  assert.equal(workerCount({ hardwareConcurrency: 8, deviceMemory: 1 }), 1);
+  assert.equal(workerCount({ hardwareConcurrency: 2 }), 1);
+  assert.equal(workerCount({ hardwareConcurrency: 1 }), 1);
+  assert.equal(workerCount({}), 1);
 });

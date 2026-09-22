@@ -1,18 +1,18 @@
 import * as THREE from 'three';
 
 export class TouchStick {
-  constructor(element, onDrive) {
+  // The stick rests in its corner as a hint, but a touch anywhere on the open
+  // scene summons it under the thumb, as in most mobile games.
+  constructor(element, onDrive, surface = null) {
     this.element = element; this.onDrive = onDrive;
-    this.pointer = null; this.engaged = false; this.vector = { x: 0, y: 0 };
+    this.pointer = null; this.engaged = false; this.vector = { x: 0, y: 0 }; this.offset = { x: 0, y: 0 };
     element.addEventListener('pointerdown', event => {
-      if (this.pointer !== null || (event.pointerType === 'mouse' && event.button !== 0)) return;
-      event.preventDefault();
-      const rect = element.getBoundingClientRect();
-      this.center = { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
-      this.radius = rect.width * .3;
-      this.pointer = event.pointerId; this.engaged = true;
-      element.setPointerCapture(event.pointerId); element.classList.add('active');
-      this.move(event);
+      if (event.pointerType === 'mouse' && event.button !== 0) return;
+      this.engage(event);
+    });
+    surface?.addEventListener('pointerdown', event => {
+      if (event.pointerType === 'mouse' || !this.available()) return;
+      this.engage(event, { x: event.clientX, y: event.clientY });
     });
     element.addEventListener('pointermove', event => this.move(event));
     for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) element.addEventListener(type, event => {
@@ -20,6 +20,32 @@ export class TouchStick {
     });
     element.addEventListener('contextmenu', event => event.preventDefault());
     window.addEventListener('resize', () => this.release());
+  }
+  // Hidden, inert (autodrive fade, menus) or display:none controls take no touches.
+  available() {
+    const { element } = this;
+    if (element.closest('[inert]') || !element.getClientRects().length) return false;
+    return getComputedStyle(element).visibility === 'visible';
+  }
+  engage(event, at = null) {
+    if (this.pointer !== null) return;
+    event.preventDefault();
+    const rect = this.element.getBoundingClientRect(), half = rect.width / 2;
+    // Measure from the resting spot, even mid-way through the glide home.
+    const home = { x: rect.x + half - this.offset.x, y: rect.y + rect.height / 2 - this.offset.y };
+    this.center = at ? {
+      x: Math.min(Math.max(at.x, half), innerWidth - half),
+      y: Math.min(Math.max(at.y, half), innerHeight - half),
+    } : { x: rect.x + half, y: rect.y + rect.height / 2 };
+    this.setOffset(this.center.x - home.x, this.center.y - home.y);
+    this.radius = rect.width * .3;
+    this.pointer = event.pointerId; this.engaged = true;
+    this.element.setPointerCapture(event.pointerId); this.element.classList.add('active');
+    this.move(event);
+  }
+  setOffset(x, y) {
+    this.offset = { x, y };
+    this.element.style.setProperty('--stick-dx', `${x}px`); this.element.style.setProperty('--stick-dy', `${y}px`);
   }
   move(event) {
     if (event.pointerId !== this.pointer) return;
@@ -36,6 +62,7 @@ export class TouchStick {
     const pointer = this.pointer; this.pointer = null; this.vector = { x: 0, y: 0 };
     this.element.classList.remove('active');
     this.element.style.setProperty('--stick-x', '0px'); this.element.style.setProperty('--stick-y', '0px');
+    this.setOffset(0, 0);
     if (pointer !== null && this.element.hasPointerCapture(pointer)) this.element.releasePointerCapture(pointer);
   }
   clear() { if (this.engaged || this.pointer !== null) this.release(); this.engaged = false; }
