@@ -8,7 +8,7 @@ import { DESERT_COLUMNS, DESERT_STEP, DESERT_VALLEY_EDGE, desertFacetColumn, des
 import { buildDesertCrossing, buildDesertWater, desertWaterClock } from './desert-river.js';
 import { desertDiscoveries, desertDiscoveryClears, desertFuelApronWidth } from './desert-discoveries.js';
 import { buildDesertDiscoveries } from './desert-discovery-scenery.js';
-import { solidPost } from './colliders.js';
+import { solidPost, solidRocks } from './colliders.js';
 
 const groundMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 1 });
 const rockMaterial = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 1, flatShading: true });
@@ -130,6 +130,7 @@ export class DesertChunk {
     this.clearDiscoveryFootprints();
     buildDesertDiscoveries(this, this.discoveries);
     this.sampleColumns = desertColumns;
+    solidRocks(this, [stoneGeometry, slabGeometry]);
     finalizeChunkTransforms(this.group);
   }
   addMesh(source, material, castShadow = false) {

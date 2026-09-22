@@ -6,6 +6,7 @@ import './car.css';
 import './menu.css';
 import './audio/mixer.css';
 import './pause.css';
+import './theme.css';
 import { createRendering } from './rendering.js';
 import { Graphics } from './graphics.js';
 import { JOURNEYS } from './journeys.js';

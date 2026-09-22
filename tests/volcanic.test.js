@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { CHUNK_LENGTH, roadHeight } from '../src/world/route.js';
-import { volcanicColumns, volcanicHeight, volcanicPosition, volcanicDrivingRoute, riftProfile, shelfFlow, creekSection } from '../src/world/volcanic-route.js';
+import { volcanicColumns, volcanicHeight, volcanicPosition, volcanicDrivingRoute, riftProfile, shelfFlow, creekSection, crossingInfluence } from '../src/world/volcanic-route.js';
 import { terrainSampler } from '../src/world/coastal-assets.js';
 import { VolcanicChunk, VolcanicWorld } from '../src/world/volcanic.js';
 import { volcanicClock } from '../src/world/volcanic-materials.js';
@@ -72,7 +72,9 @@ test('the creek and its supporting shelf share a gentle grade without cliff cros
     assert.ok(Math.abs(volcanicHeight(s + 1, next.u) - height) < .2, `abrupt drop along creek at ${s}`);
     for (const offset of [-1, 1]) {
       const bank = volcanicHeight(s, creek.u + offset * (creek.width / 2 + 2));
-      assert.ok(Math.abs(bank - height) < .08, 'both banks share the creek shelf, without a cut wall or raised rim');
+      if (crossingInfluence(s, creek.u + offset * (creek.width / 2 + 2)) > .01) {
+        assert.ok(bank <= height + .08 && height - bank < 2, 'a bridge tributary drains gently from the creek shelf');
+      } else assert.ok(Math.abs(bank - height) < .08, 'unbroken creek banks share the same shelf');
     }
   }
 });
@@ -95,6 +97,40 @@ test('right-hand molten surfaces stay attached to terrain facets', () => {
         sampled++;
       }
       assert.ok(sampled > 300, 'surface flows are present');
+    } finally { chunk.dispose(); }
+  }
+});
+
+test('rendered tributaries and receiving pools do not stack faces at their junctions', () => {
+  for (const index of [-2, 0, 5]) {
+    const chunk = new VolcanicChunk(index);
+    try {
+      const { flow, flowCoordinates } = chunk.group.getObjectByName('volcanic-lava').geometry.attributes;
+      const faces = [], bins = new Map(), key = (s, u) => `${s},${u}`;
+      const cross = (a, b, p) => (b.s - a.s) * (p.u - a.u) - (b.u - a.u) * (p.s - a.s);
+      for (let i = 0; i < flow.count; i += 3) {
+        if (flow.getX(i) <= 0) continue;
+        const points = [0, 1, 2].map(n => ({ s: flowCoordinates.getX(i + n), u: flowCoordinates.getY(i + n) }));
+        const area = cross(...points);
+        if (Math.abs(area) < .002) continue;
+        const face = { points, area, centre: { s: points.reduce((n, p) => n + p.s, 0) / 3, u: points.reduce((n, p) => n + p.u, 0) / 3 } };
+        faces.push(face);
+        for (let s = Math.floor(Math.min(...points.map(p => p.s)) / 4); s <= Math.floor(Math.max(...points.map(p => p.s)) / 4); s++) {
+          for (let u = Math.floor(Math.min(...points.map(p => p.u)) / 4); u <= Math.floor(Math.max(...points.map(p => p.u)) / 4); u++) {
+            const at = key(s, u); if (!bins.has(at)) bins.set(at, []); bins.get(at).push(face);
+          }
+        }
+      }
+      assert.ok(faces.length > 300);
+      for (const face of faces) {
+        const p = face.centre;
+        for (const other of bins.get(key(Math.floor(p.s / 4), Math.floor(p.u / 4)))) {
+          if (face === other) continue;
+          const [a, b, c] = other.points;
+          const inside = cross(a, b, p) / other.area > .002 && cross(b, c, p) / other.area > .002 && cross(c, a, p) / other.area > .002;
+          assert.equal(inside, false, `overlapping molten faces in chunk ${index} near ${p.s}, ${p.u}`);
+        }
+      }
     } finally { chunk.dispose(); }
   }
 });
@@ -218,7 +254,18 @@ test('crater, rock and buttress footprints leave the full road clear on bends', 
     try {
       for (let s = chunk.start - 24; s < chunk.start + CHUNK_LENGTH + 24; s += 2) {
         const p = volcanicPosition(s, 0);
-        for (const solid of chunk.features.colliders) assert.ok(Math.hypot(p.x - solid.x, p.z - solid.z) - solid.reach > 6.5, `blocked road at ${s}`);
+        for (const solid of chunk.features.colliders) {
+          const dx = p.x - solid.x, dz = p.z - solid.z;
+          let distance = Math.hypot(dx, dz) - solid.reach;
+          if (solid.heading !== undefined) {
+            // A turned rock's broad-phase circle can reach over the road even
+            // when its actual rectangular footprint leaves the shoulder clear.
+            const cos = Math.cos(solid.heading), sin = Math.sin(solid.heading);
+            distance = Math.hypot(Math.max(0, Math.abs(dx * cos + dz * sin) - solid.halfWidth),
+              Math.max(0, Math.abs(dx * sin - dz * cos) - solid.halfLength));
+          }
+          assert.ok(distance > 6.5, `blocked road at ${s}`);
+        }
       }
     } finally { chunk.dispose(); }
   }
@@ -226,6 +273,8 @@ test('crater, rock and buttress footprints leave the full road clear on bends', 
 
 test('ash, embers and lava lights have a fixed budget, pause together and survive origin shifts', () => {
   const scene = new THREE.Scene(), atmosphere = new VolcanicAtmosphere(scene), chunk = new VolcanicChunk(8), chunks = new Map([[8, chunk]]);
+  let released = 0;
+  for (const resource of [atmosphere.geometry, atmosphere.material, atmosphere.skyGeometry, atmosphere.skyMaterial]) resource.addEventListener('dispose', () => released++);
   try {
     assert.equal(atmosphere.geometry.attributes.position.count, 164);
     assert.equal(atmosphere.lights.length, 4);
@@ -237,11 +286,37 @@ test('ash, embers and lava lights have a fixed budget, pause together and surviv
     assert.ok(first.alpha.slice(140).some(alpha => alpha > 0), 'nearby vents release embers');
     atmosphere.update(10, 1025, 1024, chunks); assert.deepEqual(state(), first, 'a paused clock freezes all motion and illumination');
     const pointZ = atmosphere.points.position.z;
+    const skyZ = atmosphere.sky.position.z;
     atmosphere.update(10, 1025, 2048, chunks);
     assert.deepEqual(state().positions, first.positions);
     assert.equal(atmosphere.points.position.z - pointZ, 1024);
+    assert.equal(atmosphere.sky.position.z - skyZ, 1024, 'the ash sky follows origin shifts');
     atmosphere.lights.forEach((light, i) => assert.ok(Math.abs(light.position.z - first.lights[i].position[2] - 1024) < 1e-8));
     atmosphere.update(11, 1025, 2048, chunks); assert.notDeepEqual(state().positions, first.positions);
   } finally { chunk.dispose(); atmosphere.dispose(); }
   assert.equal(scene.children.length, 0);
+  assert.equal(released, 4, 'route changes release the sky as well as the particles');
+});
+
+test('large volcanic landmarks and column fields leave the rendered creek open', () => {
+  for (const index of [-8, -4, 0, 4, 8]) {
+    const chunk = new VolcanicChunk(index);
+    try {
+      const summit = chunk.features.vents.find(v => v.landmark);
+      assert.ok(summit, `a summit anchors stretch ${index}`);
+      const ground = terrainSampler(chunk.terrain), rock = terrainSampler(chunk.group.getObjectByName('volcanic-formations'), true);
+      for (let s = chunk.start + 2; s < chunk.start + CHUNK_LENGTH - 2; s += 2) {
+        const creek = creekSection(s);
+        for (const across of [-.45, 0, .45]) {
+          const p = volcanicPosition(s, creek.u + creek.width * across), z = p.z + chunk.start;
+          const floor = ground(p.x, z), formation = rock(p.x, z);
+          assert.ok(formation === null || formation < floor + 2.5, `landmark blocks the lava creek at ${s}`);
+        }
+      }
+      for (const column of chunk.features.columns) {
+        assert.ok(column.s - column.radius > chunk.start && column.s + column.radius < chunk.start + CHUNK_LENGTH, 'column belongs entirely to its chunk');
+        assert.ok(chunk.features.colliders.some(c => Math.hypot(c.x - column.x, c.z - column.z + chunk.start) < .01), 'visible columns have physical footprints');
+      }
+    } finally { chunk.dispose(); }
+  }
 });

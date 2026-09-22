@@ -5,11 +5,36 @@ import { riftProfile, creekSection, volcanicPosition } from './volcanic-route.js
 const ASH = 140, EMBERS = 24, WIDTH = 320, HEIGHT = 110, DEPTH = 340;
 const wrap = (value, extent) => value - Math.floor(value / extent) * extent - extent / 2;
 
-// One sparse particle batch and four unshadowed lights, independent of the
-// number of resident chunks. No textures, extra render targets or shadow maps.
+// A sky, one sparse particle batch and four unshadowed lights, independent of
+// resident chunks. No textures, extra render targets or shadow maps.
 export class VolcanicAtmosphere {
   constructor(scene) {
     this.group = new THREE.Group(); this.group.name = 'volcanic-atmosphere'; scene.add(this.group);
+    this.skyGeometry = new THREE.SphereGeometry(1000, 32, 16);
+    this.skyMaterial = new THREE.ShaderMaterial({ side: THREE.BackSide, depthWrite: false, toneMapped: false,
+      uniforms: { horizon: { value: new THREE.Color('#503c39') }, zenith: { value: new THREE.Color('#282630') }, glow: { value: new THREE.Color('#795047') } },
+      vertexShader: `varying vec3 vSkyDirection;
+        void main() {
+          vSkyDirection = normalize(position);
+          vec4 clip = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          gl_Position = clip.xyww;
+        }`,
+      fragmentShader: `uniform vec3 horizon; uniform vec3 zenith; uniform vec3 glow; varying vec3 vSkyDirection;
+        void main() {
+          vec3 direction = normalize(vSkyDirection);
+          float elevation = max(0.0, direction.y);
+          vec3 color = mix(horizon, zenith, smoothstep(.02, .8, elevation));
+          // Lava lights the underside of a bank of wind-stretched ash. Its
+          // broad layers fade completely at the fog horizon.
+          float cloud = sin(direction.x * 8.0 + direction.z * 5.0 + elevation * 26.0)
+            + .4 * sin(direction.x * 19.0 - direction.z * 12.0 + elevation * 45.0);
+          float bank = smoothstep(.03, .17, elevation) * (1.0 - smoothstep(.22, .58, elevation));
+          color = mix(color, glow, bank * (.2 + .15 * smoothstep(-.8, .9, cloud)));
+          gl_FragColor = vec4(color, 1.0);
+          #include <colorspace_fragment>
+        }` });
+    this.sky = new THREE.Mesh(this.skyGeometry, this.skyMaterial); this.sky.name = 'volcanic-ash-sky';
+    this.sky.renderOrder = -1000; this.sky.frustumCulled = false; this.sky.userData.ambientOcclusion = false; this.group.add(this.sky);
     const count = ASH + EMBERS, colors = [], sizes = [], kinds = [];
     this.seeds = new Float32Array(count * 4);
     for (let i = 0; i < count; i++) {
@@ -48,6 +73,7 @@ export class VolcanicAtmosphere {
   update(time, s = 0, origin = 0, chunks = new Map()) {
     const anchor = volcanicPosition(s, -14, roadHeight(s) + 20), positions = this.geometry.attributes.position, alpha = this.geometry.attributes.fleckAlpha;
     this.points.position.set(anchor.x, anchor.y, anchor.z + origin);
+    this.sky.position.set(anchor.x, roadHeight(s), anchor.z + origin);
     for (let i = 0; i < ASH; i++) {
       const n = i * 4, phase = this.seeds[n + 3] * Math.PI * 2;
       const x = wrap(this.seeds[n] * WIDTH + time * (1.1 + this.seeds[n + 3]) + Math.sin(time * .27 + phase) * 3 - anchor.x, WIDTH);
@@ -76,14 +102,14 @@ export class VolcanicAtmosphere {
       const side = i < 2 ? -1 : 1, span = side < 0 ? 96 : 128, offset = side < 0 ? 0 : 24;
       const cell = Math.floor((s - offset) / span), at = (cell + i % 2) * span + offset;
       const { near, level } = riftProfile(at, side), d = side < 0 ? near + 13 : creekSection(at).u;
-      const p = volcanicPosition(at, side * d, level + (side < 0 ? 5 : 2.5)), distance = Math.abs(at - s);
+      const p = volcanicPosition(at, side * d, level + (side < 0 ? 5 : 4.5)), distance = Math.abs(at - s);
       this.lights[i].position.set(p.x, p.y, p.z + origin);
-      this.lights[i].intensity = (side < 0 ? 1400 : 700) * (1 - smoothstep(30, span, distance))
+      this.lights[i].intensity = (side < 0 ? 1400 : 140) * (1 - smoothstep(30, span, distance))
         * (.97 + .025 * Math.sin(time * .65 + i) + .015 * Math.sin(time * 1.13 + i * 2));
     }
   }
   dispose() {
-    this.group.removeFromParent(); this.geometry.dispose(); this.material.dispose();
+    this.group.removeFromParent(); this.geometry.dispose(); this.material.dispose(); this.skyGeometry.dispose(); this.skyMaterial.dispose();
     for (const light of this.lights) light.dispose();
   }
 }

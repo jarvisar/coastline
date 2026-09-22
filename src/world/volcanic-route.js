@@ -138,6 +138,45 @@ export function creekSection(s) {
   return { u, level, width: 2.1 + .6 * Math.sin(s / 17 + .8) ** 2 + pool * 4.5 };
 }
 
+// One substantial cross-valley river every four chunks. The bridge belongs
+// entirely to its middle chunk; the channel bends independently on each bank.
+export function volcanicCrossing(s) {
+  const index = Math.round((s - 64) / 512);
+  const centre = index * 512 + 64 + Math.round((randomAt(index, 80700) - .5) * 8) * 2;
+  const halfSpan = 16 + Math.floor(randomAt(index, 80701) * 2) * 2;
+  return { index, centre, halfSpan, start: centre - halfSpan, end: centre + halfSpan };
+}
+
+export function crossingChannel(crossing, u) {
+  const { centre, index } = crossing;
+  const bend = (randomAt(index, 80702) - .5) * .18;
+  const s = centre + u * bend + Math.sin(u / 17) * 4.8 + (1 - Math.cos(u / 8)) * 2;
+  const creek = creekSection(s), basin = riftProfile(s, -1), under = roadHeight(s) - 5.4;
+  const t = Math.max(0, Math.min(1, (u - 8) / (creek.u - 12)));
+  // Three broken shelves carry short cascades between slower, wider reaches.
+  // A little grade remains on the benches so none read as artificial steps.
+  const upper = .12 * t + .88 * (.25 * smoothstep(.08, .28, t) + .44 * smoothstep(.42, .64, t) + .31 * smoothstep(.78, 1, t));
+  const lower = smoothstep(3, basin.near + 2, -u);
+  // The outlet stands just above the receiving basin before submerging in it;
+  // two coplanar lava sheets must never compete at the mouth.
+  const level = u >= 0 ? lerp(under, creek.level, upper) : lerp(under, basin.level + .15, lower);
+  const neck = 9 + randomAt(index, 80703) * 2;
+  const width = u >= 0 ? lerp(neck, creek.width * 1.15, smoothstep(20, creek.u, u))
+    + 3.8 * Math.exp(-(((t - .35) / .105) ** 2)) + 2.5 * Math.exp(-(((t - .71) / .085) ** 2))
+    : neck + lower * 3.5 + Math.sin(-u / 9) ** 2 * 1.8;
+  return { s, u, level, width, source: creek.u, mouth: -basin.near - 5 };
+}
+
+// The bed, bank setbacks and scattered dressing all use this same footprint.
+export function crossingInfluence(s, u, margin = 0) {
+  const crossing = volcanicCrossing(s);
+  if (Math.abs(s - crossing.centre) > 38 || u > 80 || u < -90) return 0;
+  const channel = crossingChannel(crossing, u);
+  if (u > channel.source + 1 || u < channel.mouth - 3) return 0;
+  const distance = Math.abs(s - channel.s), inner = channel.width / 2 + margin;
+  return 1 - smoothstep(inner, inner + 8, distance);
+}
+
 export function shelfFault(s, u) {
   if (u <= 24) return 0;
   let amount = 0;
@@ -148,7 +187,7 @@ export function shelfFault(s, u) {
   return amount;
 }
 
-export function volcanicHeight(s, u) {
+function baseHeight(s, u) {
   const d = Math.abs(u), road = roadHeight(s);
   if (d <= 7) return road;
   if (u > 0) {
@@ -169,26 +208,53 @@ export function volcanicHeight(s, u) {
   return d < far ? lerp(plateau, bed, wall(far - d)) : plateau;
 }
 
+export function volcanicTerrainHeight(s, u) {
+  const base = baseHeight(s, u), crossing = volcanicCrossing(s);
+  if (Math.abs(s - crossing.centre) > 38 || u > 80 || u < -90) return base;
+  const channel = crossingChannel(crossing, u);
+  if (u > channel.source || u < channel.mouth) return base;
+  const side = Math.sign(s - channel.s) || 1, distance = Math.abs(s - channel.s);
+  // A broad molten floor, a steep broken bank, then a worn outer shoulder.
+  // The last few metres meet the original creek shelf without cutting it down.
+  const inner = channel.width / 2 + .65 + .4 * Math.sin(u * .41 + side * 2);
+  const outer = inner + 5.5 + Math.sin(u * .23 + side * 1.8 + crossing.index) * 1.5 + Math.sin(u * .63) * .7;
+  const cut = 1 - (.76 * smoothstep(inner, inner + 3.3, distance) + .24 * smoothstep(inner + 3.3, outer, distance));
+  const sourceFade = 1 - smoothstep(channel.source - 7, channel.source, u);
+  return lerp(base, Math.min(base, channel.level - .075), cut * sourceFade);
+}
+
+export function volcanicHeight(s, u) {
+  // Driving samples the deck; the terrain mesh continues through the open
+  // channel underneath it. This also keeps lane-assisted traffic level.
+  if (Math.abs(u) <= 7) return roadHeight(s);
+  return volcanicTerrainHeight(s, u);
+}
+
 export function volcanicPosition(s, u, height = volcanicHeight(s, u)) { return positionAt(s, u, height); }
 
-export function volcanicVertex(row, column) {
+export function volcanicVertex(row, column, jitter = 3) {
   const base = volcanicColumns(row * VOLCANIC_STEP), centre = (base.length - 1) / 2, band = Math.abs(column - centre) - 1;
   const road = Math.abs(base[column]) <= 7;
-  const s = row * VOLCANIC_STEP + (road ? 0 : (randomAt(row, column + 7120) - .5) * 3);
+  const s = row * VOLCANIC_STEP + (road ? 0 : (randomAt(row, column + 7120) - .5) * jitter);
   const columns = volcanicColumns(s), gap = Math.min(columns[column] - (columns[column - 1] ?? columns[column] - 20), (columns[column + 1] ?? columns[column] + 20) - columns[column]);
   const u = columns[column] + (road ? 0 : (randomAt(row, column + 7140) - .5) * Math.min(5, gap * .3));
   // Cliff rows keep the height designed for their column, so sideways jitter
   // facets the face without sliding a crest vertex down to the lava.
-  const cliff = band >= 4;
-  return { ...volcanicPosition(s, u, volcanicHeight(s, cliff ? columns[column] : u)), s, u, band };
+  const cliff = band >= 4 && crossingInfluence(s, u, 4) < .01;
+  return { ...volcanicPosition(s, u, volcanicTerrainHeight(s, cliff ? columns[column] : u)), s, u, band };
 }
 
 export const volcanicDrivingRoute = {
   frame: roadFrame, position: volcanicPosition, height: volcanicHeight,
   // Allow room for the car's full footprint before a steep roadside scarp.
-  bounds: s => [-shelfSteps(s, -1).toe + 3, shelfSteps(s, 1).toe - 3],
+  bounds: s => {
+    const bridge = volcanicCrossing(s);
+    return s > bridge.start - 2 && s < bridge.end + 2 ? [-7, 7] : [-shelfSteps(s, -1).toe + 3, shelfSteps(s, 1).toe - 3];
+  },
   // The existing impassable-surface check also keeps tires out of molten rock.
   water: (s, u) => {
+    if (Math.abs(u) <= 7) return false;
+    if (crossingInfluence(s, u) > .9) return true;
     if (u > 0) {
       const creek = creekSection(s);
       return Math.abs(u - creek.u) < creek.width / 2 + 1

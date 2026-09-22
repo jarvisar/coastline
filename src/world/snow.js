@@ -12,7 +12,7 @@ import { CABIN_SPACING, alpineCabin, nearCabin, buildAlpineCabin } from './alpin
 import { Snowfall } from './snowfall.js';
 import { snowDiscoveries, snowDiscoveryClears } from './snow-discoveries.js';
 import { buildSnowDiscoveries, animateSnowDiscoveries } from './snow-discovery-scenery.js';
-import { solidPost } from './colliders.js';
+import { solidPost, solidSpan, solidRocks } from './colliders.js';
 import { buildAlpineLandmarks, nearAlpineRelay } from './alpine-landmarks.js';
 
 const material = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: .95, flatShading: true, ...extra });
@@ -101,6 +101,7 @@ export class SnowChunk {
     }
     buildSnowDiscoveries(this, this.discoveries);
     buildAlpineLandmarks(this);
+    solidRocks(this, alpineRockVariants.map(variant => variant.rock));
     finalizeChunkTransforms(this.group);
   }
   addMesh(g, mat, name) {
@@ -199,7 +200,11 @@ export class SnowChunk {
     for (let s = this.start; s < this.start + CHUNK_LENGTH; s += 4) {
       const y = snowRoadHeight(s), endY = snowRoadHeight(s + 4);
       if (!onDeck(s - .5, s + .5)) metal.push({ p: point(s, -7.2, y + .73), scale: [.2, 1.65, .22] });
-      if (!onDeck(s, s + 4)) beam(point(s, -7.2, y + 1.42), point(s + 4, -7.2, endY + 1.42), .3, .2);
+      if (!onDeck(s, s + 4)) {
+        const a = point(s, -7.2, y + 1.42), b = point(s + 4, -7.2, endY + 1.42);
+        beam(a, b, .3, .2);
+        solidSpan(this, { x: a[0], z: a[2] }, { x: b[0], z: b[2] }, .15);
+      }
       // Slim red snow stakes mark the inner shoulder without enclosing the view.
       if (s % 16 === 0 && !onDeck(s - .5, s + .5)) trunks.push({ p: point(s, 7.4, y + .9), scale: [.12, 1.9, .12] });
     }
@@ -300,6 +305,8 @@ export class SnowChunk {
       for (const u of [-5.4, 0, 5.4]) bar(timber, point(s, u, road(s) - .58), point(e, u, road(e) - .58), .5, .6);
       for (const side of [-1, 1]) {
         const u = side * 7.15;
+        const a = point(s, u, road(s)), b = point(e, u, road(e));
+        solidSpan(this, { x: a[0], z: a[2] }, { x: b[0], z: b[2] }, .15);
         timber.push({ p: point(s, u, road(s) + .55), scale: [.3, 1.4, .3], angle: across(s) });
         bar(timber, point(s, u, road(s) + 1.12), point(e, u, road(e) + 1.12), .2, .24);
         bar(timber, point(s, u, road(s) + .62), point(e, u, road(e) + .62), .12, .18);

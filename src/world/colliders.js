@@ -1,3 +1,5 @@
+import * as THREE from 'three';
+
 // What the car cannot drive through. A chunk records the footprint of each
 // solid thing as it stands it up, in the global coordinates the car and the
 // traffic already collide in, so the list crosses from the chunk worker as
@@ -15,6 +17,37 @@ export function solidSpan(chunk, a, b, halfWidth) {
 // A trunk, a silo, a tank: anything near enough round.
 export function solidPost(chunk, x, z, radius) {
   ((chunk.features ??= {}).colliders ??= []).push({ x, z: z - chunk.start, reach: radius });
+}
+
+// Run after scenery clearances, before chunk transforms are finalized. Rocks
+// use their whole outline: unlike a tree, their lowest vertices can be a point.
+// Only substantial stones (3 m across, 1.5 m deep and 1 m tall) obstruct the car.
+export function solidRocks(chunk, geometries) {
+  const matrix = new THREE.Matrix4(), local = new THREE.Matrix4(), unturn = new THREE.Matrix4();
+  const euler = new THREE.Euler(0, 0, 0, 'YXZ');
+  const position = new THREE.Vector3(), scale = new THREE.Vector3(), rotation = new THREE.Quaternion();
+  const point = new THREE.Vector3(), bounds = new THREE.Box3(), size = new THREE.Vector3();
+  for (const mesh of chunk.group.children) {
+    if (!mesh.isInstancedMesh || !geometries.includes(mesh.geometry)) continue;
+    const geometry = mesh.geometry;
+    if (!geometry.boundingBox) geometry.computeBoundingBox();
+    for (let i = 0; i < mesh.count; i++) {
+      mesh.getMatrixAt(i, matrix);
+      matrix.decompose(position, rotation, scale);
+      geometry.boundingBox.getSize(size).multiply(scale);
+      if (Math.max(size.x, size.z) < 3 || Math.min(size.x, size.z) < 1.5 || size.y < 1) continue;
+      const yaw = euler.setFromQuaternion(rotation).y;
+      // Undo just the yaw, keeping the placed rock's tilt and uneven scale.
+      local.copy(matrix).setPosition(0, 0, 0).premultiply(unturn.makeRotationY(-yaw));
+      bounds.makeEmpty();
+      const vertices = geometry.attributes.position;
+      for (let j = 0; j < vertices.count; j++) bounds.expandByPoint(point.fromBufferAttribute(vertices, j).applyMatrix4(local));
+      bounds.getCenter(point); bounds.getSize(size);
+      const cos = Math.cos(yaw), sin = Math.sin(yaw);
+      solidBox(chunk, position.x + point.x * cos + point.z * sin, position.z + point.z * cos - point.x * sin,
+        yaw, size.x / 2, size.z / 2);
+    }
+  }
 }
 
 // The outline of a model's lowest quarter is what a car can reach: the walls

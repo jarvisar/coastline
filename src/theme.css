@@ -1,0 +1,106 @@
+/* Shared surface colors belong to the route, including sticky headers and
+   nested settings. Keep these together so a dark route never inherits a light
+   panel behind its light text. Component files own shape and layout. */
+body {
+  color-scheme: light;
+  --surface: #f6f5ea;
+  --surface-card: #fcfcf5;
+  --surface-control: #eeeee3;
+  --surface-hover: #e1e7dc;
+  --muted: #526459;
+  --line: #a0afa3;
+  --ui-line: var(--line);
+  --surface-glass: color-mix(in srgb, var(--surface) 96%, transparent);
+}
+body[data-journey=desert] {
+  --surface: #fff2dd; --surface-card: #fff9ef; --surface-control: #f5e6ce;
+  --surface-hover: #ecd9ba; --muted: #755c46; --line: #b4a18a;
+}
+body[data-journey=snow] {
+  color-scheme: dark;
+  --surface: #1c2b41; --surface-card: #24344b; --surface-control: #263b55;
+  --surface-hover: #334c69; --muted: #b8cadd; --line: #687e9b;
+}
+body[data-journey=jungle] {
+  color-scheme: dark;
+  --surface: #203a27; --surface-card: #2a4530; --surface-control: #2b4832;
+  --surface-hover: #38583f; --muted: #c2d3b9; --line: #789473;
+}
+body[data-journey=plains] {
+  --surface: #fff6e3; --surface-card: #fffbf1; --surface-control: #f3e9d2;
+  --surface-hover: #e9dcbc; --muted: #725d3a; --line: #b4a283;
+}
+body[data-journey=city] {
+  --surface: #eef1f4; --surface-card: #f9fafb; --surface-control: #e2e8ed;
+  --surface-hover: #d6dfe6; --muted: #586773; --line: #99a8b3;
+}
+body[data-journey=volcanic] {
+  color-scheme: dark;
+  --surface: #30272a; --surface-card: #403236; --surface-control: #3c2f32;
+  --surface-hover: #57413f; --muted: #dbc0ad; --line: #9e8175;
+  --action: #75452f; --action-hover: #8b5137;
+}
+
+body[data-journey] .chooser,
+body[data-journey] .chooser-heading {
+  color: var(--ink); background: var(--surface); border-color: var(--line);
+}
+body[data-journey] .chooser::backdrop { background: #10171980; }
+body[data-journey] .chooser-card { color: var(--ink); background: var(--surface-card); border-color: var(--line); }
+body[data-journey] .chooser-card:hover,
+body[data-journey] .chooser-card[aria-current=true] { border-color: var(--ink); }
+body[data-journey] .paint-shop { background: var(--surface-control); border-color: var(--line); }
+body[data-journey] .paint-custom { border-color: var(--muted); }
+body[data-journey] .paint-custom[data-active=true] { border-color: var(--ink); }
+body[data-journey] .car-meter-track { background: color-mix(in srgb, var(--ink) 25%, var(--surface-card)); }
+
+body[data-journey] .pause-overlay { color: var(--ink); background: var(--surface-glass); }
+body[data-journey] .pause-header :is(h2, .location-copy),
+body[data-journey] .pause-settings h3 { text-shadow: none; }
+body[data-journey] :is(.panel-button, .panel-toggle, .graphics-levels button) {
+  color: var(--ink); background: var(--surface-control); border-color: var(--line);
+}
+body[data-journey] :is(.panel-button, .panel-toggle, .graphics-levels button):hover { background: var(--surface-hover); }
+body[data-journey] .graphics-levels button[aria-checked=true],
+body[data-journey] .audio-presets button[aria-pressed=true] { color: var(--cream); background: var(--ink); border-color: var(--ink); }
+body[data-journey] :is(.graphics-settings, .audio-mixer) { background: var(--surface); }
+body[data-journey] .panel-switch { border-color: var(--muted); }
+body[data-journey] .panel-toggle[aria-pressed=true] .panel-switch { border-color: var(--ink); }
+body[data-journey] .start-button:hover { background: var(--action-hover); }
+/* The title screen has a light primary action in every route. Give the
+   gradient a solid base, too, for consistent contrast and forced colors. */
+#welcome .start-button { background-color: #f4f0e4; }
+
+body[data-journey] :is(.drive-actions, .controls, #stick-help, #toast, #vr-error) {
+  color: var(--ink); background: var(--surface-glass); border-color: var(--line); text-shadow: none;
+}
+body[data-journey] .drive-actions button { color: var(--ink); background: transparent; }
+body[data-journey] .drive-actions button:hover,
+body[data-journey] .chooser-heading .icon-button:hover { background: var(--surface-hover); }
+body[data-journey] .chooser-heading .icon-button { color: var(--ink); border-color: var(--line); background: var(--surface-control); }
+body[data-journey] :is(kbd, .paint-swatch) { border-color: var(--line); }
+body[data-journey] #touch-stick { opacity: 1; background: var(--surface-glass); border-color: var(--line); }
+body[data-journey] .stick-guide { border-color: var(--muted); }
+body[data-journey] .stick-thumb { background: var(--ink); border-color: var(--surface); }
+body[data-journey] #touch-stick.active .stick-thumb { background: var(--muted); border-color: var(--ink); }
+body[data-journey] #stick-help .dismiss-control-help { background: var(--surface-control); }
+body[data-journey] #stick-help .dismiss-control-help:hover { background: var(--surface-hover); }
+body[data-journey] :is(.error, #journey-transition) { color: var(--ink); background: var(--surface); }
+
+/* Muted copy uses an explicit contrasting color, not opacity multiplied
+   through translucent panels and the scenery behind them. */
+body[data-journey] :is(.chooser-intro, .chooser-card-description, .chooser-note,
+  .paint-current, .paint-note, .paint-shop h3, .garage-subheading, .car-meter,
+  .panel-button-value, .audio-mixer-toggle small, .graphics-toggle small,
+  .audio-description, .audio-channel output, .pixel-density-control output,
+  .graphics-status, .controller-hint, .stick-help-line, .pwa-install-help) {
+  color: var(--muted); opacity: 1;
+}
+body[data-journey] .paint-note b { opacity: 1; }
+body[data-journey] #stick-help .stick-help-line,
+body[data-journey] #pause-overlay .pwa-install-help { color: var(--muted); opacity: 1; }
+body[data-journey] .car-meter { font-size: 11px; }
+body[data-journey] :is(.paint-note, .paint-current, .audio-channel output) { font-size: 12px; }
+body[data-journey] :is(.paint-shop h3, .garage-subheading, .chooser-current) { font-size: 11px; }
+body[data-journey] .car-card .chooser-card-title { font-size: 14px; }
+body[data-journey] .paint-custom:focus-within { outline: 2px solid var(--ink); outline-offset: 3px; }

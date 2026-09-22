@@ -9,7 +9,7 @@ import { CoastalBirds } from './birds.js';
 import { coastalCrags, coastalPines, coastalCypress, coastalMontereyPine, coastalSedge, terrainSampler } from './coastal-assets.js';
 import { coastalDiscoveries, discoveryClearsPlanting } from './coastal-discoveries.js';
 import { buildCoastalDiscoveries } from './coastal-discovery-scenery.js';
-import { solidModel, solidPost } from './colliders.js';
+import { solidModel, solidPost, solidRocks } from './colliders.js';
 
 const terrainMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 1 });
 const waterMaterial = createWaterMaterial();
@@ -125,6 +125,7 @@ export class CoastalChunk {
     this.buildTerrain(); this.buildWater(); this.buildRoad(); buildLandmarks(this); this.buildScenery();
     buildCoastalDiscoveries(this, this.discoveries);
     if (index % 3 === 0) this.birds = new CoastalBirds(this);
+    solidRocks(this, [rockGeometry, ...coastalCrags]);
     finalizeChunkTransforms(this.group);
   }
   addMesh(geometry, material, shadows = false) {

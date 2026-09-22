@@ -28,10 +28,10 @@ body[data-journey=city] { --action: #304853; --action-hover: #42616f; }
 #welcome .menu-brand, #welcome .menu-actions { position: relative; isolation: isolate; }
 #welcome .menu-brand::before, #welcome .menu-actions::before {
   content: ''; position: absolute; z-index: -1; pointer-events: none;
-  left: 50%; top: -64px; bottom: -64px; width: min(640px, 100vw); transform: translateX(-50%);
+  left: 50%; top: -64px; bottom: -64px; width: min(640px, calc(100vw - var(--ui-left) - var(--ui-right))); transform: translateX(-50%);
   background: radial-gradient(ellipse, #10272060 0%, #10272034 38%, #10272000 72%);
 }
-#welcome .menu-actions::before { width: min(560px, 100vw); top: -56px; bottom: -48px; }
+#welcome .menu-actions::before { width: min(560px, calc(100vw - var(--ui-left) - var(--ui-right))); top: -56px; bottom: -48px; }
 #welcome .brand-mark { display: block; width: clamp(68px, 8.5dvh, 96px); height: auto; filter: drop-shadow(0 2px 3px #10272060) drop-shadow(0 6px 16px #10272030); }
 #welcome .wordmark {
   margin: 3px 0 18px; font-family: 'Arial Rounded MT Bold', 'Trebuchet MS', 'Segoe UI', sans-serif;

@@ -18,6 +18,7 @@
     "test:mobile": "node scripts/mobile-test.mjs",
     "test:graphics": "node scripts/graphics-test.mjs",
     "test:responsive": "node scripts/responsive-test.mjs",
+    "test:themes": "node scripts/theme-test.mjs",
     "test:controller": "node scripts/controller-test.mjs",
     "test:vr": "node scripts/vr-test.mjs",
     "test:scenery": "node scripts/scenery-test.mjs",

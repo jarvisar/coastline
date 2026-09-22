@@ -11,7 +11,7 @@ import { animateWater } from './water.js';
 import { jungleDiscoveries, jungleDiscoveryClears } from './jungle-discoveries.js';
 import { buildJungleDiscoveries } from './jungle-discovery-scenery.js';
 import { terrainSampler } from './coastal-assets.js';
-import { solidModel, solidPost } from './colliders.js';
+import { solidModel, solidPost, solidRocks } from './colliders.js';
 import { jungleCrowns, emergentCrowns, emergentTrunks, junglePalms, fernGeometry, bigLeafGeometry, bananaGeometry, bambooGeometry, lilyGeometry, vineGeometry, tuftGeometry,
   jungleBoulders, cliffBlocks } from './jungle-assets.js';
 
@@ -135,6 +135,7 @@ export class JungleChunk {
     this.discoveries = jungleDiscoveries(this.start-30,this.start+CHUNK_LENGTH+30);
     this.buildTerrain(); this.buildWater(); this.buildMist(); this.buildRoad(); this.buildScenery();
     buildJungleDiscoveries(this,this.discoveries);
+    solidRocks(this, [...jungleBoulders, ...cliffBlocks]);
     finalizeChunkTransforms(this.group);
   }
   addMesh(geometry, mat, name, shadows = false) {
