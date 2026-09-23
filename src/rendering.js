@@ -139,7 +139,11 @@ export function createRendering(canvas, graphics = new Graphics()) {
     if (touchScreen.matches || window.innerWidth < window.innerHeight) {
       // Ease the desktop framing slightly toward center without changing vertical look-ahead.
       const lateralOffset = framingOffset.copy(target).sub(follow).dot(cameraRight);
-      target.addScaledVector(cameraRight, -lateralOffset * .30);
+      // The look-ahead is a world distance, so a narrow portrait screen pushed
+      // the car near its right edge. Cap it at a quarter of the half-width.
+      const limit = .25 * (camera.right - camera.left) / 2;
+      const eased = lateralOffset * .70;
+      target.addScaledVector(cameraRight, THREE.MathUtils.clamp(eased, -limit, limit) - lateralOffset);
     }
     // Fixed ocean-side azimuth and ~36° elevation preserve the reference's miniature view.
     camera.position.copy(target).add(cameraOffset); camera.lookAt(target);
