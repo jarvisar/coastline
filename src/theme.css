@@ -58,7 +58,7 @@ body[data-journey] .paint-custom { border-color: var(--muted); }
 body[data-journey] .paint-custom[data-active=true] { border-color: var(--ink); }
 body[data-journey] .car-meter-track { background: color-mix(in srgb, var(--ink) 25%, var(--surface-card)); }
 
-body[data-journey] .pause-overlay { color: var(--ink); background: var(--surface-glass); }
+body[data-journey] .pause-overlay { color: var(--ink); }
 body[data-journey] .pause-header :is(h2, .location-copy),
 body[data-journey] .pause-settings h3 { text-shadow: none; }
 body[data-journey] :is(.panel-button, .panel-toggle, .graphics-levels button) {
