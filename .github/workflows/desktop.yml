@@ -141,8 +141,10 @@ jobs:
           generate_release_notes: true
           fail_on_unmatched_files: true
           body: |
-            Desktop builds of Coastline. The Windows installer and the AppImage update themselves; the portable exe and macOS app tell you when a new version is out. The `.yml` and `.blockmap` files are for the updater. All packages are unsigned:
+            Desktop builds of Coastline. The Windows installer and AppImage update automatically. The `.yml` and `.blockmap` files are used by the updater.
 
-            - **Windows:** run the `-setup.exe` installer or the `-portable.exe`. SmartScreen may show "Windows protected your PC"; choose *More info* → *Run anyway*.
-            - **Linux / Steam Deck:** download the `.AppImage`, mark it executable, and run it. On a Steam Deck, add it as a non-Steam game to launch from Game Mode with the controller. See ELECTRON.md for details.
-            - **macOS:** open the `.dmg` for your chip (arm64 for Apple silicon, x64 for Intel). Gatekeeper blocks unsigned apps on first launch: right-click the app and choose *Open*, or run `xattr -cr /Applications/Coastline.app`.
+            - Windows: run `-setup.exe` or `-portable.exe`. If SmartScreen blocks it, click More info → Run anyway.
+            - Linux / Steam Deck: download the `.AppImage`, mark it executable and run it. On Steam Deck, add it as a non-Steam game to play in Game Mode.
+            - macOS: open the `.dmg` for your chip (arm64 for Apple silicon, x64 for Intel). The first time, right-click the app and choose Open, or run `xattr -cr /Applications/Coastline.app`.
+
+            The builds aren't code-signed. See [ELECTRON.md](https://github.com/jarvisar/coastline/blob/main/ELECTRON.md) for more details.

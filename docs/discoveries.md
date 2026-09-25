@@ -1,6 +1,6 @@
-# Discovery frequency
+# Discovery Frequency
 
-Edit the route's `*_DISCOVERY_MILES` table and reload:
+Discoveries are the landmarks that show up along each route. To change how often they appear, edit the `*_DISCOVERY_MILES` table in the route's file and reload:
 
 | Route | File |
 | --- | --- |
@@ -12,13 +12,13 @@ Edit the route's `*_DISCOVERY_MILES` table and reload:
 | Rainy Downtown | [city-discoveries.js](../src/world/city-discoveries.js) |
 | Volcanic Rift | [volcanic-discoveries.js](../src/world/volcanic-discoveries.js) |
 
-`'cable-car': 5` means roughly one encounter every five miles. Lower values make it more common. Use `Infinity` to disable it. Zero and negative values are invalid.
+For example, `'cable-car': 5` means about one every five miles. Lower numbers make it more common and `Infinity` turns it off. Zero or negative numbers aren't allowed.
 
-Defaults average about one discovery every 2.5 miles per route. Terrain, seed, and minimum spacing affect the gaps. Changing one value can move other discoveries but doesn't change their target frequency.
+The defaults work out to about one discovery every 2.5 miles. The actual gaps depend on terrain, the seed and minimum spacing, so changing one value can shift other discoveries around, but their average frequency stays the same.
 
-Birds, Alpine lakeside cabins, and ordinary road bridges have separate schedules. Smaller objects, such as a dock's boat, follow their parent discovery.
+Birds, Alpine lakeside cabins and normal road bridges are spawned separately. Smaller objects, like the boat at a dock, come with their parent discovery.
 
-## Check placement
+## Checking placement
 
 From the repo root:
 
@@ -26,6 +26,6 @@ From the repo root:
 node scripts/discovery-frequency.mjs
 ```
 
-This compares target and measured averages over 2,000 miles. Pass a sample length, such as `node scripts/discovery-frequency.mjs 500`, or set `TEST_WORLD_SEED` to check another world.
+This compares the target and actual averages over 2,000 miles. Pass a different distance (e.g. `node scripts/discovery-frequency.mjs 500`) or set `TEST_WORLD_SEED` to check another world.
 
-With the dev server running, `node scripts/volcanic-discoveries-test.mjs` checks volcanic landmarks from both sides at desktop, tablet, and phone sizes. Screenshots and reports go to `.artifacts/volcanic-discoveries/`.
+With the dev server running, `node scripts/volcanic-discoveries-test.mjs` checks the volcanic landmarks from both directions at desktop, tablet and phone sizes. Screenshots go to `.artifacts/volcanic-discoveries/`.

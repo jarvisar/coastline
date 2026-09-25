@@ -1,57 +1,12 @@
 # Coastline
 
-![Coastline routes: coast, desert, alpine, jungle, plains, and volcanic rift](showcase/scene-slices.png)
+![Coastline routes: coast, desert, alpine, jungle, plains and volcanic rift](showcase/scene-slices.png)
 
-Endless driving game built with [Three.js](https://threejs.org/). Supports keyboard, touch, controllers, and browser VR.
+Endless driving game built with [Three.js](https://threejs.org/). The road, scenery and sound are all generated in code.
 
-[Play in your browser](https://jarvisar.github.io/coastline/) or download a [desktop build](https://github.com/jarvisar/coastline/releases).
+Play it [here](https://jarvisar.github.io/coastline/), or download the [desktop app](https://github.com/jarvisar/coastline/releases). Supports keyboard, controllers, touch screens and VR through a compatible browser. The website works offline after the first visit and can be installed from your browser.
 
-## Run locally
-
-Requires Node.js 22.12 or newer.
-
-```sh
-npm install
-npm run dev
-```
-
-Open the URL printed by Vite. Use the Network URL to play on a phone on the same Wi-Fi. Allow Node through the Windows firewall for private networks if prompted.
-
-Use `npm run build` to build and `npm run preview` to preview.
-
-## Controls
-
-Controller buttons use Xbox / PlayStation names.
-
-| Action | Keyboard | Controller |
-| --- | --- | --- |
-| Accelerate | W / ↑ | RT / R2, or A / Cross |
-| Brake, then reverse | S / ↓ | LT / L2, or B / Circle |
-| Steer | A D / ← → | Left stick / D-pad left and right |
-| Strong brake | Space | — |
-| Change view | V | X / Square |
-| Autodrive | H | D-pad Up |
-| Pause / resume | P / Escape | Start / Menu / Options |
-| Garage | C / G | Left stick press (L3) |
-| Next route | N | RB / R1 |
-| Choose route | 1–7 | Select / Back / View |
-| Reset | R | Y / Triangle |
-| Sound | M | Pause menu |
-| Soft shading | O | Pause menu |
-| Fullscreen | F | LB / L1 |
-| FPS counter | F3 | Right stick press (R3) |
-
-Numpad 8 / 2 / 4 / 6 also work for driving. Press V to cycle through four overhead views, third-person, and first-person.
-
-Press H to follow the road automatically. Steering, accelerating, or braking turns autodrive off.
-
-In controller menus, use the D-pad or stick to move, A / Cross to select, and B / Circle to go back. Press a button if the browser hasn't detected the controller. Disconnecting it or leaving the tab pauses the game.
-
-On touchscreens, tap **Let's drive** and drag the joystick where you want to go. Drag farther to go faster; release to stop. In first-person and third-person, push up to accelerate, left/right to steer, and down to brake or reverse.
-
-## Routes and cars
-
-Use **Change Route** or press **1–7**:
+## Routes
 
 1. Pacific Coast
 2. Red Rock Desert
@@ -61,47 +16,84 @@ Use **Change Route** or press **1–7**:
 6. Rainy Downtown
 7. Volcanic Rift
 
-Each route keeps your position and mileage until you reload. Reset starts the current route in a new area. Add `?seed=4817` to the URL to revisit or share a world; seeds accept unsigned 32-bit integers.
+Press 1-7 or click `Change Route` to switch. Each route keeps your position and mileage until you reload, and Reset starts the current route somewhere new. Add `?seed=4817` to the URL to share or revisit a world.
 
-Open **Garage** to change cars or paint. **Default** uses the route's car. Car choice is saved; paint applies to all cars and resets on reload. Cars handle differently and lose speed and grip off-road.
+Open the `Garage` to change cars or paint. `Default` uses the route's car. Cars handle differently and lose speed and grip off-road. Your car is saved, but paint resets when you reload.
 
-For rainbow paint, enter **↑ ↑ ↓ ↓ ← → ← → B A** while driving. On a controller, use the D-pad, then B / Circle and A / Cross. Enter it again to restore your paint.
+For rainbow paint, enter ↑ ↑ ↓ ↓ ← → ← → B A while driving (D-pad, then B and A on a controller). Enter it again to turn it off.
+
+## Controls
+
+| Action | Keyboard | Controller |
+| --- | --- | --- |
+| Accelerate | W / ↑ | RT or A |
+| Brake / reverse | S / ↓ | LT or B |
+| Steer | A D / ← → | Left stick or D-pad |
+| Strong brake | Space | |
+| Change view | V | X |
+| Autodrive | H | D-pad up |
+| Pause | P / Esc | Menu |
+| Garage | C / G | Left stick click |
+| Next route | N | RB |
+| Choose route | 1-7 | View |
+| Reset | R | Y |
+| Sound | M | Pause menu |
+| Soft shading | O | Pause menu |
+| Fullscreen | F | LB |
+| FPS counter | F3 | Right stick click |
+
+Controller buttons are Xbox names; PlayStation buttons work the same way. The numpad also works for driving. V cycles through four overhead views, third-person and first-person. Autodrive follows the road until you steer, accelerate or brake.
+
+In menus, use the D-pad or left stick to move, A to select and B to go back. Press a button if the browser hasn't picked up your controller. Disconnecting it or leaving the tab pauses the game.
+
+On a touch screen, tap `Let's drive` and drag the joystick in the direction you want to go. Drag farther to go faster and let go to stop. In first-person and third-person, push up to accelerate, left/right to steer and down to brake.
+
+For VR, open the site in the Quest browser and click `Enter VR`. Use the left stick to steer, right trigger to accelerate, left trigger to brake and either grip for a strong brake. A changes the view, B pauses, X resets, Y exits VR and clicking the right stick recenters. In menus, point and pull a trigger or use the stick and A. Exiting VR pauses the game.
 
 ## Settings
 
-Open the pause menu for traffic, sound, fullscreen, and graphics settings.
+The pause menu has traffic, sound, fullscreen and graphics settings. `Auto` adjusts graphics quality while you drive, or pick High, Balanced, Smooth or Basic. Soft shading adds ambient occlusion and is off by default.
 
-**Auto** adjusts graphics quality while driving. High, Balanced, Smooth, and Basic use fixed levels. Lower levels reduce resolution, shadows, and view distance. The pixel-density slider adjusts resolution separately. Multisampling changes apply after reloading.
+Sound also starts off. Press M to turn it on. `Audio settings` has volume sliders, presets and music.
 
-**Soft shading** adds ambient occlusion. It starts off and is saved separately from graphics quality. Use `?ao=0` to disable it for a visit.
+## Desktop app
 
-Sound starts off. Press **M** to enable it. **Audio settings** has channel volumes, presets, and music.
+Download from [Releases](https://github.com/jarvisar/coastline/releases):
 
-## VR
+- Windows: `setup.exe` or `portable.exe`
+- Linux / Steam Deck: AppImage
+- macOS: `.dmg` or `.zip`
 
-Open the HTTPS site in the Quest browser and choose **Enter VR**. Local headset development needs HTTPS with a trusted certificate. VR requires the browser build and immersive WebXR support.
-
-- **Left stick:** steer. The right stick works if it's the only controller connected.
-- **Right trigger:** accelerate. **Left trigger:** brake, then reverse. **Either grip:** strong brake.
-- **A:** change view. **B / left stick press:** pause or resume.
-- **X:** reset. **Y:** exit VR. **Right stick press:** recenter.
-
-VR starts in third-person. In menus, use stick up/down and A, or point and pull a trigger. B goes back. Exiting VR pauses the game. Custom paint entry uses the regular page.
+The Windows installer and AppImage update automatically. See [ELECTRON.md](ELECTRON.md) for first-run steps, Steam Deck setup, launch options and building from source.
 
 ## Development
 
-Regenerate the six-slice route image with `npm run showcase:slices`. It starts its own server and captures coast, desert, alpine, jungle, plains, and volcanic scenery into `showcase/scene-slices.png` (3840 × 2160, 16:9, no UI), plus `scene-slices-preview.png`. All six captures use the normal scenic camera angle and different slices of one shared landscape view. A common seed preserves the road bends; small vertical adjustments to screenshot columns compensate for the routes' different elevations. Game geometry is unchanged.
+Requires [Node.js](https://nodejs.org/) 22.12+.
 
-Set `SEED` to change the world (default `4817`), `POSITION` to choose another stretch of road (default `-1100`), or `OUTPUT` to change the PNG destination. The default seed and position keep the diagonal road visible across all six slices. Chrome uses the standard Windows location; set `CHROME_PATH` for another installation, or install Playwright Chromium with `npx playwright install chromium` on other platforms.
+```sh
+npm install
+npm run dev       # start the dev server
+npm test          # unit tests
+npm run build     # build into dist/
+npm run preview   # serve the build locally
+```
 
-Scenery is in [src/world/](src/world/), driving in [vehicle.js](src/vehicle.js), and scene setup in [main.js](src/main.js). Geometry and audio are generated in code.
+To play on your phone, open the Network URL that Vite prints while on the same Wi-Fi. On Windows you may need to allow Node through the firewall. Testing VR on a headset needs HTTPS with a trusted certificate.
 
-Run `npm test` for unit tests. With the dev server running, use `npm run test:browser` for driving and streaming checks. Other tests are in [package.json](package.json).
+Scenery is in [src/world/](src/world/), driving is in [vehicle.js](src/vehicle.js) and scene setup is in [main.js](src/main.js). Most browser tests need the dev server running, e.g. `npm run test:browser`. The rest are listed in [package.json](package.json). They use Chrome at its default Windows path; set `CHROME_PATH` or `TEST_URL` to change that. Reports go to `.artifacts/`.
 
-Browser scripts generally use Chrome at the standard Windows path. Set `TEST_URL` to use another server address. Reports go to `.artifacts/`.
+`npm run showcase:slices` regenerates the image at the top of this page. Set `SEED`, `POSITION` or `OUTPUT` to change it.
+
+More docs:
 
 - [Desktop app and Steam Deck](ELECTRON.md)
-- [Install the website / offline use](PWA.md)
+- [Installing the website and offline use](PWA.md)
 - [Audio](docs/audio.md)
 - [Discovery frequency](docs/discoveries.md)
 - [Performance](docs/performance.md)
+
+## Credits
+
+- [three.js](https://threejs.org/) (MIT)
+- [N8AO](https://github.com/N8python/n8ao) for ambient occlusion (ISC)
+- [postprocessing](https://github.com/pmndrs/postprocessing) (Zlib)

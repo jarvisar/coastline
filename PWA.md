@@ -1,32 +1,30 @@
-# Install the website
+# Installing the Website
 
-Open [Coastline](https://jarvisar.github.io/coastline/):
+The [website](https://jarvisar.github.io/coastline/) can be installed like a regular app:
 
-- **iPhone / iPad:** in Safari, tap **Share → Add to Home Screen**. Leave **Open as Web App** enabled if shown.
-- **Android:** in Chrome, choose **Install app** or **Add to Home screen**.
-- **Desktop Chrome / Edge:** use the install icon in the address bar or browser menu.
+- iPhone / iPad: in Safari, tap Share → Add to Home Screen. Leave Open as Web App on if it shows up.
+- Android: in Chrome, tap Install app or Add to Home screen.
+- Desktop Chrome / Edge: click the install icon in the address bar or use the browser menu.
 
 The title screen and pause menu also have an install button.
 
-All seven routes work offline after the first load finishes installing the service worker and cache. Close all Coastline tabs and app windows, then reopen to apply an update. Clearing browser storage requires another online load. Driving progress resets when you reload.
-
-Fullscreen support varies by browser. Some keep system bars visible or require a tap first.
+All seven routes work offline once the first visit finishes caching. To get an update, close every Coastline tab and window and reopen it. If you clear your browser storage, you'll need to load it online again. Fullscreen depends on the browser; some keep the system bars visible or need a tap first.
 
 ## Hosting
 
-Run `npm run build` and deploy `dist/` to an HTTPS host. For a subdirectory:
+Run `npm run build` and upload `dist/` to any HTTPS host. For a subfolder:
 
 ```sh
 npm run build -- --base=/coastline/
 ```
 
-Only production builds register the service worker. Test with `npm run preview` on localhost, using a separate port from the dev server. Phone installation needs HTTPS.
+The service worker only registers in production builds. To test it locally, use `npm run preview` on a different port from the dev server. Installing on a phone needs HTTPS.
 
-Keep `sw.js` at a stable URL with `Cache-Control: no-cache`. The [PWA plugin](scripts/pwa-plugin.mjs) builds the offline cache list, including the chunk worker.
+Serve `sw.js` from the same URL every time with `Cache-Control: no-cache`. The offline file list is built by [pwa-plugin.mjs](scripts/pwa-plugin.mjs).
 
-## Assets and tests
+## Icons and tests
 
-Use `node scripts/pwa-icons.mjs` to regenerate icons from the favicon and `node scripts/pwa-screenshots.mjs` to refresh install screenshots.
+`node scripts/pwa-icons.mjs` regenerates the icons from the favicon and `node scripts/pwa-screenshots.mjs` updates the install screenshots.
 
 ```sh
 node scripts/pwa-test.mjs
@@ -34,4 +32,4 @@ node scripts/pwa-banner-test.mjs
 node scripts/fullscreen-test.mjs
 ```
 
-These check installation, offline use, updates, subdirectory hosting, and fullscreen. The PWA test creates builds and browser profiles under `.artifacts/`. It uses Windows Chrome or Playwright Chromium elsewhere. Set `CHROME_PATH` to use another executable.
+These check installing, offline play, updates, subfolder hosting and fullscreen. They use Chrome on Windows or Playwright's Chromium elsewhere; set `CHROME_PATH` to use a different browser. Output goes to `.artifacts/`.
