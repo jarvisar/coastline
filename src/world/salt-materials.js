@@ -74,6 +74,8 @@ export const roadMaterial = standard({ vertexColors: true, roughness: .93, flatS
 export const rockMaterial = standard({ vertexColors: true, roughness: .95 }, 'salt-rock-v1');
 export const plantMaterial = standard({ vertexColors: true, side: THREE.DoubleSide }, 'salt-plant-v1');
 export const pileMaterial = standard({ vertexColors: true, roughness: .8 }, 'salt-pile-v1');
+// Landmarks. Instance colours repaint the lodge's roof, door and shutters.
+export const discoveryMaterial = standard({ vertexColors: true, roughness: .88 }, 'salt-discovery-v1');
 export const birdMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .9, flatShading: true });
 export const postMaterial = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: .8 });
 
@@ -115,6 +117,9 @@ function mirrorMaterial(side, key) {
     shader.vertexShader = 'varying vec3 vMirrorWorld;\n' + shader.vertexShader.replace('#include <worldpos_vertex>', `#include <worldpos_vertex>
       ${worldVarying('vMirrorWorld')}`);
     shader.fragmentShader = 'varying vec3 vMirrorWorld;\n' + shader.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
+      // Anything buried below the waterline flips up above it. A reflection
+      // can't show there, and it would poke through the real thing.
+      if (vMirrorWorld.y > ${WATER_LEVEL.toFixed(2)}) discard;
       vec3 facet = normalize(cross(dFdx(vMirrorWorld), dFdy(vMirrorWorld)));
       vec3 toEye = isOrthographic ? vec3(viewMatrix[0][2], viewMatrix[1][2], viewMatrix[2][2]) : normalize(cameraPosition - vMirrorWorld);
       if (dot(facet, toEye) < 0.0) facet = -facet;
@@ -129,8 +134,8 @@ function mirrorMaterial(side, key) {
   material.customProgramCacheKey = () => key;
   return material;
 }
-export const mirrorInstanceMaterial = mirrorMaterial(THREE.BackSide, 'salt-mirror-instanced-v1');
-export const mirrorMeshMaterial = mirrorMaterial(THREE.FrontSide, 'salt-mirror-mesh-v1');
+export const mirrorInstanceMaterial = mirrorMaterial(THREE.BackSide, 'salt-mirror-instanced-v2');
+export const mirrorMeshMaterial = mirrorMaterial(THREE.FrontSide, 'salt-mirror-mesh-v2');
 
 // Reflection about the water plane, for building mirrored instance matrices.
 export const WATER_MIRROR = new THREE.Matrix4().makeScale(1, -1, 1).setPosition(0, WATER_LEVEL * 2, 0);

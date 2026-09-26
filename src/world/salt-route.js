@@ -1,4 +1,5 @@
 import { roadFrame, positionAt, randomAt, smoothstep, lerp } from './route.js';
+import { saltDiscoveryFlood } from './salt-discoveries.js';
 
 // The crust is dead level. A low causeway carries the road across it.
 export const SALT_LEVEL = 22;
@@ -55,7 +56,8 @@ export const cellKey = (i, k, side) => `${side > 0 ? 'f' : 'n'}${i},${k}`;
 
 const floodCache = new Map();
 // Pools are scattered patches of a few whole polygons, more of them along the
-// wetter stretches.
+// wetter stretches. Discoveries keep their own ground dry, and some cactus
+// islands get a lagoon.
 export function cellFlooded(i, k, side) {
   const key = cellKey(i, k, side);
   if (floodCache.has(key)) return floodCache.get(key);
@@ -65,7 +67,7 @@ export function cellFlooded(i, k, side) {
   const jitter = (randomAt(i, k * 7 + (side > 0 ? 8813 : 8823)) - .5) * .3;
   const verge = k === 0 ? .22 : 0;
   const far = smoothstep(330, 400, cross) * .6;
-  const flooded = patch + jitter + lagoon * .26 - verge - far > .33;
+  const flooded = saltDiscoveryFlood(i, k, side) ?? patch + jitter + lagoon * .26 - verge - far > .33;
   if (floodCache.size > 20000) floodCache.clear();
   floodCache.set(key, flooded);
   return flooded;
@@ -85,7 +87,7 @@ function clip(outline, mx, my, nx, ny, label) {
   }
   return kept;
 }
-export function saltCell(i, k, side) {
+export function cellOutline(i, k, side) {
   const seed = cellSeed(i, k, side), reach = CELL * 1.7;
   let outline = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([a, b]) => ({ s: seed.s + a * reach, u: seed.u + b * reach, edge: null }));
   for (let dk = -2; dk <= 2; dk++) for (let di = -2; di <= 2; di++) {
@@ -94,8 +96,10 @@ export function saltCell(i, k, side) {
     outline = clip(outline, (seed.s + other.s) / 2, (seed.u + other.u) / 2, ns / length, nu / length, cellKey(i + di, k + dk, side));
   }
   outline = clip(outline, 0, side * CAUSEWAY_TOE, 0, -side, 'toe');
-  outline = clip(outline, 0, side * CELL_REACH, 0, side, 'far');
-  return { ...seed, key: cellKey(i, k, side), flooded: cellFlooded(i, k, side), outline };
+  return clip(outline, 0, side * CELL_REACH, 0, side, 'far');
+}
+export function saltCell(i, k, side) {
+  return { ...cellSeed(i, k, side), key: cellKey(i, k, side), flooded: cellFlooded(i, k, side), outline: cellOutline(i, k, side) };
 }
 // Floods for a key produced by saltCell. Boundaries never flood.
 export function keyFlooded(key) {

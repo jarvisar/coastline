@@ -159,7 +159,7 @@ export const saltPile = saltCone();
 
 // Wading flamingos, about 1.6 m tall. One stands on a single leg, the other feeds
 // with its head in the water.
-const pink = '#f29aa7', paler = '#f6b4bd', deepPink = '#e57b90', leg = '#dd6e84', black = '#241f21', beak = '#f1d6d4';
+const pink = '#ec7a8e', paler = '#f191a0', deepPink = '#d9486a', leg = '#d65a74', black = '#241f21', beak = '#f1d6d4';
 function flamingo(feeding) {
   const parts = [
     strut([-.05, 0, .02], [-.05, .43, .05], .026, leg), strut([-.05, .43, .05], [-.04, .84, .02], .03, leg),

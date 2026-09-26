@@ -15,7 +15,7 @@ for (let s = -length / 2; s < length / 2; s += 32) {
   driven += roadFrame(s + step / 2).scale * step / METERS_PER_MILE;
 }
 const rows = [];
-for (const scene of ['coastal', 'desert', 'snow', 'jungle', 'plains', 'city', 'volcanic']) {
+for (const scene of ['coastal', 'desert', 'snow', 'jungle', 'plains', 'city', 'volcanic', 'salt']) {
   const mod = await import(`../src/world/${scene}-discoveries.js`);
   const targets = mod[`${scene.toUpperCase()}_DISCOVERY_MILES`];
   const sites = mod[`${scene}Discoveries`](-length / 2, length / 2).filter(site => site.kind !== 'parrots');

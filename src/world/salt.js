@@ -9,6 +9,8 @@ import { SALT_LEVEL, WATER_LEVEL, CAUSEWAY_TOE, CELL_REACH, SALT_EDGES, CELL, CE
 import { crustMaterial, roadMaterial, rockMaterial, plantMaterial, pileMaterial, birdMaterial, postMaterial, poolMaterial,
   mirrorInstanceMaterial, mirrorMeshMaterial, WATER_MIRROR } from './salt-materials.js';
 import { saltBoulders, saltPebble, saltApron, saltTola, saltPile, flamingoStanding, flamingoFeeding, flamingoFlying, flightMaterial, postGeometry } from './salt-assets.js';
+import { saltDiscoveries, saltDiscoveryClears } from './salt-discoveries.js';
+import { buildSaltDiscoveries } from './salt-discovery-scenery.js';
 import { SaltSky } from './salt-sky.js';
 import { animateWater } from './water.js';
 import { solidPost, solidRocks } from './colliders.js';
@@ -93,11 +95,15 @@ export class SaltChunk {
       film.receiveShadow = false;
     }
     this.buildRoad();
+    // Landmarks reach up to 40 m either side of their anchor.
+    this.discoveries = saltDiscoveries(this.start - 40, this.start + CHUNK_LENGTH + 40);
     this.buildRipRap(); this.buildClusters(); this.buildScatter(); this.buildShrubs(); this.buildPiles(); this.buildFlamingos(); this.buildPosts();
+    buildSaltDiscoveries(this, this.discoveries);
     this.finishScenery();
-    delete this.crust; delete this.water; delete this.items; delete this.cells;
+    delete this.crust; delete this.water; delete this.items; delete this.cells; delete this.discoveries;
     finalizeChunkTransforms(this.group);
   }
+  clear(s, u, radius) { return saltDiscoveryClears(s, u, this.discoveries, radius); }
   addMesh(g, material, name, shadow = false) {
     const mesh = new THREE.Mesh(g, material); mesh.name = name; mesh.castShadow = shadow; mesh.receiveShadow = true;
     this.group.add(mesh); this.owned.push(g); return mesh;
@@ -291,6 +297,7 @@ export class SaltChunk {
   // dry crust get a collar of heaped salt.
   rock(s, u, size, random, { slope = false, tall = 1 } = {}) {
     const variant = Math.floor(random() * saltBoulders.length), height = size * (.78 + random() * .3) * tall;
+    if (!this.clear(s, u, size * 1.2 + .5)) return;
     const p = this.at(s, u, slope ? saltHeight(s, u) : SALT_LEVEL);
     const item = { p: [p.x, p.y + height * .4, p.z], r: [(random() - .5) * .16, random() * Math.PI * 2, (random() - .5) * .16],
       scale: [size, height, size * (.75 + random() * .4)], color: pick(ROCK_TINTS, random()) };
@@ -311,6 +318,8 @@ export class SaltChunk {
   }
   buildClusters() {
     for (const cluster of saltClusters(this.start, this.start + CHUNK_LENGTH)) {
+      // Whole groups give way to a landmark rather than leaving a few stragglers.
+      if (!this.clear(cluster.s, cluster.u, cluster.hero * 2.5)) continue;
       const random = seededRandom(cluster.index * 13 + 89121);
       this.rock(cluster.s, cluster.u, cluster.hero, random, { tall: 1.2 });
       for (let n = 0; n < cluster.pieces; n++) {
@@ -338,7 +347,7 @@ export class SaltChunk {
     }
   }
   tola(s, u, size, random) {
-    if (Math.abs(u) < CAUSEWAY_TOE + .4 || inPool(s, u)) return;
+    if (Math.abs(u) < CAUSEWAY_TOE + .4 || inPool(s, u) || !this.clear(s, u, size + .3)) return;
     const p = this.at(s, u, SALT_LEVEL);
     this.items.tola.push({ p: [p.x, p.y - .03, p.z], r: [0, random() * Math.PI * 2, 0], scale: [size, size * (.8 + random() * .4), size], color: pick(TOLA_TINTS, random()) });
   }
@@ -360,6 +369,7 @@ export class SaltChunk {
         if (random() < .12) continue;
         const s = field.s + (column - field.columns / 2) * field.spacing + row * field.skew + (random() - .5) * .6;
         const u = field.u + field.side * (row - field.rows / 2) * field.spacing + (random() - .5) * .6;
+        if (!this.clear(s, u, 1.5)) continue;
         const wet = inPool(s, u), height = 1 + random() * .45, radius = .85 + random() * .25, p = this.at(s, u, wet ? WATER_LEVEL - .08 : SALT_LEVEL - .03);
         const item = { p: [p.x, p.y, p.z], r: [0, random() * Math.PI * 2, 0], scale: [radius, height, radius], color: pick(PILE_TINTS, random()) };
         this.items.piles.push(item);
@@ -377,7 +387,7 @@ export class SaltChunk {
       const home = pools[Math.floor(random() * pools.length)], heading = random() * Math.PI * 2;
       for (let n = 0, count = 3 + Math.floor(random() * 7); n < count; n++) {
         const s = home.s + (random() - .5) * 9, u = home.u + (random() - .5) * 7;
-        if (!inPool(s, u)) continue;
+        if (!inPool(s, u) || !this.clear(s, u, 1)) continue;
         const p = this.at(s, u, WATER_LEVEL - .1), feeding = random() < .4, size = .92 + random() * .16;
         const item = { p: [p.x, p.y, p.z], r: [0, heading + (random() - .5) * 1.4, 0], scale: [size, size, size], color: pick(BIRD_TINTS, random()) };
         (feeding ? this.items.feeding : this.items.standing).push(item);
@@ -401,7 +411,7 @@ export class SaltChunk {
     // Staggered so the two sides alternate.
     for (let s = Math.ceil(this.start / 24) * 24; s < this.start + CHUNK_LENGTH; s += 24) for (const side of [-1, 1]) {
       const at = s + (side > 0 ? 12 : 0);
-      if (at >= this.start + CHUNK_LENGTH) continue;
+      if (at >= this.start + CHUNK_LENGTH || !this.clear(at, side * 7.35, .5)) continue;
       const u = side * 7.35, p = this.at(at, u), yaw = -roadFrame(at).angle;
       this.items.posts.push({ p: [p.x, p.y + .5, p.z], r: [0, yaw, 0], scale: [.11, 1, .11], color: color('#f4f2ec') });
       this.items.bands.push({ p: [p.x, p.y + .86, p.z], r: [0, yaw, 0], scale: [.118, .16, .118], color: color('#2d2c2c') });
