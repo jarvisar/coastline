@@ -18,11 +18,11 @@ registerChunkResources('salt', { crustMaterial, roadMaterial, rockMaterial, plan
   flamingoStanding, flamingoFeeding, flamingoFlying, postGeometry });
 
 const color = hex => new THREE.Color(hex);
-const CRUST = color('#fff3e1'), DIRTY = color('#f2e4cd'), COOL = color('#f8f4ec'), DUST = color('#ecdcc2');
-const CREST = new THREE.Color(1.16, 1.15, 1.12), WET_RIM = color('#d6ebe7'), SUNKEN = color('#c9e2de');
+const CRUST = color('#fff4e5'), DIRTY = color('#e6d4bd'), COOL = color('#e4e9ee'), DUST = color('#dfcbb0');
+const CREST = color('#fffdf4'), WET_RIM = color('#d6ebe7'), SUNKEN = color('#c9e2de');
 const GRAVEL = [color('#e2d5bb'), color('#d9caac'), color('#d2c2a3'), color('#e3dac8'), color('#ede7db')];
 const ROAD = { shoulder: color('#dccfb4'), asphalt: color('#4d5259'), edge: color('#f3f1ea'), centre: color('#e0b13e') };
-const ROCK_TINTS = ['#cdbea6', '#c5b59c', '#d4c7b0', '#bfaf97', '#c9b9a1', '#d8ccb6'].map(color);
+const ROCK_TINTS = ['#d2bfa4', '#c3b29d', '#ded0b9', '#b8afa4', '#cfbba0', '#d8c9b3'].map(color);
 const TOLA_TINTS = ['#cda866', '#bc9654', '#d7b877', '#a98d55', '#c4a870'].map(color);
 const PILE_TINTS = ['#ffffff', '#f7f5f0', '#fbf8f2'].map(color);
 const BIRD_TINTS = ['#ffffff', '#fff0f2', '#f6e3e6', '#ffe9ea'].map(color);
@@ -71,10 +71,10 @@ function mirrorOf(item) {
 // Crust colour at a point: cleaner and cooler in places, grubbier in others,
 // and dusted beige next to the causeway.
 function crustTone(s, u, r = .5) {
-  const tone = CRUST.clone().lerp(DIRTY, smoothstep(.1, .8, saltNoise(s, u, 170, 8863)) * .55);
-  tone.lerp(COOL, Math.max(0, saltNoise(s + 90, u, 95, 8864)) * .45);
+  const tone = CRUST.clone().lerp(DIRTY, smoothstep(-.45, .7, saltNoise(s, u, 170, 8863)) * .65);
+  tone.lerp(COOL, smoothstep(-.15, .65, saltNoise(s + 90, u, 95, 8864)) * .48);
   tone.lerp(DUST, (1 - smoothstep(12, 30, Math.abs(u))) * .5);
-  return tone.multiplyScalar(.978 + r * .044);
+  return tone.multiplyScalar(.94 + r * .1);
 }
 // Ridge height and brightness fade out toward the far field.
 const reachFade = u => 1 - smoothstep(320, 412, Math.abs(u));
@@ -128,16 +128,16 @@ export class SaltChunk {
     const crest = outline.map((v, j) => {
       if (isBoundary(labels[(j + n - 1) % n]) || isBoundary(labels[j])) return 0;
       if (submerged(j)) return WATER_LEVEL - SALT_LEVEL - .1;
-      return (.045 + .055 * (.5 + .5 * saltNoise(v.s, v.u, 37, 8862))) * reachFade(v.u);
+      return (.025 + .04 * (.5 + .5 * saltNoise(v.s, v.u, 37, 8862))) * reachFade(v.u);
     });
     // Each rim is a flat white band along the crack, then a bevel down to the
     // polygon floor. Pool shores keep the band dry and slope into the water.
     const band = labels.map(label => {
       if (isBoundary(label)) return 0;
-      if (!flooded) return .2 + .12 * (.5 + .5 * saltNoise(cell.s, cell.u, 23, 8868));
-      return keyFlooded(label) ? .1 : .2;
+      if (!flooded) return .045 + .09 * (.5 + .5 * saltNoise(cell.s, cell.u, 23, 8868));
+      return keyFlooded(label) ? 0 : .14;
     });
-    const inset = labels.map((label, j) => band[j] + (isBoundary(label) ? (flooded ? .75 : 0) : !flooded ? .16 : keyFlooded(label) ? .14 : .6));
+    const inset = labels.map((label, j) => band[j] + (isBoundary(label) ? (flooded ? .75 : 0) : !flooded ? .3 : keyFlooded(label) ? .14 : 1.05));
     const dirs = outline.map((v, j) => {
       const w = outline[(j + 1) % n], ds = w.s - v.s, du = w.u - v.u, length = Math.hypot(ds, du) || 1;
       return { s: ds / length, u: du / length, ns: -du / length * turn, nu: ds / length * turn };
@@ -178,6 +178,8 @@ export class SaltChunk {
     const floorColor = flooded ? SUNKEN : tone.clone().multiplyScalar(.965);
     for (let j = 0; j < n; j++) {
       const k = (j + 1) % n;
+      // Flooded neighbours make one open pool, with no internal white dividers.
+      if (flooded && keyFlooded(labels[j])) continue;
       if (!inset[j] && Math.hypot(inner[j].s - outline[j].s, inner[j].u - outline[j].u) < 1e-4) continue;
       if (band[j] > 0) {
         triangle(this.crust, rim[j], rim[k], shoulder[j], rimColor(j), rimColor(k), rimColor(j));
@@ -190,24 +192,41 @@ export class SaltChunk {
     if (!flooded) {
       // A shallow dish or dome, so the fan's facets catch the sun a little differently.
       const cs = inner.reduce((sum, v) => sum + v.s, 0) / n, cu = inner.reduce((sum, v) => sum + v.u, 0) / n;
-      const centre = this.at(cs, cu, SALT_LEVEL + .005 + (r - .45) * .05);
+      const centre = this.at(cs, cu, SALT_LEVEL + .005 + (r - .45) * .065);
       for (let j = 0; j < n; j++) {
         const k = (j + 1) % n;
         if (Math.hypot(inner[j].s - inner[k].s, inner[j].u - inner[k].u) < 1e-4) continue;
-        triangle(this.crust, centre, floor[j], floor[k], tone.clone().multiplyScalar(.986 + randomAt(j, cell.i * 31 + cell.k) * .028));
+        // Broad mineral facets, with a little more colour at the centre than
+        // the perimeter. The quiet variation keeps the crust from reading as tiles.
+        const facet = tone.clone().multiplyScalar(.89 + randomAt(j, cell.i * 31 + cell.k) * .16);
+        const edgeTone = facet.clone().lerp(floorColor, .42);
+        triangle(this.crust, centre, floor[j], floor[k], facet, edgeTone, edgeTone);
       }
       return;
     }
-    // The water film spans the whole polygon. It's deepest in the middle and
-    // shallowest where a dry neighbour's rim rises out of it.
-    const centre = this.at(cell.s, cell.u, WATER_LEVEL);
-    const surfacePoint = j => this.at(outline[j].s, outline[j].u, WATER_LEVEL);
+    // A narrow shallow shelf hugs the shore. Edge midpoints keep the interiors
+    // of connected pools deep even when both end vertices touch dry salt.
+    const cs = outline.reduce((sum, v) => sum + v.s, 0) / n, cu = outline.reduce((sum, v) => sum + v.u, 0) / n;
+    const centre = this.at(cs, cu, WATER_LEVEL), shore = [];
     for (let j = 0; j < n; j++) {
-      const k = (j + 1) % n;
-      let [a, b, c, da, db, dc] = [centre, surfacePoint(j), surfacePoint(k), 1, submerged(j) ? 1 : 0, submerged(k) ? 1 : 0];
+      const a = outline[j], b = outline[(j + 1) % n];
+      shore.push({ ...a, depth: submerged(j) ? 1 : 0 }, { s: (a.s + b.s) / 2, u: (a.u + b.u) / 2, depth: keyFlooded(labels[j]) ? 1 : 0 });
+    }
+    const outer = shore.map(v => this.at(v.s, v.u, WATER_LEVEL));
+    const shelf = shore.map(v => {
+      const t = Math.min(.35, 1.1 / (Math.hypot(v.s - cs, v.u - cu) || 1));
+      return this.at(lerp(v.s, cs, t), lerp(v.u, cu, t), WATER_LEVEL);
+    });
+    const waterFace = (a, b, c, da, db, dc) => {
       if ((b.z - a.z) * (c.x - a.x) - (b.x - a.x) * (c.z - a.z) < 0) { [b, c] = [c, b]; [db, dc] = [dc, db]; }
       for (const p of [a, b, c]) this.water.positions.push(p.x, p.y, p.z);
       this.water.depths.push(da, db, dc);
+    };
+    for (let j = 0; j < shore.length; j++) {
+      const k = (j + 1) % shore.length;
+      waterFace(centre, shelf[j], shelf[k], 1, 1, 1);
+      waterFace(shelf[j], outer[j], outer[k], 1, shore[j].depth, shore[k].depth);
+      waterFace(shelf[j], outer[k], shelf[k], 1, shore[k].depth, 1);
     }
   }
   // Plain crust past the polygons, tucked just under their outer edge.

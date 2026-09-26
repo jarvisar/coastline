@@ -50,6 +50,14 @@ try {
   // Cycle both road-level cameras and all four overhead distances.
   for (let i = 0; i < 6; i++) {
     await page.keyboard.press('KeyV'); await page.waitForTimeout(250);
+    const clouds = await page.evaluate(() => {
+      const r = window.__coastline.rendering;
+      return { count: r.scene.getObjectByName('salt-cumulus')?.count,
+        reflected: r.scene.getObjectByName('salt-cumulus-reflection')?.count,
+        driving: /person/.test(r.viewLabel) };
+    });
+    assert.equal(clouds.count, clouds.driving ? 9 : 0, 'clouds must leave overhead driving views unobstructed');
+    assert.equal(clouds.reflected, 9, 'every camera keeps the reflected clouds');
     await page.screenshot({ path: `.artifacts/salt-view-${i}.png` });
   }
   const clock = () => page.evaluate(() => window.__coastline.rendering.scene.getObjectByName('salt-sky-dome').material.uniforms.saltTime.value);
@@ -58,6 +66,7 @@ try {
   await page.keyboard.press('KeyP');
   await page.keyboard.press('Digit1'); await ready(page); assert.equal(await journey(page), 'coast');
   assert.equal(await page.evaluate(() => !!window.__coastline.rendering.scene.getObjectByName('salt-sky-dome')), false);
+  assert.equal(await page.evaluate(() => !!window.__coastline.rendering.scene.getObjectByName('salt-cumulus-reflection')), false);
   await page.keyboard.press('Digit8'); await ready(page); assert.equal(await journey(page), 'salt');
   // Salt is last, so the next route wraps round to the coast.
   await page.keyboard.press('KeyN'); await ready(page); assert.equal(await journey(page), 'coast');

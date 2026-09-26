@@ -194,7 +194,7 @@ export function createRendering(canvas, graphics = new Graphics()) {
       scene.background.set(saltPalette.horizon); updateFog();
       sky.color.set(saltPalette.skyLight); sky.groundColor.set(saltPalette.groundLight); sky.intensity = SALT_LIGHT.sky;
       sun.color.set(saltPalette.sun); sun.intensity = SALT_LIGHT.sun; sunOffset.set(...SALT_SUN);
-      renderer.toneMappingExposure = 1.4;
+      renderer.toneMappingExposure = 1.48;
       return;
     }
     const desert = id === 'desert';

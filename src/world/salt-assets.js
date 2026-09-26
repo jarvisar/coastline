@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
 import { randomAt, smoothstep } from './route.js';
 import { waterClock } from './water.js';
 import { birdFlightGLSL } from './bird-flight.js';
@@ -36,27 +37,26 @@ function finish(parts) {
   return g;
 }
 
-// Faceted boulders, weathered on shared vertices so they stay closed. The
-// flat base sits in the crust, and a pale band of salt crystals rims it.
+// Uneven shoulders and an offset crown give each outcrop a few broad fracture
+// planes. A convex hull keeps those planes closed, including the buried base.
 function boulder(seed) {
-  const g = new THREE.IcosahedronGeometry(1, 1), p = g.attributes.position, offsets = new Map();
-  for (let i = 0; i < p.count; i++) {
-    const x = p.getX(i), y = p.getY(i), z = p.getZ(i), key = `${Math.round(x * 1e3)},${Math.round(y * 1e3)},${Math.round(z * 1e3)}`;
-    if (!offsets.has(key)) offsets.set(key, 1 + (randomAt(offsets.size, seed) - .5) * .14 + .04 * Math.sin(x * 3 + z * 2 + seed));
-    const wear = offsets.get(key);
-    // Rounded domes with a flat seat in the crust.
-    let height = y * wear;
-    if (height < -.42) height = -.42 + (height + .42) * .15;
-    p.setXYZ(i, x * wear, height, z * wear * (.92 + randomAt(seed, 3) * .16));
+  const points = [], lean = (randomAt(seed, 4) - .5) * .48;
+  for (const [ring, count, radius, height] of [[0, 7, .86, -.46], [1, 7, 1, .12], [2, 4, .55, .79]]) {
+    for (let j = 0; j < count; j++) {
+      const angle = (j / count + ring * .065 + (randomAt(j, seed + ring * 13) - .5) * .055) * Math.PI * 2;
+      const r = radius * (.8 + randomAt(j, seed + ring * 17 + 1) * .32);
+      const y = height + (ring ? (randomAt(j, seed + ring * 19 + 2) - .5) * .36 : 0);
+      points.push(new THREE.Vector3(Math.cos(angle) * r + lean * (y + .46), y, Math.sin(angle) * r));
+    }
   }
-  g.computeVertexNormals();
+  const g = new ConvexGeometry(points), p = g.attributes.position;
   const colors = [], a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), normal = new THREE.Vector3();
   for (let i = 0; i < p.count; i += 3) {
     a.fromBufferAttribute(p, i); b.fromBufferAttribute(p, i + 1); c.fromBufferAttribute(p, i + 2);
     normal.subVectors(c, b).cross(a.clone().sub(b)).normalize();
     const low = (a.y + b.y + c.y) / 3, facet = randomAt(i, seed + 7);
     // Lighter tops, darker undersides, per-face mottling.
-    let shade = .9 + normal.y * .08 + (facet - .5) * .06;
+    const shade = .91 + normal.y * .07 + (facet - .5) * .045;
     const crust = 1 - smoothstep(-.4, -.24, low);
     const r = shade + crust * .2, gr = shade + crust * .22, bl = shade * .98 + crust * .28;
     for (let k = 0; k < 3; k++) colors.push(r, gr, bl);

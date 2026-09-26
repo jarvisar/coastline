@@ -2,8 +2,8 @@ import * as THREE from 'three';
 import { randomAt, lerp, smoothstep } from './route.js';
 import { saltPalette, SALT_SUN } from './salt-palette.js';
 import { WATER_LEVEL } from './salt-route.js';
-import { cloudGLSL, CLOUD_HEIGHT } from './salt-materials.js';
 import { waterClock } from './water.js';
+import { SaltClouds } from './salt-clouds.js';
 
 const sun = new THREE.Vector3(...SALT_SUN).normalize();
 
@@ -17,29 +17,20 @@ function skyMaterial() {
     side: THREE.BackSide, depthWrite: false, toneMapped: false, fog: true,
     uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {
       horizon: { value: new THREE.Color(saltPalette.horizon) }, zenith: { value: new THREE.Color(saltPalette.zenith) },
-      haze: { value: new THREE.Color(saltPalette.haze) }, cloud: { value: new THREE.Color(saltPalette.cloud) },
-      cloudShade: { value: new THREE.Color(saltPalette.cloudShade) }, sunDirection: { value: sun.clone() },
+      haze: { value: new THREE.Color(saltPalette.haze) }, sunDirection: { value: sun.clone() },
     }]),
     vertexShader: `varying vec3 vSkyWorld;
       void main() {
         vSkyWorld = (modelMatrix * vec4(position, 1.0)).xyz;
         gl_Position = (projectionMatrix * modelViewMatrix * vec4(position, 1.0)).xyww;
       }`,
-    fragmentShader: `uniform vec3 horizon; uniform vec3 zenith; uniform vec3 haze; uniform vec3 cloud; uniform vec3 cloudShade; uniform vec3 sunDirection;
+    fragmentShader: `uniform vec3 horizon; uniform vec3 zenith; uniform vec3 haze; uniform vec3 sunDirection;
       uniform vec3 fogColor; uniform float fogNear; uniform float fogFar;
       varying vec3 vSkyWorld;
-      ${cloudGLSL}
-      vec3 skyColor(vec3 direction, vec3 origin) {
+      vec3 skyColor(vec3 direction) {
         float elevation = max(direction.y, 0.0);
         vec3 color = mix(horizon, zenith, pow(smoothstep(0.0, 0.9, elevation), 0.72));
         color = mix(color, haze, smoothstep(0.0, 0.025, elevation) * (1.0 - smoothstep(0.025, 0.16, elevation)) * 0.5);
-        if (direction.y > 0.002) {
-          // Cumulus on one flat layer. Sampling toward the sun lights their tops.
-          vec2 at = origin.xz + direction.xz * (${CLOUD_HEIGHT.toFixed(1)} - origin.y) / direction.y;
-          float cover = saltCloud(at), lit = saltCloud(at + sunDirection.xz * 26.0);
-          vec3 puff = mix(cloudShade, cloud, clamp(0.55 + (cover - lit) * 2.2, 0.0, 1.0));
-          color = mix(color, puff, cover * smoothstep(0.015, 0.14, elevation) * 0.96);
-        }
         return color + vec3(0.1, 0.085, 0.06) * pow(max(dot(direction, sunDirection), 0.0), 20.0);
       }
       void main() {
@@ -47,15 +38,15 @@ function skyMaterial() {
         vec3 color; float fogFactor = 0.0;
         if (direction.y < -0.0005) {
           vec3 water = vSkyWorld + direction * (${WATER_LEVEL.toFixed(2)} - vSkyWorld.y) / direction.y;
-          color = skyColor(vec3(direction.x, -direction.y, direction.z), water) * vec3(0.88, 0.92, 0.95);
+          color = skyColor(vec3(direction.x, -direction.y, direction.z)) * vec3(0.88, 0.92, 0.95);
           fogFactor = smoothstep(fogNear, fogFar, -(viewMatrix * vec4(water, 1.0)).z);
-        } else color = skyColor(direction, cameraPosition);
+        } else color = skyColor(direction);
         gl_FragColor = vec4(color, 1.0);
         #include <colorspace_fragment>
         gl_FragColor.rgb = mix(gl_FragColor.rgb, fogColor, fogFactor);
       }`,
   });
-  // Shared clock objects, not copies, so the clouds move with the pools and shadows.
+  // Expose the shared scene clock, also used by the cumulus meshes and pools.
   material.uniforms.saltTime = waterClock.time; material.uniforms.saltOrigin = waterClock.origin;
   return material;
 }
@@ -64,8 +55,8 @@ function skyMaterial() {
 // so they never get closer. Only road-level cameras see them. Their feet stand
 // on the water plane so a mirrored copy can sit directly beneath.
 const RANGES = [
-  { distance: 700, depth: 90, low: 3, high: 26, peaks: 6, peak: 34, tint: '#9391b8', salt: 8961 },
-  { distance: 820, depth: 120, low: 4, high: 40, peaks: 5, peak: 60, tint: '#9e9dc0', salt: 8971 },
+  { distance: 700, depth: 90, low: 3, high: 26, peaks: 6, peak: 34, tint: '#929fb7', salt: 8961 },
+  { distance: 820, depth: 120, low: 4, high: 40, peaks: 5, peak: 60, tint: '#a4acc4', salt: 8971 },
   // Only the far range is tall enough to hold snow.
   { distance: 960, depth: 150, low: 5, high: 52, peaks: 4, peak: 96, tint: '#abadca', salt: 8981, snowline: 118 },
 ];
@@ -79,6 +70,7 @@ function mountains() {
     const ridgeHeight = angle => {
       const massif = smoothstep(-.15, .55, Math.sin(angle * 2 + range.salt) * .7 + Math.sin(angle * 5.3 + range.salt * .3) * .3);
       let height = lerp(range.low, range.high * massif, .5 + .3 * Math.sin(angle * 3 + range.salt) + .2 * Math.sin(angle * 7.3 + range.salt * .7));
+      height *= .92 + .1 * Math.sin(angle * 19 + range.salt) + .06 * Math.sin(angle * 37 + range.salt * .3);
       for (const peak of peaks) {
         const d = Math.abs(Math.atan2(Math.sin(angle - peak.angle), Math.cos(angle - peak.angle)));
         height += peak.height * Math.max(0, 1 - d / peak.width) ** 1.3 * (.35 + .65 * massif);
@@ -89,9 +81,9 @@ function mountains() {
     const rows = Array.from({ length: STEPS }, (_, j) => {
       const angle = (j + (randomAt(j, range.salt + 3) - .5) * .5) / STEPS * Math.PI * 2, height = ridgeHeight(angle);
       const radius = range.distance + (randomAt(j, range.salt + 4) - .5) * 30;
-      const at = (r, y) => new THREE.Vector3(Math.cos(angle) * r, y, Math.sin(angle) * r);
+      const at = (r, y, offset = 0) => new THREE.Vector3(Math.cos(angle + offset) * r, y, Math.sin(angle + offset) * r);
       // Foot, a broken shoulder, then the crest.
-      return [at(radius - range.depth, 0), at(radius - range.depth * (.45 + randomAt(j, range.salt + 5) * .2), height * (.42 + randomAt(j, range.salt + 6) * .2)), at(radius, height)];
+      return [at(radius - range.depth, 0), at(radius - range.depth * (.35 + randomAt(j, range.salt + 5) * .35), height * (.3 + randomAt(j, range.salt + 6) * .4), (randomAt(j, range.salt + 7) - .5) * .035), at(radius, height)];
     });
     const face = (a, b, c) => {
       const normal = new THREE.Vector3().subVectors(b, a).cross(new THREE.Vector3().subVectors(c, a)).normalize();
@@ -118,6 +110,7 @@ function mountains() {
 
 export class SaltSky {
   constructor(scene) {
+    this.clouds = new SaltClouds(scene);
     this.group = new THREE.Group(); this.group.name = 'salt-sky'; scene.add(this.group);
     this.domeGeometry = new THREE.SphereGeometry(1000, 32, 16);
     this.domeMaterial = skyMaterial();
@@ -136,6 +129,7 @@ export class SaltSky {
   }
   follow(x, z) { this.group.position.set(x, WATER_LEVEL, z); }
   dispose() {
+    this.clouds.dispose();
     this.group.removeFromParent();
     for (const resource of [this.domeGeometry, this.domeMaterial, this.mountainGeometry, this.mountainMaterial, this.mirrorMaterial]) resource.dispose();
   }

@@ -8,9 +8,8 @@ const sun = new THREE.Vector3(...SALT_SUN).normalize();
 // GLSL literal for a vector or a (linear) colour.
 const vec3 = v => `vec3(${(v.isColor ? [v.r, v.g, v.b] : [v.x, v.y, v.z]).map(n => n.toFixed(4)).join(', ')})`;
 
-// One cumulus layer shared by the sky, the pool reflections and the shadows
-// drifting over the crust. It rides the water clock, so it pauses with the
-// scene, and wraps every 4096 m so floating-origin rebases don't move it.
+// Broad atmospheric shade and small surface breezes share the cloud clock.
+// The field wraps every 4096 m so floating-origin rebases don't move it.
 export const cloudGLSL = /* glsl */`
   uniform float saltTime;
   uniform float saltOrigin;
@@ -37,7 +36,7 @@ export const cloudGLSL = /* glsl */`
   float saltCloudShadow(vec3 world) {
     vec3 toSun = ${vec3(sun)};
     vec2 above = world.xz + toSun.xz * (${CLOUD_HEIGHT.toFixed(1)} - world.y) / toSun.y;
-    return 1.0 - 0.14 * saltCloud(above);
+    return 1.0 - 0.1 * saltCloud(above);
   }
 `;
 function clockUniforms(shader) {
@@ -81,7 +80,7 @@ export const postMaterial = new THREE.MeshStandardMaterial({ color: '#ffffff', r
 // Transparent film over the mirror beneath each pool: pale where it runs over
 // the salt rim, deeper turquoise over open water, thinner at grazing angles so
 // road-level views see more reflection.
-export const poolMaterial = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, depthWrite: false });
+export const poolMaterial = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, depthWrite: false, toneMapped: false });
 poolMaterial.onBeforeCompile = shader => {
   clockUniforms(shader);
   shader.vertexShader = 'attribute float poolDepth; varying float vPoolDepth; varying vec3 vPoolWorld;\n' + shader.vertexShader.replace('#include <worldpos_vertex>', `#include <worldpos_vertex>
@@ -94,14 +93,14 @@ poolMaterial.onBeforeCompile = shader => {
     vec2 p = vec2(vPoolWorld.x, vPoolWorld.z - saltOrigin);
     float band = saltValue(p * 0.0625 + vec2(saltTime * 0.05, saltTime * 0.02));
     float breeze = smoothstep(0.6, 0.85, saltValue(p * 0.125 - vec2(saltTime * 0.08, saltTime * 0.03)));
-    vec3 shallow = vec3(0.56, 0.85, 0.83), deep = vec3(0.08, 0.48, 0.53);
+    vec3 shallow = vec3(0.62, 0.83, 0.79), deep = vec3(0.12, 0.52, 0.59);
     // Shallow only along the outer rim, so reflections near a shore stay clear.
-    float depth = smoothstep(0.0, 0.2, vPoolDepth);
-    diffuseColor.rgb = mix(shallow, deep, depth) * (0.97 + 0.05 * band) + breeze * 0.05;
-    diffuseColor.a = mix(0.86, 0.7, depth) * mix(1.0, 0.35, grazing) + breeze * 0.06;
+    float depth = smoothstep(0.0, 0.32, vPoolDepth);
+    diffuseColor.rgb = mix(shallow, deep, depth) * (0.94 + 0.08 * band) + breeze * 0.025;
+    diffuseColor.a = mix(0.76, 0.46, depth) * mix(1.0, 0.3, grazing) + breeze * 0.035;
   `);
 };
-poolMaterial.customProgramCacheKey = () => 'salt-pool-film-v1';
+poolMaterial.customProgramCacheKey = () => 'salt-pool-film-v2';
 
 // Reflections are geometry flipped under the water plane. They're lit with
 // the un-mirrored face normal against the scene's sun and sky, so each face

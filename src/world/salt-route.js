@@ -47,8 +47,8 @@ export function lagoonAmount(s) {
 // Hexagonal seed lattice per side of the road, so no cell straddles the causeway.
 export function cellSeed(i, k, side) {
   const salt = side > 0 ? 8811 : 8821;
-  const s = (i + (k % 2 ? .5 : 0) + (randomAt(i, k * 7 + salt) - .5) * .72) * CELL;
-  const u = side * (CAUSEWAY_TOE + ROW * (k + .55) + (randomAt(i, k * 7 + salt + 1) - .5) * .62 * ROW);
+  const s = (i + (k % 2 ? .5 : 0) + (randomAt(i, k * 7 + salt) - .5) * .98) * CELL;
+  const u = side * (CAUSEWAY_TOE + ROW * (k + .55) + (randomAt(i, k * 7 + salt + 1) - .5) * .84 * ROW);
   return { i, k, side, s, u };
 }
 export const cellKey = (i, k, side) => `${side > 0 ? 'f' : 'n'}${i},${k}`;

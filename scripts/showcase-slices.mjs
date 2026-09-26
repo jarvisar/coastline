@@ -4,15 +4,18 @@ import { fileURLToPath } from 'node:url';
 import { chromium } from '@playwright/test';
 import { createServer } from 'vite';
 
-// All routes share a seed, road position, camera angle and full landscape framing.
-const routes = ['coast', 'desert', 'snow', 'jungle', 'plains', 'city', 'volcanic', 'salt'];
+// The showcase omits the city. Featured routes share a seed, camera angle and
+// full landscape framing; salt uses a nearby wetter stretch to show its pools.
+const routes = ['coast', 'desert', 'snow', 'jungle', 'plains', 'volcanic', 'salt'];
 const position = Number(process.env.POSITION ?? -1100);
 if (!Number.isFinite(position)) throw new Error('POSITION must be a finite road distance.');
+const saltPosition = Number(process.env.SALT_POSITION ?? position + 80);
+if (!Number.isFinite(saltPosition)) throw new Error('SALT_POSITION must be a finite road distance.');
 const root = fileURLToPath(new URL('../', import.meta.url));
 const output = resolve(root, process.env.OUTPUT ?? 'showcase/scene-slices.png');
 const seed = process.env.SEED ?? '4817';
 if (!/^\d+$/.test(seed) || Number(seed) > 0xffffffff) throw new Error('SEED must be an unsigned 32-bit integer.');
-const width = 3840, height = 2160, sliceWidth = width / routes.length;
+const width = 4032, height = 2268, sliceWidth = width / routes.length;
 const padding = 432;
 const server = await createServer({ root, server: { port: 0, host: '127.0.0.1' } });
 let browser;
@@ -30,6 +33,8 @@ try {
   await page.addInitScript(() => {
     localStorage.setItem('coastline.graphics', JSON.stringify({ mode: 'high', level: 'high', density: 1, ambientOcclusion: true }));
     localStorage.setItem('coastline-journey', 'coast');
+    localStorage.setItem('coastline-car', 'auto');
+    localStorage.setItem('coastline-traffic', 'false');
     localStorage.setItem('coastline-install-dismissed-v2', String(Date.now()));
   });
   await page.goto(`http://127.0.0.1:${server.httpServer.address().port}/?seed=${seed}`);
@@ -45,7 +50,6 @@ try {
       await a.world.chunkSource.prepare(position);
       a.world.update(position);
       a.vehicle.s = position; a.vehicle.reset(); a.vehicle.render(1, a.world.origin);
-      a.traffic.reset(a.vehicle.route, position, route); a.traffic.render(1, a.world.origin);
       for (let i = 0; a.rendering.viewLabel !== 'Scenic view' && i < 6; i++) a.rendering.toggleView();
       a.rendering.snap(); a.rendering.update(a.vehicle.car, 10, a.world.origin); a.rendering.resize();
       a.world.animate(8.5, a.vehicle);
@@ -68,7 +72,7 @@ try {
       const curve = [];
       for (let s = position - 900; s <= position + 900; s += .5) {
         const p = point(s).project(camera);
-        curve.push({ x: (p.x + 1) * width / 2, y: (1 - p.y) * height / 2 });
+        curve.push({ s, x: (p.x + 1) * width / 2, y: (1 - p.y) * height / 2 });
       }
       curve.sort((a, b) => a.x - b.x);
       const worldSliceWidth = worldWidth * sliceWidth / width;
@@ -76,13 +80,25 @@ try {
       camera.right = camera.left + worldSliceWidth;
       camera.top = worldHeight * (.5 + padding / height); camera.bottom = -camera.top;
       camera.updateProjectionMatrix();
+      // Move the route's default car to the road at the slice's horizontal
+      // centre, without moving the shared landscape framing with it.
+      const carX = (index + .5) * sliceWidth;
+      const right = curve.findIndex(p => p.x >= carX);
+      if (right < 1) throw new Error(`No road crossing the centre of ${route}`);
+      const leftPoint = curve[right - 1], rightPoint = curve[right];
+      const t = (carX - leftPoint.x) / (rightPoint.x - leftPoint.x);
+      a.vehicle.s = leftPoint.s + (rightPoint.s - leftPoint.s) * t;
+      a.vehicle.reset(); a.vehicle.u = 0; a.vehicle.update(0, {});
+      a.vehicle.render(1, a.world.origin); a.world.animate(8.5, a.vehicle);
+      const carScreen = a.vehicle.car.position.clone().project(camera);
+      if (Math.abs(carScreen.x) > .02 || Math.abs(carScreen.y) > 1) throw new Error(`Car is outside the centre of ${route}`);
       const { fitSunShadow } = await import('/src/shadows.js');
       const sun = a.rendering.scene.children.find(object => object.isDirectionalLight);
       fitSunShadow(camera, sun, target.y, a.world.origin);
       // Read the canvas straight after rendering, with no UI.
       a.rendering.render();
       return { src: a.rendering.renderer.domElement.toDataURL('image/png'), curve };
-    }, { route, index, position, width, height, sliceWidth, padding }));
+    }, { route, index, position: route === 'salt' ? saltPosition : position, width, height, sliceWidth, padding }));
     console.log(`Captured ${route}`);
   }
   if (errors.length) throw new Error(errors.join('\n'));
@@ -100,8 +116,8 @@ try {
     for (const [i, capture] of images.entries()) {
       const img = new Image(); img.src = capture.src; await img.decode();
       if (img.width !== sliceWidth || img.height !== height + padding * 2) throw new Error('Unexpected capture dimensions');
-      // Same seed means same bends. Shift each column vertically to cancel
-      // per-route road elevation.
+      // Align the road in every column, allowing for route elevation and the
+      // salt slice's nearby capture position.
       for (let x = 0; x < sliceWidth; x++) {
         const globalX = i * sliceWidth + x;
         const shift = roadY(capture.curve, globalX + .5) - roadY(images[0].curve, globalX + .5);
