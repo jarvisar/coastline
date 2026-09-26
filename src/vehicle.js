@@ -38,8 +38,7 @@ export function createClassicCar(entry = carEntry(DEFAULT_CAR)) {
   box(body, [1.98, .14, .17], [0, .64, 1.97], chrome);
   const plate = box(body, [.6, .22, .02], [0, .91, 2.002], roof);
   box(body, [.77, .18, .02], [0, .89, -2.002], tires);
-  // Fixed body parts sharing a material can draw together. The plate still
-  // moves for the spare tire; accessories and animated wheels stay separate.
+  // Merge static body parts per material. The plate moves for the spare tire, so it stays separate.
   const batches = new Map();
   for (const mesh of body.children) {
     if (mesh === plate) continue;
@@ -54,7 +53,6 @@ export function createClassicCar(entry = carEntry(DEFAULT_CAR)) {
     for (const part of parts) { body.remove(part); part.geometry.dispose(); }
     body.add(mesh);
   }
-  // Keep the coastal design, with a small accessory swap for each other journey.
   const rack = new THREE.Group(); rack.name = 'roof-rack'; body.add(rack);
   for (const z of [-.48, .75]) box(rack, [1.65, .09, .12], [0, 2.2, z], tires);
   const surfboard = new THREE.Group(); surfboard.name = 'surfboard'; body.add(surfboard);
@@ -77,7 +75,6 @@ export function createClassicCar(entry = carEntry(DEFAULT_CAR)) {
   for (const x of [-.52, .52]) box(cargo, [.44, .34, .3], [x, 2.42, -.55], olive);
   const roll = new THREE.Mesh(new THREE.CylinderGeometry(.19, .19, 1.5, 8), canvas);
   roll.rotation.z = Math.PI / 2; roll.position.set(0, 2.44, .55); roll.castShadow = true; cargo.add(roll);
-  // A round hay bale strapped across the rack for the plains.
   const bale = new THREE.Group(); bale.name = 'plains-bale'; body.add(bale);
   const straw = mat('#d8b566'), cutEnd = mat('#b8964f');
   const baleRoll = new THREE.Mesh(new THREE.CylinderGeometry(.42, .42, 1.4, 10), straw);
@@ -87,7 +84,6 @@ export function createClassicCar(entry = carEntry(DEFAULT_CAR)) {
     end.rotation.z = Math.PI / 2; end.position.set(x, 2.66, .05); bale.add(end);
   }
   for (const z of [-.35, .45]) box(bale, [1.5, .88, .04], [0, 2.66, z], mat('#5e4c33'));
-  // A bicycle standing on the rack for the city commute.
   const bike = new THREE.Group(); bike.name = 'city-bike'; body.add(bike);
   const frameMat = mat('#c9453f'), rubber = mat('#2f3336');
   for (const z of [-.58, .58]) {
@@ -110,9 +106,8 @@ export function createClassicCar(entry = carEntry(DEFAULT_CAR)) {
     const hub = new THREE.Mesh(new THREE.CylinderGeometry(.23, .23, .295, 10), roof); hub.rotation.z = Math.PI / 2; pivot.add(hub);
     wheels.push({ pivot, wheel, hub, front: z < 0 });
   }
-  // Reuse the model and its materials so repeated route changes stay bounded.
-  // A chosen trim ignores the route; the default car follows it. A garage colour
-  // outranks both, so a repainted car keeps that colour wherever it drives.
+  // Route changes reuse the model and materials. Paint precedence: garage
+  // colour, then the car's fixed trim, then the route.
   let customPaint = null, kitJourney = 'coast';
   function applyTrim(journey) {
     kitJourney = journey;
@@ -140,14 +135,13 @@ export function createCar(id = DEFAULT_CAR) {
   return entry.kind === 'classic' ? createClassicCar(entry) : createShapeCar(entry);
 }
 
-// Ground steeper than this is a cliff face rather than a hillside.
+// Slopes steeper than this count as a cliff face.
 const STEEP = 1.2;
-// The ground has to be sound this far round the car's middle, a little over half its
-// length, so whichever way it faces no corner hangs over a quay or a cliff.
+// Sound ground radius around the car's centre, a bit over half its length,
+// so no corner hangs over a quay or cliff whichever way it faces.
 const FOOTING = 2.5;
 export const impassable = ground => ground.blocked;
-// How fast the tyres take back what a collision knocked into the car: the
-// slide within about half a second, the turn a little sooner.
+// Knock decay rates. The slide is gone in about half a second, the spin sooner.
 const SLIDE_GRIP = 5, SPIN_GRIP = 8;
 
 export class DrivingController {
@@ -160,15 +154,14 @@ export class DrivingController {
     this.s = state.s ?? 24; this.u = 2.4; this.speed = 0; this.steer = 0; this.heading = route.frame(this.s).angle;
     this.distance = state.distance ?? 0; this.pitch = 0; this.roll = 0; this.previousSpeed = 0; this.groundedPosition = new THREE.Vector3();
     this.bodyPitch = 0; this.bodyRoll = 0; this.wheelSpin = 0;
-    // Motion a collision leaves the car with that its own drive did not make.
+    // Collision velocity on top of the car's own drive.
     this.knock = { x: 0, z: 0, spin: 0 };
     this.audioTelemetry = { speed: 0, throttle: 0, brake: 0, offRoad: 0, steer: 0, handbrake: 0, impact: 0, impactSerial: 0 };
     const pose = () => ({ position: new THREE.Vector3(), quaternion: new THREE.Quaternion(), bodyPitch: 0, bodyRoll: 0, wheelSpin: 0, steer: 0 });
     this.previousPose = pose(); this.currentPose = pose();
     this.update(0, {});
   }
-  // Swapping cars keeps the drive going: same place, same road, new machine.
-  // Paint belongs to the car being fitted, so it is passed in rather than kept.
+  // Keeps position and speed. Paint is passed in because it belongs to the new car.
   setCar(id, { rebuild = true, paint = null } = {}) {
     const carId = CARS[id] ? id : DEFAULT_CAR;
     const previous = this.car, parent = previous?.parent ?? null;
@@ -178,9 +171,8 @@ export class DrivingController {
     Object.assign(this, createCar(carId));
     const entry = carEntry(carId);
     const { width, length, cabin, cabinZ, cabinY = 1.22, drop = 0, eye, chaseLift = 0 } = entry.shape;
-    // Center the view just in front of the windshield for every body shape.
-    // Traffic-shaped cabins slope back by .24 m at the top of the glass, and a
-    // car that is not cut from a road-car cabin says where its driver sits.
+    // Eye sits just ahead of the windshield. Traffic-shaped cabins slope back
+    // .24 m at the top of the glass. Other cars give an explicit eye.
     const glassSlope = entry.kind === 'classic' ? 0 : .24 * .7;
     this.car.userData.driverEye = eye
       ? new THREE.Vector3(...eye)
@@ -195,11 +187,11 @@ export class DrivingController {
     this.wheelSpin = 0;
     this.update(0, {});
   }
-  // A garage colour, or null for the finish the car left the factory in.
+  // Garage colour, or null for factory paint.
   setPaint(color) { this.paintColor = color ?? null; this.updatePaint(); }
   updatePaint(dt = 0) {
     if (this.rainbow) {
-      // A smooth six-second RGB loop, without changing the garage's chosen paint.
+      // Cycles hue without touching the garage paint.
       this.rainbowHue = (this.rainbowHue + dt / 2.8) % 1;
       this.rainbowColor.setHSL(this.rainbowHue, 1, .5, THREE.SRGBColorSpace);
       this.paintCar(this.rainbowColor);
@@ -217,7 +209,7 @@ export class DrivingController {
     if (!this.freeDriving) this.reset();
     return this.freeDriving;
   }
-  // Lamps from daytime (0) to night (1); a storm runs them part way up.
+  // 0 is day, 1 is night. Storms use values in between.
   setLights(level) { this.night = level; for (const light of this.nightLights) light.material.emissiveIntensity = light.day + (light.night - light.day) * level; }
   setNight(enabled) { this.setLights(enabled ? 1 : 0); }
   setAppearance(journey) { this.journeyId = journey; this.applyTrim(journey); this.updatePaint(); }
@@ -229,15 +221,14 @@ export class DrivingController {
     target.position.copy(source.position); target.quaternion.copy(source.quaternion);
     for (const key of ['bodyPitch', 'bodyRoll', 'wheelSpin', 'steer']) target[key] = source[key];
   }
-  // Which way the car is really going: its own drive, and any knock on top.
+  // Own drive plus any knock.
   get velocity() { return { x: Math.sin(this.heading) * this.speed + this.knock.x, z: -Math.cos(this.heading) * this.speed + this.knock.z }; }
-  // A move in world metres, in the road's terms, as a step of driving is.
+  // World-space move in metres, applied in (s, u).
   shift(dx, dz) {
     const frame = this.route.frame(this.s);
     this.s += (dx * Math.sin(frame.angle) - dz * Math.cos(frame.angle)) / frame.scale;
     this.u += dx * Math.cos(frame.angle) + dz * Math.sin(frame.angle);
   }
-  // A slide and a turn fade as the tyres bite, and then are gone altogether.
   carryKnock(dt) {
     const knock = this.knock;
     if (!knock.x && !knock.z && !knock.spin) return;
@@ -246,10 +237,8 @@ export class DrivingController {
     knock.x *= slide; knock.z *= slide; knock.spin *= Math.exp(-dt * SPIN_GRIP);
     if (Math.hypot(knock.x, knock.z) < .05 && Math.abs(knock.spin) < .01) knock.x = knock.z = knock.spin = 0;
   }
-  // Another car gives way as far as its weight allows. This one is put back
-  // outside it and takes its share of the blow (see impact.js): the part along
-  // its heading becomes speed, though never through rest into the other
-  // direction, and the rest is a slide and a turn that carryKnock wears off.
+  // dv is this car's share of the impulse (see impact.js). The part along the
+  // heading changes speed but never reverses it. The rest becomes knock.
   resolveTrafficCollision(dx, dz, dvx = 0, dvz = 0, spin = 0) {
     const impact = Math.hypot(dvx, dvz);
     if (impact > .4) { this.audioTelemetry.impact = impact; this.audioTelemetry.impactSerial++; }
@@ -266,10 +255,8 @@ export class DrivingController {
     this.currentPose.position.copy(this.groundedPosition); this.currentPose.bodyPitch = this.bodyPitch; this.currentPose.bodyRoll = this.bodyRoll;
     this.render(1);
   }
-  // Standing scenery gives nothing. The car is put back outside it along the
-  // contact normal and keeps only the speed that runs along the face it hit,
-  // and while it is still moving it is turned toward that face, so a glancing
-  // blow slides off a wall instead of grinding to a halt against it.
+  // Scenery doesn't move. Keep only the speed along the face and turn toward
+  // it, so glancing hits slide along walls instead of stopping dead.
   resolveSceneryCollision(nx, nz, depth, dt) {
     const direction = Math.sign(this.speed), fx = Math.sin(this.heading) * direction, fz = -Math.cos(this.heading) * direction;
     const closing = -(fx * nx + fz * nz);
@@ -281,11 +268,10 @@ export class DrivingController {
       const turn = Math.atan2(fx + closing * nx, -fz - closing * nz) - Math.atan2(fx, -fz);
       this.heading += Math.atan2(Math.sin(turn), Math.cos(turn)) * Math.min(1, Math.abs(this.speed) * dt * .6);
     }
-    // Nor does it give to a car that another has knocked into it.
+    // Also cancel any knock pushing into the face.
     const into = this.knock.x * nx + this.knock.z * nz;
     if (into < 0) { this.knock.x -= into * nx; this.knock.z -= into * nz; }
-    // Away from the road (s, u) is not a rigid frame, so the push is carried
-    // back through the route's own mapping rather than the road's angle.
+    // (s, u) isn't rigid away from the road, so invert the route's local mapping.
     const at = (s, u) => this.route.position(s, u, 0), p = at(this.s, this.u), a = at(this.s + 1, this.u), b = at(this.s, this.u + 1);
     const sx = a.x - p.x, sz = a.z - p.z, ux = b.x - p.x, uz = b.z - p.z, det = sx * uz - sz * ux, push = depth + .025;
     const s = this.s + (nx * uz - nz * ux) * push / det, u = this.u + (sx * nz - sz * nx) * push / det;
@@ -297,10 +283,8 @@ export class DrivingController {
     this.currentPose.position.copy(this.groundedPosition); this.currentPose.bodyPitch = this.bodyPitch;
     this.render(1);
   }
-  // The ground under the car: its height, and its fall along and across the
-  // road over about a wheelbase and a track. Free driving also asks whether
-  // the car may stand here: not on water or a cliff face, nor with either of
-  // them within its own reach. The road itself is always sound.
+  // Height and slopes over about a wheelbase and track. In free driving also
+  // blocks water and cliffs within FOOTING. The road itself is always sound.
   ground(s, u) {
     const terrainHeight = this.route.height, height = terrainHeight(s, u);
     const ground = { s, u, height, slope: (terrainHeight(s + 1.5, u) - terrainHeight(s - 1.5, u)) / 3, lateralSlope: (terrainHeight(s, u + .7) - terrainHeight(s, u - .7)) / 1.4, blocked: false };
@@ -313,7 +297,7 @@ export class DrivingController {
   render(alpha, origin = 0) {
     const a = this.previousPose, b = this.currentPose;
     alpha = clamp(alpha, 0, 1);
-    // Interpolate in global coordinates, then rebase once for the entire display frame.
+    // Interpolate in global coordinates, then rebase once per frame.
     this.car.position.lerpVectors(a.position, b.position, alpha); this.car.position.z += origin;
     this.car.quaternion.slerpQuaternions(a.quaternion, b.quaternion, alpha);
     this.body.rotation.x = THREE.MathUtils.lerp(a.bodyPitch, b.bodyPitch, alpha);
@@ -333,25 +317,14 @@ export class DrivingController {
     const touch = input.touchDrive;
     const forward = clamp(Number(input.forward) || 0, 0, 1); const brake = clamp(Number(input.brake) || 0, 0, 1);
     this.steer = THREE.MathUtils.damp(this.steer, touch ? 0 : (Number(input.right) || 0) - (Number(input.left) || 0), 7, dt);
-    // How far off the tarmac the car is: 0 on the road, 1 out on open ground,
-    // ramped across about half a car's width so putting two wheels on the verge
-    // costs a fraction of what leaving altogether does. One number drives the
-    // surface everywhere -- what it resists, how it steers and how it sounds --
-    // so what the player hears matches what the car is doing. The ramp closes
-    // by 5.9 m because the alpine road's own shoulder is only 6.3 m wide.
+    // 0 on the road, 1 on open ground, ramped over half a car width. Drives drag,
+    // grip and audio. Ends by 5.9 m because the alpine shoulder is only 6.3 m.
     const looseness = clamp((Math.abs(this.u) - 4.8) / 1.1, 0, 1);
-    // Loose ground takes the speed rather than the game capping it: resistance
-    // that full throttle balances at the off-road figure, plus a little more
-    // the further above it the car arrives, so leaving the road at speed bleeds
-    // off over a second or so instead of at the white line.
-    // Tire resistance builds with motion. Applying the full high-speed drag
-    // at a standstill can exceed reverse torque and trap the car in the grass.
+    // Balances full throttle at stats.offRoad and bleeds excess over about a second.
+    // Scales up with speed so at a standstill it can't beat reverse torque.
     const surface = looseness * (stats.loose * Math.min(1, Math.abs(this.speed) / stats.offRoad)
       + .35 * Math.max(0, Math.abs(this.speed) - stats.offRoad));
-    // Grip goes with it. Losing top speed is a number in the corner of the
-    // screen; losing turn-in is the thing that says "this is grass". A quarter
-    // of it keeps the car recoverable, and the alignment assist still works out
-    // here, so a straightened wheel still points the car back at the road.
+    // Lose a quarter of grip off-road. Noticeable but still recoverable.
     const grip = stats.grip * (1 - .25 * looseness);
     let acceleration = 0;
     if (forward) acceleration += forward * (this.speed < -.3 ? stats.launch : stats.acceleration);
@@ -392,10 +365,8 @@ export class DrivingController {
       }
     }
     let ground = this.ground(this.s, this.u);
-    // The roadside limits already keep a car off bad ground. With them lifted,
-    // water and cliffs stop it instead. Whichever half of the move stays on
-    // firm ground is kept, so the car runs along a shore rather than sticking
-    // to it; a car already standing somewhere impassable may always leave.
+    // Free driving: keep whichever axis of the move stays on firm ground so the
+    // car slides along a shore. A car already on bad ground may always leave.
     if (this.freeDriving && impassable(ground)) {
       const from = this.ground(fromS, fromU);
       if (!impassable(from)) {
@@ -414,8 +385,7 @@ export class DrivingController {
     this.bodyRoll = THREE.MathUtils.damp(this.bodyRoll, -this.steer * this.speed * .0022, 6, dt);
     this.bodyPitch = THREE.MathUtils.damp(this.bodyPitch, -clamp(acceleration, -15, 12) * .002, 5, dt);
     this.wheelSpin -= step / .48;
-    // Report actual driving effort for keyboard, analog triggers, and touch.
-    // This is read-only telemetry: sound never feeds back into driving physics.
+    // Audio telemetry only. It never feeds back into the physics.
     this.audioTelemetry.speed = this.speed;
     this.audioTelemetry.throttle = input.handbrake ? 0 : touch ? clamp((acceleration + (this.speed > .015 ? drag : 0)) / stats.acceleration, 0, 1) : this.speed < -.3 ? brake : forward;
     this.audioTelemetry.brake = input.handbrake ? 1 : touch ? clamp(-acceleration / stats.touchBraking, 0, 1) : this.speed < -.3 ? forward : brake;
@@ -425,7 +395,7 @@ export class DrivingController {
     if (dt === 0) this.audioTelemetry.impact = 0;
     this.currentPose.position.copy(this.groundedPosition); this.currentPose.quaternion.copy(this.car.quaternion);
     for (const key of ['bodyPitch', 'bodyRoll', 'wheelSpin', 'steer']) this.currentPose[key] = this[key];
-    // Resets and journey changes are teleports, so never blend from the old location.
+    // Resets and journey changes teleport, so don't blend from the old pose.
     if (dt === 0) this.copyPose(this.previousPose, this.currentPose);
     this.render(1);
   }

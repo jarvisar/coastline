@@ -8,8 +8,7 @@ export const ledgeEdge = s => -23 - 7 * Math.sin(s / 91 + .8) - 4 * Math.sin(s /
 
 export const LAKE_LEVEL = -4;
 export function alpineLake(s) {
-  // Sheltered coves reach toward the road; projecting spurs still carry tall
-  // cliffs. The shorter descent exposes water in the portrait driving view.
+  // Coves reach toward the road so water stays visible in the portrait view.
   return { near: ledgeEdge(s) - 38 - 7 * Math.sin(s / 117 + .6) - 3 * Math.sin(s / 39)
       - 30 * smoothstep(-.25, .4, Math.sin(s / 310 - 1)),
     far: -306 + 22 * Math.sin(s / 211 + 1) + 11 * Math.sin(s / 71), y: LAKE_LEVEL };
@@ -36,8 +35,7 @@ export function alpineRelief(s, u) {
     const seed = i * 2 + (outer ? 0 : 1), center = i * 64 + 12 + randomAt(seed, 641) * 40;
     const across = outer ? 18 + randomAt(seed, 642) * 45 : 26 + randomAt(seed, 642) * 23;
     const along = (s - center) / (22 + randomAt(seed, 643) * 24);
-    // Tilt each fracture independently. Pointed lobes overlap at different
-    // elevations rather than sharing a contour or quantized height band.
+    // Tilt each lobe independently so overlaps don't share one contour.
     const cross = (distance - across) / (12 + randomAt(seed, 644) * 14) + along * (randomAt(seed, 645) - .5) * .9;
     const radius = Math.max(Math.abs(along) * .86 + Math.abs(cross) * .38, Math.abs(cross) * .9 + Math.abs(along) * .25);
     const lobe = Math.max(0, 1 - radius);
@@ -49,8 +47,7 @@ export function alpineRelief(s, u) {
 export function distantMountainHeight(s, u) {
   if (u <= 130) return 0;
   let mountains = 0;
-  // Staggered ranges overlap across deep saddles. Skewed, unequal peak
-  // profiles avoid both a flat upland and rows of identical triangular cones.
+  // Staggered ranges with skewed, unequal peaks so they don't read as identical cones.
   for (let band = 0; band < 3; band++) {
     const spacing = 240 + band * 72, cell = Math.floor(s / spacing);
     for (let i = cell - 2; i <= cell + 2; i++) {
@@ -77,8 +74,7 @@ export function mountainHeight(s, u) {
   const cell = Math.floor((s - 76) / 280);
   for (let i = cell - 1; i <= cell + 1; i++) {
     const summit = summitForCell(i);
-    // Unequal flanks and oblique ridges break the repeated cone silhouette.
-    // Each peak keeps its own crown and descends into a broad snowy saddle.
+    // Unequal flanks and a skewed ridge break up the cone silhouette.
     const along = (s - summit.s) / summit.rs;
     const across = (u - summit.u) / summit.ru;
     const skew = across + along * (.22 + randomAt(i, 623) * .24);
@@ -92,9 +88,8 @@ export function mountainHeight(s, u) {
   return apron + peak * smoothstep(11, 26, u) + rockFaces + distantMountainHeight(s, u);
 }
 
-// Stacked rock strata: flat snow shelves between near-vertical risers, as in
-// the reference cliffs. The bands drift and dip with position so no two
-// contours share one level, and each shelf renders as a single plane.
+// Terraces height into flat shelves between steep risers. The bands drift with
+// position so shelves don't all share one level.
 export function strata(height, s, u, period, strength) {
   if (strength <= 0) return height;
   const drift = 3.1 * Math.sin(s / 43 + u / 57) + 1.7 * Math.sin(s / 19 - u / 29) + u * .1;
@@ -131,8 +126,7 @@ export function snowBaseHeight(s, u) {
       return lake.y + .45 - 5 * smoothstep(0, 9, bankDistance) - 6 * smoothstep(9, 65, bankDistance);
     }
     const edge = ledgeEdge(s), distance = edge - u, width = edge - lake.near;
-    // A narrow snow bench at the foot of the cliff gives cabins and landings
-    // dry approaches while the bluff does most of its descending above them.
+    // Leaves a narrow bench at the cliff foot for cabins and landings.
     const t = Math.max(0, Math.min(1, distance / (width - 7)));
     const warp = (Math.sin(s / 31 + .5) * .2 + Math.sin(s / 13 - .7) * .08) * Math.sin(t * Math.PI);
     const shoulder = h + smoothstep(-7, -13, u) * (1.1 + .55 * Math.sin(s / 17));
@@ -140,8 +134,7 @@ export function snowBaseHeight(s, u) {
     const slope = lerp(shoulder, shore, smoothstep(0, 1, t + warp));
     const fissure = 2.3 * (.5 + .5 * Math.sin(s / 8.7 + u / 37)) ** 7 * smoothstep(0, 12, distance);
     const bluff = slope + (alpineRelief(s, u) - fissure) * (1 - smoothstep(.45, .78, t));
-    // The bluff below the road drops in a few tall tiers, easing off at the
-    // ledge and again above the shore so both edges stay exact.
+    // Strata fade out at the ledge and the shore so both edges stay exact.
     return strata(bluff, s, u, 19, (.4 + alpineExposure(s, u) * .28)
       * smoothstep(.03, .14, t) * smoothstep(8, 19, u - lake.near));
   }
@@ -152,8 +145,8 @@ export function snowBaseHeight(s, u) {
     * smoothstep(9, 24, u) * (1 - smoothstep(110, 175, u)));
 }
 
-// Broad wind-exposed ribs alternate with sheltered, snow-filled bowls. Share
-// the field between the landform, snow cover and fir groves, not triangle noise.
+// 0 in sheltered bowls, 1 on exposed ribs. Shared by terrain, snow cover and fir
+// placement so they agree.
 export function alpineExposure(s, u) {
   return smoothstep(-.75, .75, Math.sin(s / 83 + u / 59) * .7 + Math.sin(s / 151 - u / 41) * .45);
 }
@@ -182,8 +175,8 @@ export function snowHeight(s, u) {
   }
   return height;
 }
-// Timber trestles cross stream gullies at world-space intervals, independently
-// of streaming chunks. Each span straddles a chunk boundary so both halves are built.
+// Trestles sit at world-space intervals, independent of chunk streaming.
+// Each span straddles a chunk boundary so both halves are built.
 export const BRIDGE_SPACING = 768;
 export function snowBridgeAt(s) {
   const index = Math.round((s - 372) / BRIDGE_SPACING), center = 372 + index * BRIDGE_SPACING;
@@ -191,8 +184,7 @@ export function snowBridgeAt(s) {
 }
 export function gullyAmount(s, u) {
   const bridge = snowBridgeAt(s);
-  // The gully descends diagonally from the peaks towards the lake, so the
-  // crossing reads as a mountain stream bed rather than a slot cut across the road.
+  // The gully runs diagonally so it doesn't look like a slot cut across the road.
   const d = Math.abs(s - bridge.center - u * .2 - 2.4 * Math.sin(u / 11 + bridge.index));
   const along = 1 - smoothstep(9, 38, d);
   if (!along) return 0;
@@ -200,8 +192,7 @@ export function gullyAmount(s, u) {
     : (1 - smoothstep(16, 50, ledgeEdge(s) - u)) * smoothstep(6, 22, u - alpineLake(s).near);
   return along * across;
 }
-// Scenery and the terrain mesh see the gully beneath each trestle; the car
-// and the road ribbons keep sampling the flat deck through snowHeight.
+// Terrain and scenery see the gully. The car and road sample the deck via snowHeight.
 export function snowGroundHeight(s, u) {
   const height = snowHeight(s, u), gully = gullyAmount(s, u);
   if (!gully) return height;
@@ -225,8 +216,8 @@ export function snowVertex(row, column) {
 export function lampAt(index) {
   let s = index * LAMP_SPACING + 16;
   const u = 8.8, bridge = snowBridgeAt(s), offset = s - bridge.center;
-  // Lamps step off the trestle to its nearer abutment, which lights the deck.
-  // One right at mid-span would crowd its neighbour, so it is left out instead.
+  // Lamps on the trestle move to the nearer abutment. One near mid-span is
+  // hidden so it doesn't crowd its neighbour.
   const hidden = Math.abs(offset) < 12;
   if (Math.abs(offset) < 38) s = bridge.center + (offset >= 0 ? 38 : -38);
   return { s, u, hidden, ...snowPosition(s, u, snowRoadHeight(s) + 7.6) };

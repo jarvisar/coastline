@@ -2,9 +2,8 @@ import { chromium } from '@playwright/test';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 
-// Keep a reproducible listening comparison outside the shipped application.
-// Choose an older implementation with AUDIO_BASE_REF; HEAD is the default
-// during development. Both versions receive the same telemetry and RMS gain.
+// Listening comparison against the audio code at AUDIO_BASE_REF (default HEAD).
+// Both versions get the same telemetry and RMS gain.
 const root = '.artifacts/audio/review';
 await mkdir(`${root}/legacy/audio`, { recursive: true });
 const ref = process.env.AUDIO_BASE_REF || 'HEAD';
@@ -35,8 +34,7 @@ try {
       const audio = new DriveAudio(); audio.context = ctx; audio.graph = createSoundGraph(ctx); audio.enabled = true;
       if (audio.mix) audio.mix = { master: .72, engine: .8, road: .7, ambience: .85, traffic: .65, music: item.solo === 'music' ? .7 : 0, night: false };
       audio.setJourney(item.journey); audio.syncOutput();
-      // Keep both comparisons focused on the original layers. Wildlife and
-      // new traffic do not get to win this comparison by adding more detail.
+      // Compare only the original layers, so wildlife and new traffic don't skew it.
       if (audio.director && item.solo !== 'music') audio.director.update = () => {};
       const tick = () => {
         const t = ctx.currentTime;

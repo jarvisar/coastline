@@ -66,10 +66,8 @@ async function checkProduction(base) {
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.goto(url);
     await page.waitForFunction(() => document.querySelector('#loading.loaded') && document.querySelector('#error').hidden);
-    // A production build has no debug surface to read the quality level from,
-    // so require the smallest window any level keeps built: enough to prove the
-    // worker really supplied the route rather than the page falling back to
-    // building it itself.
+    // Production has no debug surface for the quality level, so wait for the
+    // smallest window any level builds. That proves the worker built the route.
     await page.waitForFunction(count => window.__chunkWorkerCheck.chunks >= count, SMALLEST_WINDOW);
     const worker = await page.evaluate(() => window.__chunkWorkerCheck);
     assert.equal(worker.readySeed, worker.seed, 'production worker must use the page seed before building scenery');
@@ -106,8 +104,7 @@ async function checkProduction(base) {
     await context.setOffline(true);
     await page.reload();
     await page.waitForFunction(() => document.querySelector('#loading.loaded') && document.querySelector('#error').hidden);
-    // Scenery and worker builders are split into route modules. A route never
-    // visited online must still load from the production precache while offline.
+    // Builders are split per route, so unvisited routes must load from the precache offline.
     for (const [id, label] of [['desert', 'RED ROCK DESERT'], ['snow', 'MIDNIGHT ALPINE'],
       ['jungle', 'EMERALD JUNGLE'], ['plains', 'GOLDEN PLAINS'], ['city', 'RAINY DOWNTOWN'], ['volcanic', 'VOLCANIC RIFT']]) {
       const chunks = await page.evaluate(() => window.__chunkWorkerCheck.chunks);
@@ -118,14 +115,9 @@ async function checkProduction(base) {
       await page.waitForFunction(count => window.__chunkWorkerCheck.chunks >= count, chunks + SMALLEST_WINDOW);
       assert.deepEqual(await page.evaluate(() => window.__chunkWorkerCheck.errors), [], `${id}: offline worker`);
     }
-    // A production build has no debug surface to read the quality level from,
-    // so require the smallest window any level keeps built: enough to prove the
-    // worker really supplied the route rather than the page falling back to
-    // building it itself.
     await page.waitForFunction(count => window.__chunkWorkerCheck.chunks >= count, SMALLEST_WINDOW);
     assert.deepEqual(await page.evaluate(() => window.__chunkWorkerCheck.errors), [], 'worker bundle must be available offline');
     assert.equal(await page.locator('#pwa-install-invitation').isVisible(), false, 'Dismissal survives reload');
-    // All journey assets are available even when switching for the first time offline.
     for (const journey of await page.locator('button[data-journey]').evaluateAll(buttons => buttons.map(button => button.dataset.journey))) {
       await page.locator('#change-journey').click();
       await page.locator(`button[data-journey="${journey}"]`).click();
@@ -164,12 +156,11 @@ async function checkProduction(base) {
       event.prompt = async () => { window.testInstallPromptCalled = true; };
       event.userChoice = Promise.resolve({ outcome: 'dismissed' });
       window.dispatchEvent(event);
-      // Trigger the stub in the same task, before Chrome can emit a real prompt event.
+      // Click in the same task, before Chrome can emit a real prompt event.
       document.querySelector('#pause-overlay .pwa-install-button').click();
     });
     assert.equal(await page.evaluate(() => window.testInstallPromptCalled), true);
-    // Chrome can emit another native prompt after the stub finishes. Exercise
-    // fallback deterministically instead of depending on that event's timing.
+    // Chrome may emit another native prompt later, so force the fallback with a failing stub.
     await page.evaluate(() => {
       const event = new Event('beforeinstallprompt', { cancelable: true });
       event.prompt = async () => { throw new Error('Install prompt unavailable'); };

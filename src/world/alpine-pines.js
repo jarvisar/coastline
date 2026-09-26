@@ -25,8 +25,6 @@ function fir(seed) {
       const tip = p(length, y - .052);
       face(needles, root, ridge, left); face(needles, root, right, ridge);
       face(needles, ridge, tip, left); face(needles, ridge, right, tip);
-      // Each bough carries an uneven pillow of snow, leaving the drooping
-      // needle tips exposed. Rotate the branch whorls to break the silhouette.
       if (randomAt(id, 553) > .16) {
         const top = blend(root, ridge, .35, .014), crest = blend(root, ridge, .92, .02);
         const a = blend(ridge, left, .7 + randomAt(id, 554) * .18, .012);

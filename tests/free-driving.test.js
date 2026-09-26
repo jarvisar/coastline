@@ -128,7 +128,7 @@ for (const [id, { route }] of Object.entries(JOURNEYS)) {
       assert.ok(side * car.u > 1500);
       assertGrounded(car);
 
-      // Shoved aside and slowed by 3 m/s, then left to slide until the knock wears off.
+      // Knock sideways and slow by 3 m/s, then let the knock wear off.
       const before = car.groundedPosition.clone(), speed = car.speed;
       car.resolveTrafficCollision(side * .5, -.2, Math.cos(heading) * side * 2 - Math.sin(heading) * 3, Math.sin(heading) * side * 2 + Math.cos(heading) * 3, side * .5);
       assert.ok(car.groundedPosition.distanceTo(before) < 5, 'collision teleported the car');

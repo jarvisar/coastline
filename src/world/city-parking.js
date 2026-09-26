@@ -10,8 +10,8 @@ const ASPHALT = new THREE.Color('#4d5155'), PAINT = new THREE.Color('#bfc2b8'), 
 export function cityParkingForBlock(block) {
   if (!sites.has(block)) {
     const from = blockBoundary(block) + 18, to = blockBoundary(block + 1) - 18;
-    // The same broad embankments that held the old parking rows. Keep the
-    // ends clear of crossings, and enough land behind for the riverside walk.
+    // Only broad embankments qualify. Ends stay clear of crossings and leave
+    // room behind for the riverside walk.
     const wide = quayOffset((from + to) / 2) < -35 && Math.max(quayOffset(from), quayOffset(to)) < -31.5;
     sites.set(block, wide && to - from >= 36 ? { block, from, to } : null);
     if (sites.size > 128) sites.delete(sites.keys().next().value);
@@ -29,13 +29,12 @@ export function cityParkingWidth(s, site = cityParkingAt(s)) {
     (1 - smoothstep(site.to - TAPER, site.to, s)) : 6.05;
 }
 
-// Retain the existing pavement level, with a dropped-curb ramp at the road.
+// Pavement level with a dropped-curb ramp at the road.
 export const cityParkingHeight = (s, u) => cityGroundHeight(s, u) + .04 + .035 * (1 - smoothstep(6, 6.6, Math.abs(u)));
 
 export function buildCityParking(chunk) {
   const { streets, details } = chunk.scenery, end = chunk.start + CHUNK_LENGTH;
-  // Clip strips by their longitudinal coordinates, so angled markings and
-  // asphalt have a single owner even where a pull-off crosses a chunk seam.
+  // Clip strips by s so markings and asphalt have one owner across chunk seams.
   const strip = (target, a, b, color, height, lift = 0) => {
     const from = Math.max(a.s, chunk.start), to = Math.min(b.s, end);
     if (to <= from) return;
@@ -65,8 +64,7 @@ export function buildCityParking(chunk) {
     const count = Math.floor((site.to - TAPER - 1.5 - SKEW - first) / SPACING);
     for (let k = 0; k <= count; k++) {
       const s = first + k * SPACING;
-      // The waterfront lane travels toward decreasing s. Bay noses point
-      // that way too, at a gentle 45 degrees into the pull-off.
+      // The waterfront lane runs toward decreasing s, so bays angle 45° that way.
       strip(streets, { s, near: BACK + .13, far: BACK }, { s: s + SKEW, near: FRONT, far: FRONT - .13 }, PAINT, cityParkingHeight, .012);
       if (k === count) continue;
       const center = s + (SPACING + SKEW) / 2, u = (FRONT + BACK) / 2;

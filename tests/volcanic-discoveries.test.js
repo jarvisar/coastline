@@ -102,7 +102,7 @@ test('camp equipment and continuous fissures follow the rendered terrain on both
       const equipment=chunk.group.getObjectByName('volcanic-research-camp');
       equipment.getMatrixAt(0,matrix);
       const vertices=equipment.geometry.attributes.position;
-      // The three separate field cases must rest at their own ground heights.
+      // Each of the three cases is checked against the ground under it.
       for(const [x,z] of [[-5,.2],[-5.8,-1.5],[6,-3]]) {
         let bottom=Infinity;
         for(let i=0;i<vertices.count;i++) {
@@ -159,7 +159,6 @@ test('discovery platforms cut and fill the terrain, agree with driving, and pres
         const s=site.s+ds,rift=riftProfile(s,-1),creek=creekSection(s);
         for(const u of [-rift.near,-rift.near-4,-7,0,7,creek.u])assert.equal(volcanicTerrainHeight(s,u),volcanicNaturalTerrainHeight(s,u),'road and lava contacts retain their original heights');
       }
-      // The sculpted footprint fades out before either end of its owner.
       for(const s of [chunk.start,chunk.start+128])for(let u=-80;u<=80;u+=2)assert.equal(volcanicTerrainHeight(s,u),volcanicNaturalTerrainHeight(s,u),'no platform step at the streaming boundary');
     }finally{chunk.dispose();}
   }
@@ -206,8 +205,7 @@ test('mine cart wheels meet the ballast or rail heads and the hut has no air gap
       }
       for(const x of [-5.85,-4.15])for(const z of [-.82,.82]) {
         const bottom=modelBottom(mesh.geometry,x,z,.36,.086);
-        // Start just inside the tire's bottom. Front-face raycasting must hit
-        // the upward rail head underneath, not the tire's downward face.
+        // Start just inside the tyre so the ray skips its underside and hits the rail head.
         const p=new THREE.Vector3(x,bottom+.001,z).applyMatrix4(matrix);
         const ray=new THREE.Raycaster(p,new THREE.Vector3(0,-1,0),0,.02),hits=ray.intersectObject(mesh,false);
         assert.ok(hits.some(hit=>hit.face.normal.y>.9&&Math.abs(hit.distance-.001)<.002),'cart wheels line up with both visible rails');

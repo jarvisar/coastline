@@ -135,7 +135,7 @@ test('chooser routes controller inputs to navigation without driving', () => {
   device.axes[0] = 1; input.update({ menu: true }); input.update({ menu: true });
   assert.equal(actions.at(-1), 'menuNext');
   device.axes[0] = 0; input.update({ menu: true });
-  // The stick's two axes are separate menu directions, so a grid can be crossed by row.
+  // Each stick axis is its own menu direction, so grids can be crossed by row.
   device.axes[1] = 1; input.update({ menu: true }); input.update({ menu: true });
   assert.equal(actions.at(-1), 'menuDown');
   device.axes[1] = -1; input.update({ menu: true }); input.update({ menu: true });
@@ -153,20 +153,18 @@ test('the pause screen takes the pad as a menu while its shortcuts stay live', (
     hold(device, index, 0); input.update(pauseMenu);
   }
   assert.equal(actions.length, 6);
-  // The pause screen is a layer over the drive, not a modal, so the shortcuts
-  // that open the garage or the routes from it still work.
+  // Pause is an overlay rather than a modal, so its shortcuts stay live.
   for (const [index, action] of [[9, 'pause'], [8, 'journey'], [10, 'car'], [5, 'nextJourney'], [4, 'fullscreen'], [11, 'fps']]) {
     hold(device, index); input.update(pauseMenu); input.update(pauseMenu);
     assert.equal(actions.at(-1), action);
     hold(device, index, 0); input.update(pauseMenu);
   }
-  // Both stick axes steer the focus ring here too.
   device.axes[0] = 1; input.update(pauseMenu); input.update(pauseMenu);
   assert.equal(actions.at(-1), 'menuNext');
   device.axes[0] = 0; device.axes[1] = -1; input.update(pauseMenu); input.update(pauseMenu);
   assert.equal(actions.at(-1), 'menuUp');
   device.axes[1] = 0; input.update(pauseMenu);
-  // Paused without the screen up — a chooser is over it — nothing moves a ring.
+  // Paused with a chooser covering the pause screen: no menu actions.
   const before = actions.length;
   hold(device, 13); input.update({ paused: true }); input.update({ paused: true });
   assert.equal(actions.length, before);

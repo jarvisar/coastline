@@ -16,7 +16,7 @@ try {
     await page.addInitScript(() => localStorage.setItem('coastline-install-dismissed-v2', String(Date.now())));
     await page.goto(process.env.TEST_URL || 'http://127.0.0.1:5173');
     await page.waitForFunction(() => window.__coastline && document.querySelector('#loading.loaded'));
-    // Freeze world animation during the geometry audit; exercise actual actions below.
+    // Freeze world animation for the layout audit.
     await page.evaluate(() => window.__coastline.action('pause'));
     async function showState(state) {
       await page.evaluate(state => {
@@ -49,14 +49,13 @@ try {
           if (!dialogState && (a.rect.left < -1 || a.rect.right > innerWidth + 1 || a.rect.top < -1 || a.rect.bottom > innerHeight + 1)) issues.push(`${a.selector} outside viewport`);
           for (const b of items.slice(i + 1)) if (!a.element.contains(b.element) && !b.element.contains(a.element) && overlaps(a.rect, b.rect)) issues.push(`${a.selector} overlaps ${b.selector}`);
         }
-        // Sound and fullscreen are settings now, so they are asked for where
-        // they live: on the pause screen, beside the garage and the levels.
+        // Sound and fullscreen live on the pause screen.
         const buttons = state === 'menu' ? ['#start', '#change-journey'] : state === 'pause' ? ['#resume', '#change-car', '#sound', '#fullscreen', '#change-journey', '#pause'] : state === 'chooser' ? ['#close-journeys'] : state === 'garage' ? ['#close-cars'] : ['#view', '#reset', '#pause', '#change-journey'];
         for (const selector of buttons) {
           const el = document.querySelector(selector);
           if (document.body.dataset.controller === 'true' && ['#view', '#reset', '#pause', '#change-journey'].includes(selector)) continue;
           if (!visible(el)) { issues.push(`${selector} required action hidden`); continue; }
-          // Long panels scroll, so judge a control where the player would meet it.
+          // Long panels scroll, so check each control once scrolled into view.
           el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
           const r = rect(el), hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
           if (!el.contains(hit)) issues.push(`${selector} covered or clipped by ${hit?.id || hit?.className}`);
@@ -66,8 +65,7 @@ try {
           const el = document.querySelector(selector);
           if (visible(el) && el.scrollWidth > el.clientWidth + 1) issues.push(`${selector} horizontal overflow`);
         }
-        // The route and its mileage read on the pause screen; the drive keeps
-        // the scene clear.
+        // The route readout only shows on the pause screen.
         if (state === 'pause') {
           const location = document.querySelector('.location');
           if (!visible(location)) issues.push('pause readout missing');
@@ -80,8 +78,7 @@ try {
         if (state === 'driving') {
           if (visible(document.querySelector('.location'))) issues.push('the drive still shows a readout');
           const stick = document.querySelector('#touch-stick');
-          // On a 320 px screen the stick is wider than half the viewport, so
-          // its centre, not its left edge, says which side it sits on.
+          // At 320 px the stick is wider than half the viewport, so test its centre.
           const stickRect = visible(stick) && rect(stick);
           if (stickRect && stickRect.left + stickRect.width / 2 < innerWidth / 2) issues.push('joystick is not on the right');
           if (stickRect && stickRect.right > innerWidth - 4) issues.push('joystick runs past the right edge');

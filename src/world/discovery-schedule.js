@@ -2,9 +2,8 @@ import { randomAt } from './route.js';
 
 export const METERS_PER_MILE = 1609.344;
 
-// One landmark per district keeps different kinds from crowding each other.
-// Compensate for measured terrain rejection so the editable miles describe
-// encounters, not failed placement attempts. Actual gaps still vary by seed.
+// One landmark per district so kinds don't crowd each other. Rates are scaled by
+// terrain suitability so the configured miles describe actual encounters.
 export function createDiscoverySchedule(miles, suitability, salt, place) {
   const rates = Object.entries(miles).map(([kind, distance]) => {
     if (!(distance > 0)) throw new RangeError(`${kind}: discovery miles must be positive (or Infinity to disable)`);
@@ -13,7 +12,7 @@ export function createDiscoverySchedule(miles, suitability, salt, place) {
     return { kind, rate: 1 / (distance * success) };
   }).filter(entry => entry.rate > 0);
   const total = rates.reduce((sum, entry) => sum + entry.rate, 0);
-  // Very small user settings saturate here instead of overlapping structures.
+  // Very small settings saturate here instead of overlapping structures.
   const spacing = Math.max(3072, METERS_PER_MILE / total);
   const cache = new Map();
 
@@ -24,8 +23,8 @@ export function createDiscoverySchedule(miles, suitability, salt, place) {
     const center = (index + .5) * spacing;
     const desired = center + (randomAt(index, salt + 1) - .5) * spacing / 5;
     let site = place(selected.kind, index, desired);
-    // Keep every search in its own district, including snapped terrain sites.
-    // This guarantees at least 0.3 districts of clear road between landmarks.
+    // Drop sites that drift out of their district, including snapped terrain
+    // sites. Leaves at least 0.3 districts of clear road between landmarks.
     if (site && Math.abs(site.s - center) > spacing * .35) site = null;
     cache.set(index, site);
     if (cache.size > 128) cache.delete(cache.keys().next().value);

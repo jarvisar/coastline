@@ -21,7 +21,7 @@ try {
     await page.evaluate(async journey => {
       const a = window.__coastline;
       if (a.journey !== journey) await a.changeJourney(journey);
-      // A representative sparse encounter: one car ahead, one approaching.
+      // One car ahead, one approaching.
       a.vehicle.s = 1022; a.vehicle.reset(); a.world.update(a.vehicle.s);
       a.traffic.reset(a.vehicle.route, a.vehicle.s, journey);
       a.traffic.respawn(a.traffic.vehicles[2], a.vehicle.s + 32);
@@ -40,7 +40,7 @@ try {
     await page.locator('#pause-overlay').evaluate(el => { el.style.visibility = 'hidden'; });
     await page.screenshot({ path: `.artifacts/traffic-${journey}.png` });
   }
-  // Run the actual controller and fleet together through an impact and origin shift.
+  // Real controller and fleet through an impact and an origin shift.
   const impact = await page.evaluate(async () => {
     const a = window.__coastline;
     a.vehicle.s = 1022; a.vehicle.reset(); a.vehicle.speed = 28;
@@ -58,7 +58,7 @@ try {
   });
   assert.ok(impact.hit && impact.behind && impact.clearAfterReset); assert.equal(impact.origin, 1024);
   assert.ok(Math.abs(impact.playerZ - impact.trafficZ) < 15);
-  // Close-up contact sheet makes all five procedural silhouettes reviewable.
+  // Contact sheet of all five traffic models for review.
   await page.evaluate(async () => {
     const THREE = await import('/node_modules/three/build/three.module.js');
     const { createTrafficModels, TRAFFIC_COLORS } = await import('/src/traffic-models.js');

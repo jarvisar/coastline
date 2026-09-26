@@ -5,8 +5,8 @@ export const DESERT_VALLEY_EDGE = 36;
 export const DESERT_BRIDGE_SPACING = 896;
 const riverRockSamples = new Map();
 
-// Look ahead along the left wall so the creek eases around a rock shoulder
-// instead of tracing its small jagged edges. Samples are global and bounded.
+// Smoothed left-wall edge so the creek eases round rock shoulders.
+// Samples are keyed globally and the cache is capped at 128.
 export function desertRiverRockEdge(s) {
   const anchor = Math.floor(s / 32), fraction = s / 32 - anchor;
   const sample = index => {
@@ -31,8 +31,8 @@ export function desertRiverRockEdge(s) {
   return a + (b - a) * smoothstep(0, 1, fraction);
 }
 
-// Occasional western creek crossings, anchored to the world rather than chunks.
-// Even endpoints let the asphalt meet the timber without a partial road segment.
+// Bridges are spaced in world s, independent of chunks. Even endpoints avoid a
+// partial road segment where asphalt meets the deck.
 export function desertBridgeAt(s) {
   const index = Math.floor((s - 320 + DESERT_BRIDGE_SPACING / 2) / DESERT_BRIDGE_SPACING);
   const center = index * DESERT_BRIDGE_SPACING + 320;
@@ -43,10 +43,9 @@ export function desertCreek(s) {
   const bridge = desertBridgeAt(s), delta = s - bridge.center;
   const direction = ((bridge.index % 2) + 2) % 2 ? -1 : 1;
   const crossing = smoothstep(-64, 64, delta) * 2 - 1;
-  // Independent meanders and pool widths avoid parallel road/river/ledge
-  // ribbons. The crossing itself retains its original alignment with the deck.
+  // Independent meanders keep road, river and ledge from running parallel.
+  // Near the bridge the creek stays aligned with the deck.
   const side = Math.sign(direction * crossing) || -1;
-  // Gently vary the bend spacing as well as the offset from the road.
   const desiredDistance = 21.8 + 4.5 * Math.sin(s / 81 + .4 + .3 * Math.sin(s / 173))
     + 2.1 * Math.sin(s / 35 + 1.6);
   const pool = smoothstep(-.65, .85, Math.sin(s / 47 + .6) + .45 * Math.sin(s / 19));
@@ -60,7 +59,7 @@ export function desertCreek(s) {
   const width = 3.3 + (poolWidth - 3.3) * freeMeander;
   const besideRoad = smoothstep(12, 22, Math.abs(center));
   const fill = (roadHeight(s) - 3.3) * (1 - besideRoad) + (desertHeight(s, center) - 1.65) * besideRoad + .7;
-  // On a sloping valley floor the lower bank still contains the wider pools.
+  // Cap the level below both banks so pools stay contained on a slope.
   const level = Math.min(fill, desertHeight(s, center - width - 3.8) - .12, desertHeight(s, center + width + 3.8) - .12);
   return { center, width, level };
 }
@@ -75,24 +74,21 @@ export function desertGroundHeight(s, u) {
   const d = Math.abs(u - creek.center);
   const bank = creek.width + 3.8;
   if (d >= bank) return base;
-  // Fill the channel higher while retaining the existing bed elevation.
   const bed = creek.level - 1.3 + .07 * Math.sin(s * .7 + u * .4);
-  // Alternating shallow shelves make one bank more gradual than the other.
-  // This breaks up matching shorelines while keeping both banks contained.
+  // One bank shelves more gently than the other so the shorelines don't match.
   const bedShare = .43 + .16 * Math.sin(s / 38 + .8) * Math.sign(u - creek.center);
   return Math.min(base, bed + (base - bed) * smoothstep(creek.width * bedShare, bank, d));
 }
 export function desertRowStep(row) {
   return Math.abs(row * DESERT_STEP - desertBridgeAt(row * DESERT_STEP).center) < 128 ? .25 : .5;
 }
-// The original floor had seven left and five right columns. Keep the original
-// cliff seeds after adding twelve left and fourteen right valley samples.
+// Maps a column back to its pre-subdivision index so cliff facet seeds are unchanged.
+// 12 valley columns were added on the left and 14 on the right.
 export function desertFacetColumn(column, u) {
   return u < -DESERT_VALLEY_EDGE ? column : u > DESERT_VALLEY_EDGE ? column - 26 : column - 12;
 }
 
-// Broad rock masses with short transitions between their flat shoulders.
-// All samples are global so a terrace continues through streaming boundaries.
+// Stepped noise. Sampled in world s so terraces continue across chunk seams.
 function terraceNoise(s, span, seed) {
   const cell = Math.floor(s / span), t = s / span - cell;
   const a = randomAt(cell, seed), b = randomAt(cell + 1, seed);
@@ -104,13 +100,13 @@ export function canyonProfile(s, side) {
   const foot = Math.max(44, (side < 0 ? 60 : 64) + 8 * Math.sin(s / 137 + phase)
     + 28 * (terraceNoise(s + side * 27, 48, side + 611) - .5)
     + 2.8 * Math.sin(s / 7.7 + phase));
-  // Even when seeded terraces dip together, the lowest rim must clear the dunes.
+  // Minimum 27 so the rim always clears the dunes.
   const height = Math.max(27, (side < 0 ? 23 : 28) + 3 * Math.sin(s / 193 + phase)
     + (side < 0 ? 29 : 37) * terraceNoise(s + side * 51, 88, side + 612));
   const shelfEnd = 27 + 8 * terraceNoise(s, 64, side + 613);
   const lowerShare = .43 + .12 * terraceNoise(s, 96, side + 614);
   const upperStrength = .25 + .75 * smoothstep(.22, .62, terraceNoise(s + side * 110, 144, side + 615));
-  // Eroded fans replace whole stretches of the lower scarp with a sandy slope.
+  // Low values swap the lower cliff for a sandy slope.
   const cliffStrength = side < 0
     ? smoothstep(.44, .76, .5 + .38 * Math.sin(s / 91 - .9) + .18 * Math.sin(s / 39 + 1.4))
     : .58 + .42 * terraceNoise(s, 137, 632);
@@ -121,8 +117,7 @@ export function dryWashCenter(s) {
 }
 export function dryWashWidth(s) { return 1.6 + 1.1 * Math.sin(s / 72 + .6) ** 2; }
 
-// Low, dissected benches give the camera-facing side its own relief. Unlike a
-// single plateau, each landform has an outer face, a cap, and sandy space around it.
+// Low benches beyond the canyon, two belts on the left and one on the right.
 export function desertRelief(s, u) {
   const side = Math.sign(u) || 1, cross = Math.abs(u);
   if (cross < 65 || cross > 360) return 0;
@@ -184,8 +179,8 @@ export function desertHeight(s, u) {
 export function desertPosition(s, u, height) { return positionAt(s, u, height ?? desertHeight(s, u)); }
 
 export function desertVertex(row, column, sampleColumns = desertColumns) {
-  // Subdivide only the valley floor. Its outer edge follows the original
-  // eight-meter cliff mesh exactly, including that mesh's jitter and facets.
+  // Only the valley floor gets half rows. Outside it, interpolate the 8 m rows
+  // so the cliff mesh and its jitter are unchanged.
   if (!Number.isInteger(row) && Math.abs(DESERT_COLUMNS[column]) >= DESERT_VALLEY_EDGE) {
     const low = Math.floor(row), t = row - low;
     const a = desertVertex(low, column, sampleColumns), b = desertVertex(low + 1, column, sampleColumns);
@@ -197,7 +192,6 @@ export function desertVertex(row, column, sampleColumns = desertColumns) {
   const jitter = valley ? smoothstep(112, 144, creekDistance) : 1;
   const s = row * DESERT_STEP + (road ? 0 : (randomAt(row, 3200) - .5) * 2.6 * jitter);
   const columns = sampleColumns(s);
-  // Preserve the established random facets outside the added valley columns.
   const originalColumn = desertFacetColumn(column, columns[column]);
   const nextColumn = columns[column] < -DESERT_VALLEY_EDGE && columns[column + 1] === -DESERT_VALLEY_EDGE
     ? dryWashCenter(s) - dryWashWidth(s) * 1.5 : columns[column + 1];
@@ -213,8 +207,8 @@ export function desertVertex(row, column, sampleColumns = desertColumns) {
   return { ...p, s, u };
 }
 
-// Entire rock formations belong to a single chunk, with their full footprint
-// generated outside the visible range before the player reaches them.
+// Each mesa belongs to one chunk. Callers check neighbouring chunks too because
+// footprints cross seams.
 export function mesasForChunk(index) {
   const random = seededRandom(index + 34191), start = index * CHUNK_LENGTH;
   const rightS = start + 38 + random() * 50, leftS = start + 15 + random() * 75;
@@ -225,7 +219,7 @@ export function mesasForChunk(index) {
     { s: nearRightS, u: Math.max(35, canyonProfile(nearRightS, 1).foot - 13), rs: 6 + random() * 4, ru: 4 + random() * 3, height: 13 + random() * 16, seed: index * 17 + 3 },
     { s: nearLeftS, u: -Math.max(35, canyonProfile(nearLeftS, -1).foot - 11), rs: 5 + random() * 4, ru: 4 + random() * 3, height: 9 + random() * 15, seed: index * 17 + 4 },
   ];
-  // Squared rock shoulders grow out of the lower cliff, breaking up long walls.
+  // Buttresses on the lower cliff to break up long walls.
   for (const side of [-1, 1]) {
     for (let i = 0; i < 2; i++) {
       const s = start + 20 + i * 62 + random() * 19;
@@ -250,7 +244,7 @@ export function insideMesa(s, u, padding = 1.28) {
   return false;
 }
 
-// The valley floor is open sand well short of the mesas, which start at 35 m.
+// Well inside the nearest mesas at 35 m.
 export const DESERT_VERGE = 22;
 
 export const desertDrivingRoute = {
@@ -263,6 +257,5 @@ export const desertDrivingRoute = {
     const creek = desertCreek(s), margin = creek.width + 4.7;
     return creek.center < 0 ? [Math.max(-DESERT_VERGE, creek.center + margin), DESERT_VERGE] : [-DESERT_VERGE, Math.min(DESERT_VERGE, creek.center - margin)];
   },
-  // The creek either side of its bridge.
   water: (s, u) => Math.abs(u) > 7 && desertCreekDistance(s, u) < 1,
 };

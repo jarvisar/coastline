@@ -71,14 +71,13 @@ test('soft roadside limits keep a continuously steered car on safe ground', () =
 
 test('streaming stays bounded, releases meshes, and handles origin shifts and reverse travel', () => {
   const scene = new THREE.Scene(); const world = new CoastalWorld(scene);
-  // The sky is the one resident object that is not a streamed chunk.
+  // The sky is the only resident object that isn't a streamed chunk.
   const streamed = () => scene.children.filter(child => child !== world.sky.group).length;
   for (const s of [0, 130, 270, 1025, 16500, 16400, -130, -1025]) {
     world.update(s);
     assert.equal(world.chunks.size, 9); assert.equal(streamed(), 9);
     assert.ok(Math.abs(-s + world.origin) <= 1024);
     for (const chunk of world.chunks.values()) assert.ok(Math.abs(chunk.group.position.z) < 1900);
-    // The sky stays centred on the car through every origin shift.
     const car = positionAt(s, 0);
     assert.ok(Math.hypot(world.sky.group.position.x - car.x, world.sky.group.position.z - (car.z + world.origin)) < .001);
   }
@@ -125,8 +124,7 @@ test('pond basins contain their water, including where landmark intervals overla
     assert.ok(groundHeight(pond.center, pond.u) < pond.level - 1);
     for (let step = 0; step < 24; step++) {
       const angle = step / 24 * Math.PI * 2;
-      // Follow the actual bent basin instead of assuming a symmetric oval.
-      // Every ray must reach a dry retaining bank before leaving the basin.
+      // Bisect along each ray through the real bent basin. Each must hit a dry bank.
       let low = .4, high = 1.8;
       for (let i = 0; i < 20; i++) {
         const radius = (low + high) / 2;
@@ -160,8 +158,7 @@ test('the resident window follows the quality level, and reaches the worker', as
     assert.equal(world.chunks.size, 9, 'the top levels keep the whole window');
     const centre = world.center;
 
-    // A cheaper level drops the far chunk in each direction. It takes effect on
-    // the next update, without waiting for the car to cross into a new chunk.
+    // Applies on the next update without the car crossing into a new chunk.
     setResidentWindow({ behind: 2, ahead: 4 });
     world.update(0);
     assert.equal(world.center, centre, 'the car has not moved');
@@ -173,14 +170,12 @@ test('the resident window follows the quality level, and reaches the worker', as
     world.update(0);
     assert.equal(world.chunks.size, 5);
 
-    // Climbing back builds the window out again rather than leaving a gap.
     setResidentWindow({ behind: 3, ahead: 5 });
     world.update(0);
     assert.equal(world.chunks.size, 9);
     assert.deepEqual(residentWindow(), { behind: 3, ahead: 5 });
 
-    // The worker's queue follows it, so a shorter view is also less building:
-    // resident chunks first, forward before back, then one chunk of lead.
+    // Resident chunks first, forward before back, then one chunk of lead.
     assert.deepEqual(prefetchOffsets(3, 5), [0, 1, -1, 2, -2, 3, -3, 4, 5, 6, -4]);
     assert.deepEqual(prefetchOffsets(1, 3), [0, 1, -1, 2, 3, 4, -2]);
   } finally { world.dispose(); setResidentWindow(); }

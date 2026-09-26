@@ -49,8 +49,7 @@ test('city discovery meshes survive worker transfer with their sites', () => {
       assert.deepEqual(after.instanceMatrix.array, matrices);
       assert.equal(restored.features.discoveries.filter(other => other.index === site.index).length, 1);
       if (kind === 'river-bridge') {
-        // The deck spans the water from the quay to the far bank, and no
-        // building stands on the landing.
+        // The deck spans from the quay to the far bank.
         const matrix = new THREE.Matrix4(), position = new THREE.Vector3();
         let nearest = Infinity, farthest = -Infinity;
         for (let i = 0; i < after.count; i++) {

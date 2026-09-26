@@ -1,5 +1,5 @@
-// Keep asset construction off the startup path for routes that are not in use.
-// Both the page and worker use these loaders, after initializing the world seed.
+// Routes load on demand so unused ones stay off the startup path. The page and
+// worker both use these, after the world seed is set.
 const loaders = {
   coast: () => import('./environment.js').then(module => ({ World: module.CoastalWorld, Chunk: module.CoastalChunk })),
   desert: () => import('./desert.js').then(module => ({ World: module.DesertWorld, Chunk: module.DesertChunk })),
@@ -15,7 +15,7 @@ export function loadScenery(journey) {
   if (!Object.hasOwn(loaders, journey)) return Promise.reject(new Error('Invalid journey'));
   if (!pending.has(journey)) {
     const promise = loaders[journey]().catch(error => {
-      pending.delete(journey); // A failed download must not prevent a retry.
+      pending.delete(journey); // Allow a retry after a failed download.
       throw error;
     });
     pending.set(journey, promise);

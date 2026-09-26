@@ -54,8 +54,7 @@ try {
         const p = a.vehicle.route.position(s, 0);
         return new Vector3(p.x, p.y, p.z + a.world.origin);
       };
-      // The normal scenic camera, with one shared landscape window. Each route
-      // supplies its corresponding slice of that window.
+      // Each route renders its own slice of one shared scenic window.
       const target = point(position).add(new Vector3(-24, 0, -46));
       const offset = new Vector3(-220, 245, 260);
       const camera = a.rendering.camera;
@@ -80,7 +79,7 @@ try {
       const { fitSunShadow } = await import('/src/shadows.js');
       const sun = a.rendering.scene.children.find(object => object.isDirectionalLight);
       fitSunShadow(camera, sun, target.y, a.world.origin);
-      // Capture the canvas immediately after rendering, without any UI.
+      // Read the canvas straight after rendering, with no UI.
       a.rendering.render();
       return { src: a.rendering.renderer.domElement.toDataURL('image/png'), curve };
     }, { route, index, position, width, height, sliceWidth, padding }));
@@ -101,8 +100,8 @@ try {
     for (const [i, capture] of images.entries()) {
       const img = new Image(); img.src = capture.src; await img.decode();
       if (img.width !== sliceWidth || img.height !== height + padding * 2) throw new Error('Unexpected capture dimensions');
-      // The same seed gives identical road bends. Account for route-specific
-      // elevations with a small vertical translation of each screenshot column.
+      // Same seed means same bends. Shift each column vertically to cancel
+      // per-route road elevation.
       for (let x = 0; x < sliceWidth; x++) {
         const globalX = i * sliceWidth + x;
         const shift = roadY(capture.curve, globalX + .5) - roadY(images[0].curve, globalX + .5);

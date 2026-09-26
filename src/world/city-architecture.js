@@ -4,9 +4,8 @@ import { randomAt, roadFrame } from './route.js';
 const ACCENTS = ['#486f69', '#955e4f', '#aa894f', '#52687c', '#687451'];
 const STONE = new THREE.Color('#c7c1b3'), IRON = new THREE.Color('#475359');
 
-// Face coordinates are shared by trim and glazing, including the reversed
-// riverbank frontage. Long strips follow the road instead of cutting a chord
-// through a curved wall. All decoration goes into the existing chunk batches.
+// Trim and glazing share these face coordinates, including the reversed
+// riverbank frontage. Decoration goes into the existing chunk batches.
 export function buildingFacades(chunk, b) {
   const { s0, s1, u0, u1 } = b, facing = u1 < 0 ? 1 : -1, front = facing > 0 ? u1 : u0;
   return [
@@ -49,9 +48,9 @@ export function buildParapet(chunk, b, roof, color, height = .7) {
   }
 }
 
-// Broad glazing bands survive the fog without hundreds of individual panes.
-// Interpolate the actual flat tower faces, so details cannot sink into their
-// chords on bends. Reuse the skyline batch: no new draws, shadows or updates.
+// Broad glazing bands stand in for individual panes in the fog. Interpolate the
+// flat tower faces so bands can't sink into them on bends. Reuses the skyline
+// batch, so no new draws or shadows.
 export function dressSkyline(chunk, b, base, roof, color, lane) {
   const { s0, s1, u0, u1 } = b, target = chunk.scenery.skyline;
   const corners = [[s0, u0], [s1, u0], [s1, u1], [s0, u1]].map(([s, u]) => chunk.at(s, u, 0));
@@ -93,14 +92,11 @@ export function dressBuilding(chunk, b, base, roof, seed) {
     trim(roof - .75, roof - .5, .065, stone.clone().multiplyScalar(.7));
   }
   if (near) {
-    // Slim stone piers frame masonry facades. The recessed glass remains the
-    // dominant detail; a few broad bands read better than tiny brick textures.
     if (randomAt(seed, 3520) < .55) {
       for (const s of [s0 + .12, s1 - .4]) chunk.prism(blocks, s, s + .28, u0 - .12, u0 + .05, base + 4, roof - .2, stone.clone().multiplyScalar(.94));
     }
   } else {
-    // Coarse architectural rhythm survives at driving distance: grouped bays,
-    // a few belt courses, and corner piers instead of dense brick geometry.
+    // Only coarse detail reads at driving distance: bays, belt courses and corner piers.
     const masonry = b.windows !== 'ribbon', piers = randomAt(seed, 3540) < .7;
     for (const face of faces) {
       if (piers) for (const d of [.12, face.length - .52]) facadePanel(chunk, blocks, face, d, d + .4, base + .7, roof - .5, stone, .085);
@@ -114,7 +110,7 @@ export function dressBuilding(chunk, b, base, roof, seed) {
     }
     const floorHeight = u0 > -240 && u0 < 90 ? 3.2 : 4.2;
     if (masonry && !b.simple) for (let floor = 4; floor * floorHeight < b.height - 3; floor += 4) trim(base + floor * floorHeight + .35, base + floor * floorHeight + .58, .08);
-    // Recessed entrances give residential blocks a ground floor, too.
+    // Recessed entrance for residential blocks.
     if (!b.shop && b.windows !== 'none') {
       const face = faces[0], mid = face.length * .5;
       facadePanel(chunk, blocks, face, mid - 1.15, mid + 1.15, base + .18, base + 3.45, stone, .095);
@@ -124,8 +120,7 @@ export function dressBuilding(chunk, b, base, roof, seed) {
     }
   }
   if (u0 < 0 && b.windows === 'none') {
-    // Wharf workshops: broad lintels, shutter rails and a pitched canopy over
-    // the loading bays. The geometry projects only into their reserved lot edge.
+    // Wharf workshop detail projects only into the reserved lot edge.
     const face = faces[0];
     for (let d = 2; d < face.length - 3; d += 6.5) {
       for (const x of [d - .16, d + 2.6]) facadePanel(chunk, blocks, face, x, x + .16, base + .25, base + 3.65, stone, .09);
@@ -145,9 +140,8 @@ export function dressBuilding(chunk, b, base, roof, seed) {
   }
 }
 
-// One deliberate roof composition per building: a stair house, glazed roof
-// lantern, or a small planted terrace. These replace the anonymous flat lids
-// behind the boulevard without adding meshes, lights, textures or animation.
+// One roof feature per building: stair house, glazed lantern or planted terrace.
+// Adds no meshes, lights or textures.
 export function buildRoofDetails(chunk, b, roof, seed) {
   if (b.roof === 'gable') return;
   const { blocks } = chunk.scenery, { s0, s1, u0, u1 } = b;
@@ -214,7 +208,7 @@ export function buildShopfront(chunk, b, y0, seed) {
     }
   }
   chunk.prism(blocks, s0 + .22, s1 - .22, u0 - .22, u0 + .04, y0 + 2.98, y0 + 3.6, accent);
-  // A small inset plaque on the fascia, without illegible text at driving scale.
+  // Blank fascia plaque. Text would be illegible at driving scale.
   front(s0 + (s1 - s0) * .36, s0 + (s1 - s0) * .64, 3.16, 3.4, frame, blocks, .23);
   if (randomAt(seed, 3532) < .72) {
     const a0 = s0 + .45, a1 = s1 - .45, count = Math.ceil((a1 - a0) / .9);

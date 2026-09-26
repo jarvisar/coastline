@@ -6,8 +6,8 @@ import { volcanicPosition } from '../src/world/volcanic-route.js';
 import { VolcanicAtmosphere } from '../src/world/volcanic-atmosphere.js';
 import { CRATER } from '../src/world/volcanic-backdrop.js';
 
-// The overhead camera from rendering.js, at its widest: scenic height, the
-// portrait allowance and an ultrawide aspect.
+// Mirrors the overhead camera in rendering.js at its widest: scenic height,
+// portrait allowance and the given aspect.
 function overheadFrustum(s, origin, aspect) {
   const car = volcanicPosition(s, 0, roadHeight(s)), target = new THREE.Vector3(car.x - 24, car.y, car.z + origin - 46);
   const height = 235 * 1.12, camera = new THREE.OrthographicCamera(-height * aspect / 2, height * aspect / 2, height / 2, -height / 2, 1, 1200);
@@ -34,7 +34,7 @@ test('the distant eruption stands beyond the fog, out of the overhead views', ()
       scene.updateMatrixWorld(true);
       for (const aspect of [.46, 1, 16 / 9, 2.4]) {
         const frustum = overheadFrustum(s, origin, aspect);
-        // Every face of the mountain, and the whole volume the plume moves through.
+        // Check every mountain face and the plume's whole bounding volume.
         const p = mountain.geometry.attributes.position;
         for (let i = 0; i < p.count; i += 3) {
           const face = new THREE.Box3().setFromBufferAttribute({ count: 3, getX: k => p.getX(i + k), getY: k => p.getY(i + k), getZ: k => p.getZ(i + k) }).applyMatrix4(mountain.matrixWorld);

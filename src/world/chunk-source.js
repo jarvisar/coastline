@@ -2,19 +2,16 @@ import { CHUNK_LENGTH, SEED } from './route.js';
 import { unpackChunk } from './chunk-transfer.js';
 import { residentWindow, prefetchOffsets } from './resident.js';
 
-// A route's first view is several chunks, and each takes long enough to build
-// that one worker makes the wait. Spare cores build them side by side. Each
-// worker holds its own copy of a route's shared scenery, so devices reporting
-// little memory keep fewer.
+// Spare cores build the first view's chunks in parallel. Each worker holds its
+// own copy of the route's shared scenery, so low-memory devices get fewer.
 export function workerCount({ hardwareConcurrency, deviceMemory } = globalThis.navigator ?? {}) {
   const cores = Number.isFinite(hardwareConcurrency) ? hardwareConcurrency : 2;
   const memory = Number.isFinite(deviceMemory) ? deviceMemory : 4;
   return Math.max(1, Math.min(3, cores - 1, memory < 2 ? 1 : memory < 4 ? 2 : 3));
 }
 
-// Each worker takes one job at a time, which lets reversals and route switches
-// cancel queued work before it runs. Only the two chunks just outside the
-// resident window are prefetched.
+// One job per worker at a time so reversals and route switches can cancel
+// queued work. Only the two chunks just outside the resident window are prefetched.
 export class ChunkWorker {
   constructor(createWorker = () => new Worker(new URL('./chunk-worker.js', import.meta.url), { type: 'module' }), count = workerCount()) {
     this.sources = new Set(); this.queue = []; this.lanes = []; this.nextId = 0;
@@ -36,13 +33,13 @@ export class ChunkWorker {
   get worker() { return this.lanes[0]?.worker ?? null; }
   get ready() { return this.lanes.some(lane => lane.ready); }
   get active() { return this.lanes.find(lane => lane.active)?.active ?? null; }
-  // A worker that stays silent is given up and its job handed to another.
+  // A silent worker is dropped and its job handed to another.
   watchdog(lane) { clearTimeout(lane.timeout); lane.timeout = setTimeout(() => this.drop(lane, true), 20000); }
   source(journey) { const source = new ChunkSource(this, journey); this.sources.add(source); return source; }
   receive(lane, data) {
     if (!this.lanes.includes(lane)) return;
     clearTimeout(lane.timeout);
-    // A different seed would build a different world; no worker can be trusted.
+    // A different seed builds a different world, so trust no worker.
     if (data.type === 'ready' && data.seed !== SEED) { this.disable(); return; }
     if (data.type === 'ready') lane.ready = true;
     else if (data.type === 'chunk' && lane.active?.id === data.id) {
@@ -54,9 +51,8 @@ export class ChunkWorker {
     } else { this.drop(lane); return; }
     this.pump();
   }
-  // Losing one worker leaves the rest building. Every chunk falls back to the
-  // page, and so to stalls while driving, only once none are left. A job that
-  // failed is not retried, and its chunk is built on the page when needed.
+  // The page builds everything, with stalls, only once no workers are left.
+  // A failed job isn't retried; the page builds that chunk when needed.
   drop(lane, retry = false) {
     if (!this.lanes.includes(lane)) return;
     clearTimeout(lane.timeout); lane.worker.terminate();
@@ -96,19 +92,17 @@ class ChunkSource {
   async prepare(s) {
     const center = Math.floor(s / CHUNK_LENGTH), { behind, ahead } = residentWindow();
     this.prefetch(center, new Map());
-    // Prepare the whole initial view before revealing it. Edge prefetches may
-    // finish afterward; ordinary driving has a full chunk's worth of lead time.
+    // Wait for the whole initial view. Edge prefetches may finish later since
+    // normal driving has a chunk of lead time.
     await Promise.all([...this.pending.values()].filter(task => task.index >= center - behind && task.index <= center + ahead).map(task => task.done));
   }
-  // The queue follows the resident window, so a quality level that keeps less
-  // of the route built also stops the worker building what it will not show.
+  // Follows the resident window, so lower quality levels also prefetch less.
   prefetch(center, resident) {
     if (this.disposed) return;
     const { behind, ahead } = residentWindow(), first = center - behind - 1, last = center + ahead + 1;
     for (const index of this.cache.keys()) if (index < first || index > last || resident.has(index)) this.cache.delete(index);
     for (const task of this.pending.values()) if (task.index < first || task.index > last || resident.has(task.index) || this.cache.has(task.index)) this.owner.cancel(task);
     if (!this.owner.worker) return;
-    // Nearby chunks have priority during loading; offscreen chunks come last.
     for (const offset of prefetchOffsets(behind, ahead)) {
       const index = center + offset;
       if (resident.has(index) || this.cache.has(index) || this.pending.has(index)) continue;
@@ -126,11 +120,11 @@ class ChunkSource {
       catch { this.owner.disable(); }
     }
     this.owner.stats.fallback++;
-    return null; // Existing synchronous builders cover failures or distant jumps.
+    return null; // Caller falls back to the synchronous builder.
   }
   retain(index, chunk) {
-    // The evicted chunk is the next one needed when reversing. Retain its CPU
-    // buffers inside the same two-chunk cache while releasing its GPU resources.
+    // The evicted chunk is next when reversing. Keep its CPU buffers in the
+    // cache; its GPU resources are still released.
     if (!this.disposed && chunk.sourceData) this.cache.set(index, chunk.sourceData);
   }
   dispose() {

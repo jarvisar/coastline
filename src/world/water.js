@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 
-// One shared clock, no per-frame geometry uploads. The phase is periodic over
-// 4096 m, so floating-origin rebases do not make the water jump.
+// One shared clock, no per-frame geometry uploads. The phase repeats every
+// 4096 m so floating-origin rebases don't make the water jump.
 export const waterClock = { time: { value: 0 }, origin: { value: 0 } };
 const declarations = /* glsl */`
   uniform float coastTime;
@@ -51,15 +51,14 @@ function animatedWaterMaterial({ lake = false, river = false }) {
     shader.fragmentShader = declarations + shader.fragmentShader;
     shader.fragmentShader = shader.fragmentShader.replace('#include <color_fragment>', `
       #include <color_fragment>
-      // River coordinates follow the banks. Advect every layer together at
-      // 0.55 metres per second, so the highlights travel with the current.
+      // River coordinates follow the banks. All layers advect at 0.55 m/s so the
+      // highlights travel with the current.
       vec2 waterCoord = vWaterCoord ${river ? '- vec2(0.0, coastTime * 0.55)' : ''};
       vec2 q = waterCoord * 0.0015339807879;
       vec2 drift = waterCoord / 64.0 ${river ? '' : '+ vec2(-coastTime * 0.013, coastTime * 0.007)'};
       float bend = waterNoise(drift * 2.0);
       float detail = waterNoise(drift * 4.0 + vec2(19.3, 7.1));
-      // Distort the crests and break them into uneven patches instead of
-      // intersecting regularly spaced sine bands (which read as a grid).
+      // Break the crests into uneven patches so the sine bands don't read as a grid.
       float phase = q.x * 284.0 + q.y * 92.0 ${river ? '' : '- coastTime * 1.3'}
         + (bend - 0.5) * 4.0 + (detail - 0.5) * 1.2;
       float wave = sin(phase);
@@ -74,7 +73,7 @@ function animatedWaterMaterial({ lake = false, river = false }) {
 }
 
 export function createSurfMaterial(moving = false) {
-  // Thin foam surfaces need both sides visible, but not separate back/front passes.
+  // Thin foam needs both sides, drawn in one pass.
   const material = new THREE.MeshBasicMaterial({ color: '#f4fdff', toneMapped: false, transparent: true, opacity: .96, depthWrite: false, side: THREE.DoubleSide, forceSinglePass: true });
   material.onBeforeCompile = shader => {
     shader.uniforms.coastTime = waterClock.time; shader.uniforms.coastOrigin = waterClock.origin;
@@ -131,7 +130,7 @@ export function createRockWashMaterial() {
       float washNoise = waterNoise(drift);
       float froth = waterNoise(drift * 4.0 + vec2(7.3, 19.1));
       float surge = 0.5 + 0.5 * sin(coastTime * 1.05 + vRockWash.y);
-      // Fade out through a ragged edge instead of outlining a hollow ring.
+      // Ragged edge so the wash doesn't outline a ring.
       float reach = 0.4 + washNoise * 0.35 + surge * 0.2;
       float edgeFade = 1.0 - smoothstep(reach * 0.3, reach, vRockWash.x);
       float breakup = smoothstep(0.2, 0.7, washNoise * 0.65 + froth * 0.35);

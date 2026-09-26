@@ -2,8 +2,8 @@ import { randomAt, CHUNK_LENGTH } from './route.js';
 import { riverCenter, riverHalfWidth, riverLevel, riverLips, sideFalls, poolAt, gorgeWall, jungleHeight, onRiver } from './jungle-route.js';
 import { createDiscoverySchedule } from './discovery-schedule.js';
 
-// Approximate miles between sightings of EACH kind. Lower = more frequent.
-// Edit one number, then reload. Infinity disables a kind. Together: ~2.5 miles.
+// Rough miles between sightings of each kind. Lower is more frequent.
+// Infinity disables a kind. About 2.5 miles combined.
 export const JUNGLE_DISCOVERY_MILES = {
   rainbow: 7.5, // Attached to a real waterfall.
   temple: 7.5,
@@ -12,7 +12,7 @@ export const JUNGLE_DISCOVERY_MILES = {
 const schedule = createDiscoverySchedule(JUNGLE_DISCOVERY_MILES,
   { rainbow: .98, temple: .98, 'rope-bridge': .90 }, 2801, districtSite);
 export const JUNGLE_DISCOVERY_SPACING = schedule.spacing;
-// Parrots stay on their original schedule and do not count toward discoveries.
+// Parrots have their own schedule and don't count as discoveries.
 export const JUNGLE_PARROT_SPACING = CHUNK_LENGTH * 3;
 
 function districtSite(kind, index, desired) {
@@ -24,7 +24,7 @@ function districtSite(kind, index, desired) {
         const s = Math.round((desired + offset) / 8) * 8;
         const inChunk = ((s % CHUNK_LENGTH) + CHUNK_LENGTH) % CHUNK_LENGTH;
         if (inChunk < 24 || inChunk > CHUNK_LENGTH - 24 || sideFalls(s - 32, s + 32).length) continue;
-        // When the roadside terrace is too steep, use the dry far bank.
+        // Fall back to the far bank when the roadside terrace is too steep.
         for (const distance of side < 0 ? [21, 23, 25, 28, 31, 78, 85] : [21, 23, 25, 28, 31]) {
           const u = side * distance;
           const footprint = [-9, 0, 9].flatMap(ds => [-9, 0, 9].map(du => ({s: s + ds, u: u + du})));
@@ -57,7 +57,7 @@ function districtSite(kind, index, desired) {
       const u = riverCenter(s), half = riverHalfWidth(s) + 8;
       const ends = [u-half, u+half], heights = ends.map(v => jungleHeight(s,v));
       if (Math.abs(heights[0]-heights[1]) > 2.8 || Math.min(...heights) < pool.level+1.4) continue;
-      // Both landings need a small usable bank, not a cliff or steep scree.
+      // Both landings need a fairly flat bank.
       if (ends.some(v => Math.max(...[-2,0,2].map(ds => jungleHeight(s+ds,v)))
         - Math.min(...[-2,0,2].map(ds => jungleHeight(s+ds,v))) > 1.2)) continue;
       site = {kind, index, s, u, farU: ends[0], nearU: ends[1], level: pool.level};
@@ -69,7 +69,7 @@ function districtSite(kind, index, desired) {
 
 export function jungleDiscoveries(first, last) {
   const sites = schedule.discoveries(first, last);
-  // Match Pacific gulls: one flock in every third chunk, in both directions.
+  // One flock every third chunk, like the coastal gulls.
   for(let cell=Math.floor(first/JUNGLE_PARROT_SPACING)-1;cell<=Math.floor(last/JUNGLE_PARROT_SPACING);cell++) {
     const index=cell*3,s=cell*JUNGLE_PARROT_SPACING+CHUNK_LENGTH/2;
     if(s>=first && s<last) sites.push({kind:'parrots',index,s,u:riverCenter(s),count:2+Math.floor(randomAt(index,2804)*3)});

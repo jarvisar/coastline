@@ -20,16 +20,15 @@ export class BrowserVR {
     for (const button of this.buttons) {
       button.hidden = !this.supported;
       button.disabled = this.pending;
-      // Buttons that carry an icon keep it: only their label span is rewritten.
+      // Rewrite only the label span so icon buttons keep their icon.
       (button.querySelector?.('.vr-entry-label') ?? button).textContent = this.active ? 'Exit VR' : 'Enter VR';
       button.setAttribute('aria-label', this.active ? 'Exit virtual reality' : 'Enter virtual reality');
     }
   }
   async detect() {
-    // The desktop wrapper is deliberately outside the scope of browser VR.
+    // No VR in the Electron build.
     if (!this.secure || /Electron\//i.test(this.navigator.userAgent) || !this.navigator.xr) return;
-    // A headset can be plugged in or removed long after the page loads, so the
-    // entry stays in step with what the browser reports.
+    // Headsets can be connected or removed after load.
     this.navigator.xr.addEventListener?.('devicechange', () => void this.check());
     await this.check();
   }
@@ -43,16 +42,15 @@ export class BrowserVR {
     this.pending = true; this.refresh();
     try {
       if (this.session) { await this.session.end(); return; }
-      // Call directly from the button's user gesture. A local reference space
-      // works seated or standing and does not depend on floor tracking.
+      // Must run inside the click's user gesture. 'local' needs no floor tracking.
       const session = await this.navigator.xr.requestSession('immersive-vr', { requiredFeatures: ['local'], optionalFeatures: ['layers'] });
       this.session = session;
       session.addEventListener('end', this.ended);
       session.addEventListener('visibilitychange', this.visibilityChanged);
       this.renderer.xr.enabled = true;
       this.renderer.xr.setReferenceSpaceType('local');
-      // Supersample both eyes and preserve peripheral detail. The framebuffer
-      // scale must be set before the session allocates its render targets.
+      // Supersample with no foveation. The scale must be set before setSession
+      // allocates the render targets.
       this.renderer.xr.setFramebufferScaleFactor(1.5);
       this.renderer.xr.setFoveation(0);
       await this.renderer.xr.setSession(session);

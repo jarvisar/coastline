@@ -1,8 +1,7 @@
 import * as THREE from 'three';
 
 export class TouchStick {
-  // Like most mobile games, the stick is hidden until a thumb lands on the
-  // scene, then anchors exactly there until that thumb lifts.
+  // Floating stick. Appears where the touch lands and stays there until release.
   constructor(element, onDrive, surface) {
     this.element = element; this.onDrive = onDrive; this.surface = surface;
     this.pointer = null; this.engaged = false; this.vector = { x: 0, y: 0 };
@@ -23,7 +22,7 @@ export class TouchStick {
       if (event.pointerId === this.pointer) this.release();
     });
   }
-  // Hidden or inert controls (menus, a controller, the autodrive fade) take no touches.
+  // No touches while the controls are hidden or inert (menus, gamepad, autodrive).
   available() {
     const controls = this.element.parentElement;
     return !controls.closest('[inert]') && controls.getClientRects().length > 0 && getComputedStyle(controls).visibility === 'visible';
@@ -48,8 +47,7 @@ export class TouchStick {
   clear() { if (this.engaged || this.pointer !== null) this.release(); this.engaged = false; }
 }
 
-// In the chase view the stick controls the car, independent of camera rotation.
-// Use the existing analog driving physics for gradual steering and brake/reverse.
+// Chase view maps the stick to car-relative analog inputs, ignoring camera rotation.
 export function thirdPersonDrivingInput(stick) {
   return {
     forward: Math.max(0, stick.y), brake: Math.max(0, -stick.y),
@@ -58,9 +56,8 @@ export function thirdPersonDrivingInput(stick) {
   };
 }
 
-// Invert the terrain's local screen projection. Including terrain height and the
-// actual road coordinates keeps cardinal and diagonal drags aligned with pixels
-// even on slopes, bends, or after rotating/resizing the camera.
+// Inverts the ground's local screen projection at the car so a drag moves the
+// car the same way on screen, on slopes and bends and at any camera angle.
 export function touchDrivingInput(stick, camera, route, s, u, origin = 0) {
   const amount = Math.min(1, Math.hypot(stick.x, stick.y));
   if (!amount) return { amount: 0 };
@@ -69,8 +66,8 @@ export function touchDrivingInput(stick, camera, route, s, u, origin = 0) {
   const across = { x: (b.x - p.x) / step, y: (b.y - p.y) / step, z: (b.z - p.z) / step };
   camera.updateMatrixWorld();
   const m = camera.matrixWorld.elements;
-  // Perspective also changes scale with depth. Evaluate its local derivative
-  // at the car, in the same rebased coordinates used to render the scene.
+  // Perspective scales with depth, so take its derivative at the car in the
+  // rebased coordinates the scene renders with.
   const point = camera.isPerspectiveCamera
     ? new THREE.Vector3(p.x, p.y + .13, p.z + origin).applyMatrix4(camera.matrixWorldInverse) : null;
   if (point && point.z >= -.1) return { amount: 0 };

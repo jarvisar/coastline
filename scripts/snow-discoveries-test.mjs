@@ -40,7 +40,7 @@ try {
     assert.equal(record.chunks, record.resident);
     if (!before) assert.equal(record.features.filter(f => f.index === site.index).length, 1, 'one chunk owns each discovery');
     await page.screenshot({ path: `${directory}/${site.kind}-drive.png` });
-    // A framed view of the whole discovery, from the road's side.
+    // Frame the whole discovery from the road side.
     await page.evaluate(async site => {
       const a = window.__coastline;
       const { snowPosition, snowRoadHeight } = await import('/src/world/snow-route.js');
@@ -56,7 +56,6 @@ try {
     await page.screenshot({ path: `${directory}/${site.kind}-detail.png` });
     records.push(record);
   }
-  // Streaming back to the first site must not leak geometry.
   assert.ok(records.at(-1).geometries <= records[0].geometries + 8, 'streaming leaves the geometry count bounded');
   if (!before) {
     const motion = await page.evaluate(async () => {
@@ -85,7 +84,6 @@ try {
     a.rendering.resize(); a.rendering.snap(); a.rendering.update(a.vehicle.car, 10, a.world.origin); a.rendering.render();
   });
   await page.screenshot({ path: `${directory}/cable-car-mobile.png` });
-  // Leaving the journey takes the discoveries with it.
   await page.evaluate(() => window.__coastline.changeJourney('coast'));
   await page.waitForFunction(() => window.__coastline.journey === 'coast' && !window.__coastline.changingJourney);
   for (const name of ['cable-car-line', 'cable-car-cabins', 'snowmen']) {

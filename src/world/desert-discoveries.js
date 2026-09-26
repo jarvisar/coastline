@@ -2,8 +2,8 @@ import { smoothstep } from './route.js';
 import { desertBridgeAt, desertCreek, desertCreekDistance, desertHeight, canyonProfile, insideMesa, dryWashCenter, dryWashWidth } from './desert-route.js';
 import { createDiscoverySchedule } from './discovery-schedule.js';
 
-// Approximate miles between sightings of EACH kind. Lower = more frequent.
-// Edit one number, then reload. Infinity disables a kind. Together: ~2.5 miles.
+// Rough miles between sightings of each kind. Lower is more frequent.
+// Infinity disables a kind. About 2.5 miles combined.
 export const DESERT_DISCOVERY_MILES = {
   'fuel-stop': 7.5,
   windpump: 7.5,

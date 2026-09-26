@@ -23,7 +23,6 @@ try {
   assert.equal(await page.locator('#fps-counter').isVisible(), false);
   assert.equal(await page.locator('#ambient-occlusion').count(), 0);
   await page.evaluate(() => window.__coastline.action('pause'));
-  // Presets leave AO off; only the independent toggle enables it.
   await page.evaluate(() => window.__coastline.graphics.setMode('high'));
   assert.equal(await page.evaluate(() => window.__coastline.rendering.ambientOcclusion.enabled), false);
   await page.keyboard.press('KeyO');
@@ -62,10 +61,8 @@ try {
         try { r.render(); } finally { r.scene.updateMatrixWorld = updateMatrices; }
         const on = pixels(), onImage = canvas.toDataURL();
         // Compare against automatic scenery transforms and a fresh AO traversal.
-        // Dense foliage makes this GPU redraw an identical jungle frame with a
-        // few thousand channels different about once in ten frames, so a single
-        // comparison cannot tell a transform regression from that. A real
-        // regression repeats; the artifact does not, so take the best of three.
+        // Dense jungle foliage occasionally redraws a few thousand channels
+        // differently on the GPU, so take the best of three comparisons.
         const channelError = (x, y) => {
           let error = 0;
           for (let i = 0; i < x.length; i++) error = Math.max(error, Math.abs(x[i] - y[i]));
@@ -104,7 +101,6 @@ try {
             neutralError = Math.max(neutralError, Math.abs(off[i + c] - neutral[i + c]));
           }
         }
-        // Repeated toggles reuse buffers, including while the game is paused.
         const textures = r.renderer.info.memory.textures;
         for (let i = 0; i < 6; i++) { ao.enabled = i % 2 === 1; r.render(); }
         const extension = gl.getExtension('WEBGL_debug_renderer_info');

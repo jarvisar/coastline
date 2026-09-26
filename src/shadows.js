@@ -3,10 +3,8 @@ import * as THREE from 'three';
 const bounds = new THREE.Box3(), point = new THREE.Vector3(), direction = new THREE.Vector3();
 
 export function stabilizeShadowFiltering() {
-  // Three's PCF filter rotates its taps per screen pixel. Without temporal
-  // antialiasing that grain crawls across world surfaces when the camera moves.
-  // A fixed, symmetric tent filter gives smooth edges without the sparse
-  // disk's directional bands. Hardware bilinear filtering blends each tap.
+  // Three's PCF rotates its taps per pixel, which crawls when the camera moves
+  // without TAA. Use a fixed tent filter. Hardware bilinear blends each tap.
   THREE.ShaderChunk.shadowmap_pars_fragment = THREE.ShaderChunk.shadowmap_pars_fragment.replaceAll(
     'interleavedGradientNoise( gl_FragCoord.xy ) * PI2', '0.0').replace(
     /shadow = \(\s*texture\( shadowMap, vec3\( shadowCoord\.xy \+ vogelDiskSample\( 0, 5, phi \)[\s\S]*?\) \* 0\.2;/,
@@ -25,9 +23,8 @@ export function stabilizeShadowFiltering() {
     }`);
 }
 
-// Enclose the visible terrain, from valleys to peaks. Routes with a changing
-// elevation datum pass the local height so coverage travels with the landscape.
-// Translating both height planes preserves the shadow map's texel density.
+// Enclose visible terrain from valleys to peaks. heightOrigin moves coverage with
+// routes whose elevation changes. Shifting both planes keeps texel density fixed.
 export function fitSunShadow(camera, sun, heightOrigin = 0, worldOrigin = 0) {
   camera.updateMatrixWorld();
   sun.updateMatrixWorld();
@@ -36,8 +33,8 @@ export function fitSunShadow(camera, sun, heightOrigin = 0, worldOrigin = 0) {
   const lightCamera = sun.shadow.camera;
   bounds.makeEmpty();
   if (camera.isPerspectiveCamera) {
-    // Enclose the nearby chase frustum in a sphere. Its size depends only on
-    // the lens, so steering and pitching cannot stretch the shadow texels.
+    // Bound the near frustum with a sphere. Its size depends only on the lens,
+    // so steering and pitching can't stretch the shadow texels.
     const far = Math.min(100, camera.far);
     const slope = Math.tan(THREE.MathUtils.degToRad(camera.getEffectiveFOV()) / 2);
     const middle = Math.min(far, (camera.near + far) * (1 + slope * slope * (1 + camera.aspect * camera.aspect)) / 2);
@@ -60,8 +57,8 @@ export function fitSunShadow(camera, sun, heightOrigin = 0, worldOrigin = 0) {
   const width = Math.ceil((bounds.max.x - bounds.min.x + padding * 2) * 16) / 16;
   const height = Math.ceil((bounds.max.y - bounds.min.y + padding * 2) * 16) / 16;
   const texelX = width / sun.shadow.mapSize.x, texelY = height / sun.shadow.mapSize.y;
-  // Anchor to the absolute world, including floating-origin rebases. Camera
-  // motion may shift the map by whole texels but cannot slide between them.
+  // Snap to whole texels in absolute world space, across origin rebases, so
+  // shadows don't shimmer as the camera moves.
   point.set(0, 0, worldOrigin).applyMatrix4(lightCamera.matrixWorldInverse);
   const centerX = point.x + Math.round(((bounds.min.x + bounds.max.x) / 2 - point.x) / texelX) * texelX;
   const centerY = point.y + Math.round(((bounds.min.y + bounds.max.y) / 2 - point.y) / texelY) * texelY;

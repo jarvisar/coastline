@@ -2,17 +2,15 @@ import * as THREE from 'three';
 import { randomAt, lerp, smoothstep } from './route.js';
 import { volcanicPalette } from './volcanic-palette.js';
 
-// A great stratovolcano stands on the horizon ahead, erupting. Like the sky
-// it travels with the car, so it keeps its bearing and never draws nearer; it
-// sits beyond the fog and fades into the haze instead. Only the road-level
-// cameras look far enough along the horizon to see it.
+// Moves with the car like the sky, so it keeps its bearing and never gets
+// closer. It sits past the fog; only road-level cameras see it.
 const ERUPTION_DIRECTION = new THREE.Vector3(-.36, 0, -.93).normalize();
 const DISTANCE = 900, SIDES = 15, PUFFS = 64;
-// The crater lip is breached on the side facing the road, where lava pours out.
+// Angle of the crater breach, facing the road.
 const FRONT = Math.atan2(-ERUPTION_DIRECTION.z, -ERUPTION_DIRECTION.x);
 const centre = ERUPTION_DIRECTION.clone().multiplyScalar(DISTANCE);
-// Ring radius and height, from a foot hidden in the haze up to the crater lip.
-// The foot stays narrow enough never to reach the edge of an overhead view.
+// [radius, height] rings from foot to crater lip. The foot is narrow enough
+// to stay out of overhead views.
 const PROFILE = [[330, -55], [215, 52], [134, 124], [80, 178], [52, 206]];
 export const CRATER = new THREE.Vector3(centre.x, 196, centre.z);
 
@@ -40,8 +38,7 @@ function mountain() {
     const shade = typeof tint === 'function' ? tint(normal, (a.y + b.y + c.y) / 3) : tint;
     for (const p of [a, b, c]) { positions.push(p.x, p.y, p.z); colors.push(shade.r, shade.g, shade.b); }
   };
-  // Distance lifts the shadows and drains colour: the foot dissolves into the
-  // haze that also hides the far terrain, the summit stays a crisp silhouette.
+  // Lower slopes blend toward the horizon colour so the foot fades into the haze.
   const rock = (n, y) => {
     const lit = Math.max(0, n.dot(light)), glow = smoothstep(120, 206, y) * Math.max(0, n.dot(toward));
     return shadowSide.clone().lerp(litSide, lit).lerp(horizon, .18 + .72 * (1 - smoothstep(-70, 150, y))).add(ember.clone().multiplyScalar(.035 * glow));
@@ -56,7 +53,6 @@ function mountain() {
     const next = (k + 1) % SIDES, a = rings[level][k], b = rings[level][next], c = rings[level + 1][k], d = rings[level + 1][next];
     face(a, b, d, rock); face(a, d, c, rock);
   }
-  // The crater: an inner wall lit from the lava pond that fills it.
   const lip = rings.at(-1), floor = lip.map(p => new THREE.Vector3(lerp(CRATER.x, p.x, .62), CRATER.y - 6, lerp(CRATER.z, p.z, .62)));
   const throat = ember.clone().multiplyScalar(.28).lerp(shadowSide, .35);
   for (let k = 0; k < SIDES; k++) {
@@ -64,9 +60,8 @@ function mountain() {
     face(lip[k], floor[next], lip[next], throat); face(lip[k], floor[k], floor[next], throat);
     face(new THREE.Vector3(CRATER.x, CRATER.y - 6, CRATER.z), floor[k], floor[next], molten);
   }
-  // Lava pours through the breach and down three gullies on the near flank,
-  // bright at the lip and dimming to a dull crust where it slows. Each sample
-  // is cast onto the finished flank so the flows lie in its facets.
+  // Three lava gullies on the near flank. Samples are raycast onto the finished
+  // flank so the flows lie on its facets.
   const flank = new THREE.BufferGeometry();
   flank.setAttribute('position', new THREE.Float32BufferAttribute(positions.slice(), 3));
   const surface = new THREE.Mesh(flank), caster = new THREE.Raycaster(), inward = new THREE.Vector3();
@@ -97,9 +92,8 @@ function mountain() {
   return g;
 }
 
-// The ash column: faceted puffs that leave the crater fast, slow as they climb
-// and spread into a leaning head. Each puff's phase, spin and size ride along
-// as attributes, so the column animates entirely on the GPU.
+// Ash column. Per-puff phase, spin and size are attributes so it animates
+// entirely on the GPU.
 function column() {
   const puff = new THREE.IcosahedronGeometry(1, 1), source = puff.attributes.position, positions = [], seeds = [];
   for (let n = 0; n < PUFFS; n++) {
@@ -135,7 +129,7 @@ export class VolcanicBackdrop {
         vec3 centre = vec3(${CRATER.x.toFixed(2)}, ${CRATER.y.toFixed(2)}, ${CRATER.z.toFixed(2)})
           + wind * age * age * 380.0 + vec3(sin(swirl), 0.0, cos(swirl)) * age * 34.0 + vec3(0.0, rise * 540.0, 0.0);
         float radius = (20.0 + age * 160.0) * plumeSeed.z;
-        // A tall jet leaves the vent; higher up the puffs flatten into the head.
+        // Tall near the vent, flattening as the puffs age.
         vec3 transformed = centre + position * radius * vec3(1.0, mix(2.1, .72, smoothstep(0.0, .55, age)), 1.0);
         vPlumeAge = age; vPlumeRise = rise; vPlumeShape = position;
         vec3 towardCamera = normalize(-(modelViewMatrix * vec4(centre, 1.0)).xyz);
@@ -143,8 +137,7 @@ export class VolcanicBackdrop {
       `);
       shader.fragmentShader = `varying float vPlumeAge; varying float vPlumeRise; varying vec3 vPlumeShape; varying float vPlumeEdge;\n` + shader.fragmentShader;
       shader.fragmentShader = shader.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
-        // Dark ash, lit copper from the crater below and faintly rose on top
-        // where the last of the daylight reaches it. Linear colours.
+        // Copper underlight from the crater, faint rose on top. Linear colours.
         vec3 facet = normalize(cross(dFdx(vPlumeShape), dFdy(vPlumeShape)));
         float lit = max(0.0, dot(facet, normalize(vec3(-.5, .75, .45))));
         vec3 ash = mix(vec3(.034, .028, .034), vec3(.1, .075, .085), lit);

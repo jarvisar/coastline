@@ -3,8 +3,8 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { vehicleGeometry, TRAFFIC_MODELS } from '../traffic-models.js';
 
-// Small merged, flat-shaded street furniture with its colours baked into
-// vertex colours, so one instanced mesh per kind draws a whole chunk's worth.
+// Merges parts into one geometry with baked vertex colours, so each furniture
+// kind is a single instanced mesh per chunk.
 export class Parts {
   constructor() { this.parts = []; }
   add(source, position, color, rotation = [0, 0, 0]) {
@@ -26,7 +26,6 @@ export class Parts {
     g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.normalize()));
     this.add(g, from.add(to).multiplyScalar(.5).toArray(), color);
   }
-  // One closed pitched roof and two outward-facing gable triangles.
   gable(p, width, length, wallHeight, ridgeHeight, wall, roof, overhang = .35) {
     const [x, y, z] = p, rise = ridgeHeight - wallHeight, half = width / 2;
     const eave = wallHeight - rise * overhang / half + .22;
@@ -47,8 +46,7 @@ export class Parts {
 
 const iron = '#3d4246', darkIron = '#2f3336', galvanised = '#9da3a6', timber = '#6b5a48';
 
-// A street lamp: a tapered column with an arm reaching over the road, unlit
-// in the daytime storm. Local -x is toward the road.
+// Local -x points at the road.
 function lampPost() {
   const p = new Parts();
   p.cylinder([0, 3.6, 0], .09, .15, 7.2, iron, 6);
@@ -58,7 +56,6 @@ function lampPost() {
   p.box([-1.75, 7.36, 0], [.7, .06, .28], '#d9d5c4');
   return p.finish();
 }
-// A pedestal traffic signal on a street corner: three lamps in a hood.
 function trafficSignal() {
   const p = new Parts();
   p.cylinder([0, 2.2, 0], .07, .1, 4.4, iron, 6);
@@ -67,7 +64,6 @@ function trafficSignal() {
   p.box([-.2, 5.16, 0], [.24, .06, .4], darkIron);
   return p.finish();
 }
-// A promenade bench facing the water.
 function bench() {
   const p = new Parts();
   for (const z of [-.8, .8]) {
@@ -78,7 +74,6 @@ function bench() {
   p.box([.3, .84, 0], [.07, .42, 1.9], timber);
   return p.finish();
 }
-// A bus shelter: a flat roof on two posts with a glass back and a stop sign.
 function busShelter() {
   const p = new Parts();
   for (const z of [-1.7, 1.7]) p.box([.6, 1.25, z], [.1, 2.5, .1], iron);
@@ -89,31 +84,29 @@ function busShelter() {
   p.cylinder([-.9, 1.4, 1.6], .05, .05, 2.8, iron, 5);
   return p.finish();
 }
-// A four-metre run of quay railing, laid along z.
+// 4 m of railing along z.
 function railing() {
   const p = new Parts();
   p.box([0, 1.02, 0], [.07, .09, 4], iron);
-  // The crossbar fits inside the posts, leaving their outer faces exposed.
+  // Crossbar is thinner than the posts so their outer faces stay visible.
   p.box([0, .5, 0], [.04, .05, 4], iron);
   const post = (z, depth) => {
     const g = new THREE.BoxGeometry(.05, .975, depth);
-    // The handrail closes the post's top. Omit that buried contact face.
+    // Drop the top face, which is hidden inside the handrail.
     g.setIndex(Array.from(g.index.array).filter(i => g.attributes.normal.getY(i) < .5));
     p.add(g, [0, .4875, z], darkIron);
   };
   for (const z of [-1, 0, 1]) post(z, .05);
-  // Each span owns half of an end post; consecutive runs meet at z = ±2.
+  // Half-depth end posts so adjacent runs meet at z = ±2 without overlap.
   for (const side of [-1, 1]) post(side * 1.9875, .025);
   return p.finish();
 }
-// A bollard by the water and a bin by the bench.
 function bollard() {
   const p = new Parts();
   p.cylinder([0, .42, 0], .12, .14, .84, darkIron, 6);
   p.cylinder([0, .88, 0], .1, .13, .1, galvanised, 6);
   return p.finish();
 }
-// A round manhole cover in the road.
 function manhole() {
   const p = new Parts();
   p.cylinder([0, .015, 0], .52, .52, .03, '#35383b', 10);
@@ -136,7 +129,6 @@ function waterTank() {
   return p.finish();
 }
 
-// A small riverside coffee stand, with a pitched metal roof and a serving hatch.
 function kiosk() {
   const p = new Parts();
   p.box([0, .14, 0], [4, .28, 4.8], '#b0aaa0');
@@ -159,8 +151,7 @@ function litterBin() {
   return p.finish();
 }
 
-// Pruned street trees: the same faceted geometry as the other routes, with a
-// narrower, upright crown that fits between the shopfronts and the kerb.
+// Narrow crown so it fits between shopfronts and the kerb.
 function streetTree(variant) {
   const trunk = new Parts(), crown = new Parts();
   trunk.beam([0, -.04, 0], [.035, .64, 0], .038, '#ffffff', 5);
@@ -179,8 +170,7 @@ function streetTree(variant) {
 export const cityTrees = [streetTree(0), streetTree(1)];
 export const cityAssets = { lamp: lampPost(), signal: trafficSignal(), bench: bench(), shelter: busShelter(), railing: railing(), bollard: bollard(), manhole: manhole(), tank: waterTank(), kiosk: kiosk(), bin: litterBin() };
 
-// Parked cars reuse the traffic fleet's bodies: the paint shell carries a
-// per-instance colour and everything else keeps its own baked colours.
+// Reuses traffic car bodies. Paint is tinted per instance, trim keeps baked colours.
 function parkedCar(spec) {
   const { paint, details, headlights, taillights } = vehicleGeometry(spec);
   const tint = (g, color) => {

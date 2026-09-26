@@ -2,7 +2,7 @@ import { chromium } from '@playwright/test';
 import { mkdir, readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
-// Rasterize the existing road mark; no new artwork or image dependency.
+// Rasterize favicon.svg so there's no separate artwork or image dependency.
 const browser = await chromium.launch(process.env.CHROME_PATH
   ? { executablePath: process.env.CHROME_PATH }
   : process.platform === 'win32'

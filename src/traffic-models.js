@@ -11,16 +11,15 @@ export const TRAFFIC_MODELS = [
   { name: 'van', width: 2.08, length: 4.7, cabin: [1.93, 1.35, 3.55], cabinZ: .32 },
 ];
 
-// Chooser-only: a low, short-cabin coupe. It is never spawned into traffic and
-// is not any route's own car, so the roads keep their ordinary-looking fleet.
+// Chooser-only coupe. Never spawned into traffic.
 export const SPORTS_MODEL = { name: 'sports', width: 1.94, length: 4.2, cabin: [1.6, .56, 1.84], cabinZ: .3, drop: .2 };
 
 export const TRAFFIC_COLORS = ['#d8c7a0', '#e9e5d9', '#577f96', '#829789', '#b34e43', '#d2a345', '#58636a', '#b7c4c9', '#796c8c', '#397e7b'];
 
 export const WHEEL = { radius: .43, width: .25, hubRadius: .21, hubWidth: .26, y: .44 };
 
-// Build one body shape as four merged geometries. Traffic bakes its wheels into
-// the details mesh; a driven car asks for them separately so they can turn.
+// Four merged geometries per body. Traffic bakes wheels into details; a driven
+// car gets them separately so they can turn.
 export function vehicleGeometry(spec, { separateWheels = false } = {}) {
   const parts = { paint: [], details: [], headlights: [], taillights: [] };
   const wheels = [];
@@ -35,15 +34,14 @@ export function vehicleGeometry(spec, { separateWheels = false } = {}) {
     parts[category].push(geometry);
   }
   const box = (size, location, category = 'paint', color) => add(new THREE.BoxGeometry(...size), location, category, color);
-  // Surface trim only needs its visible face. This also keeps the many parked
-  // copies in city chunks within their existing triangle budget.
+  // Trim is a single visible face to keep parked city cars in the triangle budget.
   const trimFace = (size, location, yaw, color) => {
     const geometry = new THREE.PlaneGeometry(...size);
     geometry.rotateY(yaw); add(geometry, location, 'details', color);
   };
   const { width: w, length: l, cabin: [cw, ch, cl], cabinZ: cz, name, drop = 0 } = spec;
   const roofY = 1.22 + ch;
-  // A narrow shoulder catches the light without bevel meshes or extra materials.
+  // Tapered shoulder instead of bevel meshes or extra materials.
   const shell = new THREE.BoxGeometry(w, .65, l, 1, 2, 1);
   const shellVertices = shell.attributes.position;
   for (let i = 0; i < shellVertices.count; i++) {
@@ -53,7 +51,6 @@ export function vehicleGeometry(spec, { separateWheels = false } = {}) {
   shell.computeVertexNormals();
   add(shell, [0, .89, 0], 'paint');
   box([w * .94, .13, l - .14], [0, 1.24, 0]);
-  // Slightly sloped glass keeps the silhouettes in the player's faceted style.
   const glass = new THREE.BoxGeometry(cw, ch, cl);
   const vertices = glass.attributes.position;
   for (let i = 0; i < vertices.count; i++) if (vertices.getY(i) > 0) {
@@ -65,10 +62,10 @@ export function vehicleGeometry(spec, { separateWheels = false } = {}) {
   box([cw * .94 + .09, .12, cl - .26], [0, roofY + .02, cz + .06]);
   const lampHeight = name === 'sports' ? .14 : name === 'van' ? .28 : .22;
   for (const side of [-1, 1]) {
-    // Painted pillars follow the glass rake instead of standing proud of it.
+    // Pillars follow the glass rake.
     for (const [z, rake] of [[-cl / 2 + .02, .24], [.16, 0], [cl / 2 - .02, -.12]]) {
       const pillar = new THREE.BoxGeometry(.085, ch, .09), p = pillar.attributes.position;
-      // The roof, beltline and glass enclose three faces of each pillar.
+      // Roof, beltline and glass hide three faces of each pillar, so drop them.
       const exposed = [side > 0 ? 0 : 1, 4, 5];
       pillar.setIndex(exposed.flatMap(face => Array.from(pillar.index.array.slice(face * 6, face * 6 + 6))));
       pillar.clearGroups();
@@ -105,7 +102,6 @@ export function vehicleGeometry(spec, { separateWheels = false } = {}) {
     box([.34, .065, .035], [0, 1.52, l / 2 + .012], 'details', '#414c4b');
   }
   if (name === 'van') {
-    // Solid rear quarter panels distinguish the van from the long-window wagon.
     for (const side of [-1, 1]) box([.11, ch - .06, 1.48], [side * cw / 2, 1.22 + ch / 2, 1.27]);
     box([cw, ch, .1], [0, 1.22 + ch / 2, cz + cl / 2]);
     box([cw * .69, .5, .025], [0, roofY - .37, cz + cl / 2 + .055], 'details', '#344e55');
@@ -115,7 +111,6 @@ export function vehicleGeometry(spec, { separateWheels = false } = {}) {
     box([cw * .94, .075, .23], [0, roofY + .015, cz + cl / 2 - .1]);
   }
   if (name === 'sports') {
-    // A splitter, skirts and a rear wing read as quick from the miniature view.
     box([w * .9, .1, .4], [0, .63, -l / 2 - .12], 'details', '#2f3a3c');
     for (const side of [-1, 1]) box([.1, .2, l * .44], [side * (w / 2 - .02), .62, .1], 'details', '#2f3a3c');
     for (const x of [-.55, .55]) box([.09, .3, .13], [x, 1.42, l / 2 - .3]);
@@ -124,10 +119,10 @@ export function vehicleGeometry(spec, { separateWheels = false } = {}) {
   }
   const merged = Object.fromEntries(Object.entries(parts).map(([key, geometries]) => {
     const joined = joinCoplanarFaces(mergeGeometries(geometries));
-    // Compact unused pillar vertices as well as repeated corners in the batch.
+    // Drops unused pillar vertices and repeated corners.
     const geometry = mergeVertices(joined, 1e-6);
     joined.dispose();
-    // A lowered body sits closer to unchanged wheels, so drop only the shell.
+    // Lowered bodies drop toward unchanged wheels.
     if (drop) geometry.translate(0, -drop, 0);
     for (const part of geometries) part.dispose();
     return [key, geometry];
@@ -135,8 +130,7 @@ export function vehicleGeometry(spec, { separateWheels = false } = {}) {
   return { ...merged, wheels };
 }
 
-// Merge each model into four meshes, with shared geometry across the small fleet.
-// Only the paint material belongs to an individual car.
+// The fleet shares geometry and materials. Only paint is per car.
 export function createTrafficModels() {
   const material = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: .76, flatShading: true, ...extra });
   const details = material('#ffffff', { vertexColors: true });
@@ -163,7 +157,7 @@ export function createTrafficModels() {
       vehicle.car.name = `traffic-${vehicle.spec.name}`;
       Object.values(templates[index]).forEach((geometry, i) => { vehicle.car.children[i].geometry = geometry; });
     },
-    // Lamps from daytime (0) to night (1); a storm runs them part way up.
+    // 0 is day, 1 is night. Storms use values in between.
     setLights(level) { headlights.emissiveIntensity = .3 + 2 * level; taillights.emissiveIntensity = .25 + 1.55 * level; },
     setNight(night) { this.setLights(night ? 1 : 0); },
     dispose() {

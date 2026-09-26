@@ -4,8 +4,7 @@ import { WeatherMotion } from './weather-motion.js';
 
 const WIDTH = 300, HEIGHT = 200, DEPTH = 360, COUNT = 1350;
 
-// Soft circular flakes in a world-anchored volume. A single draw call supplies
-// fine distant snow and a few larger foreground flakes without image assets.
+// Soft round flakes in a world-anchored volume, in one draw call with no textures.
 export class Snowfall {
   constructor() {
     const sizes = [], opacity = [];
@@ -28,8 +27,7 @@ export class Snowfall {
       shader.vertexShader = `attribute float flakeSize; attribute float flakeOpacity;
         varying float vFlakeAlpha;\n` + shader.vertexShader;
       shader.vertexShader = shader.vertexShader.replace('gl_PointSize = size;', `
-        // Orthographic projection keeps world scale fixed; depth still makes
-        // nearby snow feel larger and more distinct than the distant flurry.
+        // Orthographic cameras don't shrink distant points, so scale by depth here.
         gl_PointSize = size * flakeSize * clamp(430.0 / max(80.0, -mvPosition.z), 0.65, 1.65);
         vec3 edge = abs(transformed) / vec3(${WIDTH / 2}.0, ${HEIGHT / 2}.0, ${DEPTH / 2}.0);
         vFlakeAlpha = flakeOpacity * (1.0 - smoothstep(0.78, 1.0, max(edge.x, max(edge.y, edge.z))));

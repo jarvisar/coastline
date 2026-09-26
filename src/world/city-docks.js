@@ -4,9 +4,8 @@ import { blockAt, blockBoundary, quayOffset, pavementHeight, farBankHeight, city
 import { Parts } from './city-assets.js';
 import { registerChunkResources } from './chunk-resources.js';
 
-// Extend a seeded sequence in either direction. Each gap independently picks
-// seven or eight blocks; cached prefixes and binary lookup keep chunk queries
-// cheap and give the same result regardless of loading order.
+// Dock blocks 7 or 8 apart, extended lazily both ways. Cached prefixes and binary
+// search keep queries cheap and independent of loading order.
 const firstDockBlock = Math.floor(randomAt(0, 3970) * 8);
 const dockBlocks = [[firstDockBlock], [firstDockBlock]];
 function scheduledBlocks(from, to) {
@@ -51,8 +50,7 @@ const BOATS = [
 function cabinBoat(variant, palette) {
   const p = new Parts(), cream = '#ddd4b6', rubber = '#343e3c', glass = '#405f64';
   const { cabin, center, height } = BOATS[variant], { paint, roof } = BOATS[palette];
-  // A narrow chine under the waterline and a clipped bow keep the hull
-  // faceted, while giving it a proper boat silhouette rather than a slab.
+  // Narrow chine below the waterline and a clipped bow.
   const outline = [[-1.65, -6.2], [-1.4, -6.5], [1.4, -6.5], [1.65, -6.2], [1.65, 4.8], [.85, 6.5], [-.85, 6.5], [-1.65, 4.8]];
   const hull = [], triangle = (a, b, c) => hull.push(...a, ...b, ...c);
   for (let i = 0; i < outline.length; i++) {
@@ -69,7 +67,6 @@ function cabinBoat(variant, palette) {
   const top = .5 + height;
   p.box([0, .5 + height / 2, center], [2.35, height, cabin], paint);
   p.box([0, .6, center], [2.4, .12, cabin + .05], cream);
-  // Two broad roof facets catch the light without adding a rounded surface.
   for (const side of [-1, 1]) p.box([side * .69, top + .1, center], [1.4, .15, cabin + .4], roof, [0, 0, -side * .065]);
   const windows = variant === 0 ? 4 : variant === 1 ? 3 : 2;
   for (const x of [-1.18, 1.18]) for (let k = 0; k < windows; k++) {
@@ -94,12 +91,12 @@ function cabinBoat(variant, palette) {
   p.cylinder([-.55, top + .27, center + .75], .12, .13, .24, '#96967f', 6);
   p.cylinder([-.55, top + .42, center + .75], .2, .2, .07, cream, 6);
   if (variant === 1) {
-    // Shorter cabin, open stern seating and a small roof hatch.
+    // Stern seating and a roof hatch.
     p.box([0, .82, -4.7], [2.35, .65, .62], paint);
     p.box([0, 1.16, -4.7], [2.4, .12, .68], cream);
     p.box([0, top + .21, center + 1.7], [1.05, .12, .75], glass);
   } else if (variant === 2) {
-    // A little working launch with a covered load behind its wheelhouse.
+    // Covered load behind the wheelhouse.
     p.box([0, .8, -2.1], [2.15, .6, 3.3], '#a49168');
     p.box([0, 1.14, -2.1], [2.25, .18, 3.4], '#8c967b');
     for (const z of [-3.1, -1.1]) p.box([0, 1.245, z], [2.25, .035, .075], cream);
@@ -133,8 +130,7 @@ export function buildCityDocks(chunk) {
       chunk.prism(target, s0, s1, Math.min(a, b), Math.max(a, b), y0, y1, color);
     };
     const timber = new THREE.Color(TIMBERS[site.timber]);
-    // Continuous edges follow the quay. Broad, subtly varied boards meet
-    // edge to edge, avoiding noisy subpixel gaps at the driving camera scale.
+    // Broad boards meet edge to edge. Gaps show as subpixel noise from the driving camera.
     const strip = (a, b, outer, inner, y, color) => chunk.quad(target,
       [[a, outer], [b, outer], [b, inner], [a, inner]].map(([t, du]) => chunk.at(t, offset(t, du), y)), color, [0, 1, 0]);
     for (let ds = -9; ds < 9; ds += 1) {
@@ -153,8 +149,7 @@ export function buildCityDocks(chunk) {
       box(s + ds - .19, s + ds + .19, du - .19, du + .19, RIVER_BED, deck + .55, piling);
       box(s + ds - .23, s + ds + .23, du - .23, du + .23, deck + .51, deck + .61, iron);
     }
-    // The far bank slopes into the river: extend its stairs over that slope
-    // to dry land, instead of mirroring the near bank's much steeper wall.
+    // The far bank slopes, so its stairs run out over the slope to dry land.
     const stairS = s - 7.25, landing = (far ? farBankHeight(stairS) : pavementHeight(stairS)) + .075;
     const count = Math.ceil((landing - deck) / .24), bottomU = offset(stairS, -5.7);
     const landingU = far ? FAR_BANK_TOP - .7 : shore(stairS) + .7;
@@ -170,7 +165,6 @@ export function buildCityDocks(chunk) {
       box(cargoS - .6, cargoS + .6, -2.55, -1.45, deck, deck + .85, new THREE.Color('#958268'));
       for (const ds of [-.4, .4]) box(cargoS + ds - .035, cargoS + ds + .035, -2.57, -1.43, deck + .85, deck + .91, piling);
     }
-    // One light handrail follows the stair slope, leaving the landing open.
     const railFrom = chunk.at(s - 8.16, bottomU - outward * .1, deck + .85), railTo = chunk.at(s - 8.16, landingU + outward * .15, landing + .85);
     beam(railFrom, railTo, .075, '#67716a');
     for (const point of [railFrom, railTo]) beam({ ...point, y: point.y - .85 }, point, .075, '#67716a');
@@ -199,7 +193,7 @@ export function buildCityDocks(chunk) {
   }
 }
 
-// Called for neighboring chunks too, so a stair opening never closes at a seam.
+// Neighbouring chunks call this too, so a stair opening never closes at a seam.
 export function dockRailingSpans(from, to, bank = 'near') {
   let spans = [[from, to]];
   for (const site of cityDocks(from - 12, to + 12)) {

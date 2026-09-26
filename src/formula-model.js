@@ -2,14 +2,12 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { stableShadowDepth } from './world/shadow-depth.js';
 
-// An open-wheel racer: a narrow carbon tub slung between four exposed slicks,
-// with a front wing, sidepods, an airbox and a rear wing. Like the coupe it is
-// chooser-only, so the roads keep their ordinary-looking fleet.
+// Chooser-only, like the coupe, so traffic never uses it.
 export const FORMULA_SHAPE = {
   name: 'formula', width: 1.9, length: 5.2,
-  // The chooser reads these the way it reads a road car's measurements.
+  // Read by the chooser art like a road car's dimensions.
   cabin: [.62, .34, 1.1], cabinZ: .12, cabinY: .52, wheelRadius: .38, wheelZ: 1.66,
-  // First person sits just ahead of the halo rather than behind a windshield.
+  // First-person eye sits just ahead of the halo.
   eye: [0, .88, -.76],
 };
 
@@ -30,8 +28,7 @@ export function createFormulaCar(entry) {
     parts[category].push(geometry);
   }
   const box = (size, location, category, color) => add(new THREE.BoxGeometry(...size), location, category, color);
-  // One end of a box pulled in, the way the road cars' glass is, keeps the
-  // nose cone and engine cover faceted rather than smoothly lofted.
+  // Box with one end (`at` = -1 or 1 on z) scaled in, for faceted tapers.
   const tapered = (size, location, { at, x, y = 1, lift = 0 }) => {
     const geometry = new THREE.BoxGeometry(...size), position = geometry.attributes.position;
     for (let i = 0; i < position.count; i++) if (Math.sign(position.getZ(i)) === at) {
@@ -40,48 +37,47 @@ export function createFormulaCar(entry) {
     geometry.computeVertexNormals(); add(geometry, location);
   };
 
-  // Floor plank and rear diffuser: the flat carbon the whole car sits on.
+  // Floor and diffuser
   box([.78, .1, 3.5], [0, .15, .2], 'details', CARBON);
   box([.86, .22, .34], [0, .21, 2.25], 'details', CARBON);
-  // Nose cone, tub and the raised cockpit sides.
+  // Nose, tub and cockpit sides
   tapered([.56, .3, 1.25], [0, .42, -2], { at: -1, x: .5, y: .5, lift: -.05 });
   box([.66, .34, 2.5], [0, .37, -.15]);
   for (const side of [-1, 1]) box([.1, .22, 1.3], [side * .3, .63, .05]);
   box([.52, .06, 1.3], [0, .57, .05], 'details', DARK);
-  // Driver: a helmet and visor sunk into the opening.
+  // Helmet and visor
   const helmet = new THREE.SphereGeometry(.16, 8, 6);
   add(helmet, [0, .84, -.04], 'details', SUIT);
   box([.25, .07, .04], [0, .85, -.2], 'details', DARK);
-  // Halo: two side rails meeting a single pillar ahead of the driver.
+  // Halo
   box([.09, .28, .09], [0, .75, -.62], 'details', CARBON);
   box([.64, .07, .09], [0, .89, -.6], 'details', CARBON);
   for (const side of [-1, 1]) box([.07, .07, 1.3], [side * .31, .89, -.03], 'details', CARBON);
-  // Sidepods with dark radiator inlets, and mirrors on their leading edge.
+  // Sidepods, inlets and mirrors
   for (const side of [-1, 1]) {
     tapered([.4, .38, 1.5], [side * .42, .38, .45], { at: 1, x: .45, y: .6 });
     box([.34, .3, .06], [side * .42, .4, -.32], 'details', DARK);
     box([.17, .08, .07], [side * .45, .72, -.42]);
   }
-  // Airbox and the engine cover tapering into the rear wing.
+  // Airbox and engine cover
   box([.4, .42, .34], [0, .78, .85]);
   box([.26, .2, .05], [0, .82, .67], 'details', DARK);
   tapered([.5, .44, 1.6], [0, .56, 1.35], { at: 1, x: .38, y: .5, lift: -.1 });
-  // Front wing, its flap and endplates.
+  // Front wing
   box([1.5, .07, .5], [0, .26, -2.32], 'details', CARBON);
   box([1.42, .06, .28], [0, .36, -2.5], 'details', CARBON);
   for (const side of [-1, 1]) box([.06, .3, .62], [side * .78, .35, -2.36], 'details', CARBON);
-  // Rear wing on a central pylon, carbon like the wing it carries so it does
-  // not read as a fin in the paint colour from behind.
+  // Rear wing. The pylon is carbon so it doesn't read as a painted fin from behind.
   box([.14, .42, .3], [0, .84, 2.1], 'details', CARBON);
   box([1.05, .07, .42], [0, 1.08, 2.15], 'details', CARBON);
   box([1, .06, .26], [0, 1.22, 2.28], 'details', CARBON);
   for (const side of [-1, 1]) box([.06, .52, .66], [side * .5, 1.02, 2.14], 'details', CARBON);
-  // Pushrods and wishbones reaching out to each exposed wheel.
+  // Suspension arms
   for (const side of [-1, 1]) for (const z of [-FORMULA_SHAPE.wheelZ, FORMULA_SHAPE.wheelZ]) {
     for (const y of [.3, .56]) box([.62, .05, .07], [side * .42, y, z], 'details', CARBON);
     box([.07, .05, .5], [side * .42, .43, z + (z < 0 ? .3 : -.3)], 'details', CARBON);
   }
-  // A rear rain light keeps the racer visible on the midnight route.
+  // Rain light, for night routes.
   box([.14, .12, .05], [0, .92, 2.28], 'taillights');
 
   const mat = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: .58, flatShading: true, ...extra });
@@ -115,7 +111,7 @@ export function createFormulaCar(entry) {
   return {
     car, body, wheels,
     nightLights: [{ material: rear, day: .15, night: 2.6 }],
-    // A chosen car keeps its own paint and kit on every route.
+    // No-op: this car keeps the same kit on every route.
     applyTrim() {},
     paintCar(color) { paint.color.set(color || entry.paint); },
     disposeModel() {

@@ -1,17 +1,17 @@
 import { randomAt, headlandCenter, coastOffset, shorelineOffset, beachWidth, bridgeAt, overlookAt, groundHeight } from './route.js';
 import { createDiscoverySchedule } from './discovery-schedule.js';
 
-// Approximate miles between sightings of EACH kind. Lower = more frequent.
-// Edit one number, then reload. Infinity disables a kind. Together: ~2.5 miles.
+// Rough miles between sightings of each kind. Lower is more frequent.
+// Infinity disables a kind. About 2.5 miles combined.
 export const COASTAL_DISCOVERY_MILES = {
-  lighthouse: 6, // Includes the keeper's cottage.
-  dock: 6, // Includes the moored rowboat.
+  lighthouse: 6,
+  dock: 6,
   whale: 15,
 };
 const schedule = createDiscoverySchedule(COASTAL_DISCOVERY_MILES,
   { lighthouse: .99, dock: .98, whale: 1 }, 2101, districtSite);
 export const COASTAL_DISCOVERY_SPACING = schedule.spacing;
-// Gulls retain their original chunk schedule in environment.js / birds.js.
+// Gulls are scheduled separately in environment.js / birds.js.
 
 function clearHeadland(s) {
   const overlook = overlookAt(s);
@@ -30,14 +30,12 @@ function towerSite(index, desired) {
   return null;
 }
 function dockSite(index, desired) {
-  // Look for a broad beach near the district's own anchor, independently of
-  // bridges and tidal inlets. Empty districts still leave long quiet stretches.
+  // Search for a wide beach near the district anchor. Districts can end up empty.
   const direction = randomAt(index, 2113) > .5 ? 1 : -1;
   for (const offset of [0, 64, -64, 128, -128, 192, -192]) {
     const s = desired + offset * direction;
     if (beachWidth(s) < 16) continue;
-    // A landing needs dry sand at its shore end and a reasonably straight
-    // waterline across its width. Avoid the submerged floor of a ravine.
+    // Needs dry sand at the shore end and a fairly straight waterline across its width.
     const shore = shorelineOffset(s);
     if ([-4, 0, 4].some(ds => groundHeight(s + ds, shore + 7) < .8
       || Math.abs(shorelineOffset(s + ds) - shore) > 2.5)) continue;
@@ -57,7 +55,7 @@ export function discoveryClearsPlanting(s, u, sites) {
   return sites.every(site => {
     if (site.kind === 'lighthouse') {
       const ds = Math.abs(s - site.s);
-      // Protect both the compound and the narrow paved pedestrian approach.
+      // Clears the compound and its footpath to the road.
       return !(Math.hypot(s - site.s, u - site.u) < 18 || (ds < 4.5 && u >= site.u && u < -7));
     }
     if (site.kind === 'dock') return Math.hypot(s - site.s, u - site.u) > 24;

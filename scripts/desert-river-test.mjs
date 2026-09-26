@@ -28,19 +28,17 @@ try {
       return { s: a.vehicle.s, water, bridges, chunks: a.world.chunks.size, resident: a.graphics.settings.chunks.behind + a.graphics.settings.chunks.ahead + 1, origin: a.world.origin, carZ: a.vehicle.car.position.z,
         geometries: a.rendering.renderer.info.memory.geometries, calls: a.rendering.renderer.info.render.calls };
     });
-    // One water sheet per resident chunk, however many this level keeps built.
+    // One water sheet per resident chunk at any quality level.
     assert.equal(state.water, state.resident); assert.ok(state.bridges >= 1); assert.equal(state.chunks, state.resident);
     assert.ok(state.geometries < 150); assert.ok(Math.abs(state.carZ) < 1030);
     records.push(state);
     if (s === 290) await page.screenshot({ path: `${output}/desktop-crossing.png` });
   }
-  // Exercise actual keyboard driving onto the planks, then back off the bridge.
   await page.evaluate(() => { const a = window.__coastline; a.vehicle.s = 291; a.vehicle.reset(); a.rendering.snap(); });
   await page.keyboard.down('KeyW');
   await page.waitForFunction(() => window.__coastline.vehicle.s > 310, { timeout: 30000 });
   await page.keyboard.up('KeyW'); await page.keyboard.press('KeyR'); await page.waitForFunction(() => !window.__coastline.changingJourney);
-  // Reset lands on a fresh random stretch, so drive back onto this crossing
-  // before reversing off it.
+  // Reset lands on a random stretch, so move back to the crossing before reversing.
   await page.evaluate(() => { const a = window.__coastline; a.vehicle.s = 315; a.vehicle.reset(); a.rendering.snap(); });
   await page.keyboard.down('ArrowDown');
   await page.waitForFunction(() => window.__coastline.vehicle.s < 302, { timeout: 30000 });
@@ -51,12 +49,12 @@ try {
   await page.screenshot({ path: `${output}/bridge-detail.png` });
   await page.keyboard.press('KeyV'); await page.waitForTimeout(900);
   await page.screenshot({ path: `${output}/third-person-crossing.png` });
-  // Returning to medium view also gives a stable frame for the shader check.
+  // Back to medium view for a stable frame in the shader check.
   await page.keyboard.press('KeyV'); await page.keyboard.press('KeyV');
   await page.waitForTimeout(1500);
   await page.evaluate(() => window.__coastline.action('pause'));
-  // Read the material in this scene; Vite hot reload can give a fresh dynamic
-  // import a different module instance from the one used to build the world.
+  // Read the material from the scene. After a Vite hot reload a dynamic import
+  // can return a different module instance from the one that built the world.
   const waterTime = () => page.evaluate(() => {
     const material = window.__coastline.rendering.scene.getObjectByName('desert-creek-water').material;
     const shader = { uniforms: {}, vertexShader: '', fragmentShader: '' };

@@ -39,10 +39,8 @@ const p = new THREE.Vector3(), before = new THREE.Vector3(), after = new THREE.V
 export class CoastalBirds {
   constructor(chunk) {
     this.start = chunk.start; this.phase = randomAt(chunk.index, 1761) * Math.PI * 2;
-    // Pick a clear cruising height once, over the tallest sea stack's crown
-    // (the chunk records it; inland boulders share the stacks' batches but
-    // lie far from the gulls' offshore circuit). The margin covers the gentle
-    // bobbing and wings without per-frame collisions.
+    // Fly above the tallest sea stack. The margin covers bobbing and wingspan
+    // so no per-frame collision check is needed.
     this.flightHeight = Math.max(22, (chunk.seaStackTop ?? 0) + 5);
     this.mesh = new THREE.InstancedMesh(geometry, material, 4);
     this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
@@ -51,7 +49,7 @@ export class CoastalBirds {
     this.mesh.computeBoundingSphere(); this.mesh.boundingSphere.radius += 85;
   }
   update(time) {
-    // Worker-restored flocks initialize this small deterministic cache once too.
+    // Built lazily so worker-restored flocks get it too.
     if (!this.flight) {
       this.flight = new Float64Array(16);
       for (let i = 0; i < 4; i++) {
@@ -62,8 +60,7 @@ export class CoastalBirds {
     }
     for (let i = 0; i < 4; i++) {
       this.flightPoint(i, time, p); this.flightPoint(i, time - .02, before); this.flightPoint(i, time + .02, after);
-      // The shoreline bends the actual world-space path; an orbit angle alone
-      // cannot tell which way the bird is travelling along that path.
+      // Heading comes from the world-space path, since the shoreline bends it.
       forward.set(after.x - before.x, after.y - before.y, after.z - before.z).normalize();
       previousForward.set(p.x - before.x, p.y - before.y, p.z - before.z).normalize();
       const turn = previousForward.z * forward.x - previousForward.x * forward.z;

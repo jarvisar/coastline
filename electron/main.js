@@ -1,10 +1,6 @@
-// Desktop shell for Coastline.
-//
-// The renderer is the unmodified Vite build (dist-electron/), served through a
-// privileged app:// scheme so absolute asset URLs, the module Web Worker,
-// storage, and secure-context APIs behave exactly as on the HTTPS deployment.
-// A sandboxed preload exposes only native fullscreen controls, Escape input, and
-// the update notice.
+// Serves the unmodified Vite build (dist-electron/) over a privileged app://
+// scheme so asset URLs, the module worker, storage and secure-context APIs
+// behave as on HTTPS. The preload exposes only fullscreen, Escape and updates.
 import { app, BrowserWindow, Menu, dialog, ipcMain, net, protocol, shell } from 'electron';
 import electronUpdater from 'electron-updater'; // CommonJS: no named exports
 import { existsSync, readFileSync, statSync } from 'node:fs';
@@ -18,8 +14,7 @@ const rendererDir = path.join(root, 'dist-electron');
 const APP_HOST = 'coastline';
 const APP_ORIGIN = `app://${APP_HOST}`;
 const RELEASES_URL = 'https://github.com/jarvisar/coastline/releases/latest';
-// Web-only helpers (install banner, offline service worker) are served as empty
-// scripts instead of being stripped from the build, so index.html stays untouched.
+// Served as empty scripts so index.html needs no desktop changes.
 const WEB_ONLY_SCRIPTS = new Set(['/pwa-register.js', '/pwa-install.js']);
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8',
@@ -31,9 +26,7 @@ const MIME = {
   '.txt': 'text/plain; charset=utf-8', '.xml': 'application/xml',
 };
 
-// --- Command line ----------------------------------------------------------
-// Flags may appear anywhere: `electron . --seed=1`, `Coastline.exe --fullscreen`,
-// or Steam launch options. Unknown switches fall through to Chromium.
+// Flags may appear anywhere, including Steam launch options. Unknown ones go to Chromium.
 const argv = process.argv.slice(1);
 const has = flag => argv.includes(flag);
 const value = flag => argv.find(arg => arg.startsWith(`${flag}=`))?.slice(flag.length + 1);
@@ -62,8 +55,7 @@ if (has('--help') || has('-h')) {
   app.exit(0);
 }
 
-// --- Metadata shared with the web app ---------------------------------------
-// The web manifest is the single source of truth for name, description, and colors.
+// The web manifest is the source of truth for name and colours.
 function readManifest() {
   for (const file of [path.join(rendererDir, 'manifest.webmanifest'), path.join(root, 'public', 'manifest.webmanifest')]) {
     try { return JSON.parse(readFileSync(file, 'utf8')); } catch { /* try the next location */ }
@@ -76,7 +68,7 @@ const backgroundColor = manifest.background_color ?? '#d5e7d9';
 app.setName(productName);
 if (process.env.COASTLINE_USER_DATA) app.setPath('userData', path.resolve(process.env.COASTLINE_USER_DATA));
 
-// --- Chromium switches (must run before `ready`) ----------------------------
+// Chromium switches must be set before `ready`.
 if (options.softwareGl) {
   app.commandLine.appendSwitch('use-angle', 'swiftshader');
   app.commandLine.appendSwitch('enable-unsafe-swiftshader');
@@ -89,7 +81,6 @@ protocol.registerSchemesAsPrivileged([{
   privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true, codeCache: true },
 }]);
 
-// --- Serving the renderer ---------------------------------------------------
 const emptyScript = () => new Response('// Not used in the desktop app.\n', { headers: { 'content-type': MIME['.js'] } });
 const notFound = () => new Response('Not found', { status: 404, headers: { 'content-type': MIME['.txt'] } });
 
@@ -118,7 +109,7 @@ function installProtocols() {
     return notFound();
   });
   if (options.devUrl) {
-    // Development against Vite: hide the same web-only scripts without editing them.
+    // Blank the same web-only scripts when running against the Vite dev server.
     const devOrigin = new URL(options.devUrl).origin;
     const scheme = devOrigin.startsWith('https') ? 'https' : 'http';
     protocol.handle(scheme, request => {
@@ -135,7 +126,6 @@ function startUrl() {
   return url.href;
 }
 
-// --- Window -----------------------------------------------------------------
 let mainWindow;
 function createWindow() {
   const state = new WindowState(path.join(app.getPath('userData'), 'window-state.json'), { width: 1280, height: 800 });
@@ -205,11 +195,8 @@ function installMenu() {
   ]));
 }
 
-// --- Updates ----------------------------------------------------------------
-// The Windows install and the Linux AppImage download a newer GitHub release in the
-// background and install it on quit. The portable exe cannot replace itself and the
-// unsigned macOS app cannot be updated in place, so for those the game's menus show a
-// button that opens the download page.
+// The Windows installer and AppImage update themselves on quit. The portable exe
+// and unsigned macOS app can't, so they get a download button instead.
 let availableUpdate;
 function checkForUpdates() {
   if (!app.isPackaged || options.noUpdate) return;
@@ -222,11 +209,10 @@ function checkForUpdates() {
       mainWindow?.webContents.send('coastline:update-available', availableUpdate);
     });
   }
-  // Failures (offline, rate limit) are logged by the updater and never block the game.
+  // The updater logs failures itself. They never block the game.
   autoUpdater.checkForUpdates().catch(() => {});
 }
 
-// --- Lifecycle --------------------------------------------------------------
 app.whenReady().then(() => {
   if (!options.devUrl && !existsSync(path.join(rendererDir, 'index.html'))) {
     dialog.showErrorBox(productName, `The web build is missing.\n\nRun "npm run electron:web" first, or start with --dev-url=<vite url>.\n\nLooked in: ${rendererDir}`);
@@ -242,7 +228,7 @@ app.whenReady().then(() => {
       return mainWindow.isFullScreen();
     });
   }
-  // The page asks once it has loaded, in case the check finished first.
+  // For a check that finished before the page loaded.
   ipcMain.handle('coastline:update-get', () => availableUpdate);
   createWindow();
   checkForUpdates();

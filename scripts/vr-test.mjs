@@ -11,8 +11,8 @@ try {
   page.on('console', message => {
     if (message.type() === 'error' || /GL_INVALID|INVALID_VALUE|texSubImage/.test(message.text())) errors.push(message.text());
   });
-  // Exercise Three's actual WebXRManager and stereo renderer with an in-page
-  // XR device. This cannot measure headset latency, comfort or hardware speed.
+  // Fake XR device drives Three's real WebXRManager and stereo path.
+  // It can't measure headset latency, comfort or hardware speed.
   await page.addInitScript(() => {
     localStorage.setItem('coastline-install-dismissed-v2', String(Date.now()));
     localStorage.setItem('coastline.graphics', JSON.stringify({ mode: 'smooth' }));
@@ -92,7 +92,7 @@ try {
     return { count: cameras.length, separation: Math.hypot(a[12] - b[12], a[13] - b[13], a[14] - b[14]) };
   });
   assert.equal(stereo.count, 2); assert.ok(Math.abs(stereo.separation - .064) < 1e-5, `Eye separation: ${stereo.separation}`);
-  // Prove the monoscopic compositor is not used in immersive mode.
+  // The monoscopic AO compositor must not run in immersive mode.
   await page.evaluate(() => {
     const ao = window.__coastline.rendering.ambientOcclusion;
     window.originalAORender = ao.render.bind(ao);
@@ -129,7 +129,7 @@ try {
   const after = await page.evaluate(() => ({ s: window.__coastline.vehicle.s, matrix: [...window.__coastline.rendering.vrCamera.camera.matrixWorld.elements], frames: window.__coastline.rendering.renderer.info.render.frame }));
   assert.equal(after.s, before.s); assert.notDeepEqual(after.matrix, before.matrix); assert.ok(after.frames > before.frames);
   const views = new Set();
-  // Paused, move once from Resume to the Camera menu entry; A selects it.
+  // One step down from Resume is the Camera entry. A selects it.
   const menuMove = async value => {
     await page.evaluate(value => { window.testXR.inputSources[0].gamepad.axes[3] = value; }, value);
     await frames();
@@ -146,7 +146,6 @@ try {
   const screenshotStyle = await page.addStyleTag({ content: '#app > :not(canvas) { display: none !important; }' });
   await page.screenshot({ path: '.artifacts/vr-stereo.png' });
   await screenshotStyle.evaluate(element => element.remove());
-  // Route chooser, garage and settings are usable without ending the session.
   await menuMove(1); await press('right', 4);
   assert.equal(await page.locator('#journey-dialog').evaluate(dialog => dialog.open), true);
   await press('right', 5);

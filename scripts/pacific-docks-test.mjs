@@ -20,7 +20,7 @@ try {
     const {coastalDiscoveries} = await import('/src/world/coastal-discoveries.js');
     const {shorelineOffset} = await import('/src/world/route.js');
     const docks = coastalDiscoveries(-100000, 100000).filter(site => site.kind === 'dock').sort((a,b) => Math.abs(a.s) - Math.abs(b.s)).slice(0, 3);
-    // Revisit the original striped inlet beach even though its dock has moved.
+    // Also revisit the original inlet beach, though its dock has moved.
     return [...docks, {kind: 'original-beach', index: 0, s: -3394, u: shorelineOffset(-3394) + 9}];
   });
   assert.equal(sites.length, 4);

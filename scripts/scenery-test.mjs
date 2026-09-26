@@ -28,7 +28,6 @@ try {
     });
     records.push(state);
     assert.equal(state.chunks, state.resident); assert.ok(state.geometries <= 185);
-    // A level without soft shading never allocates its six buffers at all.
     assert.equal(state.textures, state.softShading ? 9 : 3, 'three scenery textures, plus six reusable AO textures when it is on');
     await page.screenshot({ path: `.artifacts/scenery-${s}.png` });
   }
@@ -41,9 +40,8 @@ try {
       a.world.animate(time); a.rendering.renderer.render(a.rendering.scene, a.rendering.camera);
       const canvas = document.createElement('canvas'); canvas.width = 1440; canvas.height = 1000;
       const context = canvas.getContext('2d', { willReadFrequently: true });
-      // The crop below is in CSS pixels, and the drawing buffer only matches
-      // those at full quality, so scale the frame into place rather than
-      // drawing it at its own size and reading off the bottom of it.
+      // The crop is in CSS pixels and the buffer only matches at full quality,
+      // so scale the frame to the canvas.
       context.drawImage(document.querySelector('#scene'), 0, 0, canvas.width, canvas.height);
       return context.getImageData(70, 640, 360, 240).data;
     };
@@ -53,8 +51,7 @@ try {
       if (Math.abs(before[i] - after[i]) + Math.abs(before[i + 1] - after[i + 1]) + Math.abs(before[i + 2] - after[i + 2]) > 3) moving++;
       if (after[i] !== still[i] || after[i + 1] !== still[i + 1] || after[i + 2] !== still[i + 2]) paused++;
     }
-    // Rebase the rendered scene by a complete phase period while the world stays
-    // at the same place. This exercises the shader's floating-origin correction.
+    // Shift the scene by a full phase period to test the shader's floating-origin correction.
     for (const chunk of a.world.chunks.values()) chunk.group.position.z += 4096;
     a.vehicle.car.position.z += 4096; a.rendering.camera.position.z += 4096;
     for (const object of a.rendering.scene.children) {

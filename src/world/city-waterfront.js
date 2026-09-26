@@ -14,9 +14,8 @@ export function waterfrontKioskForBlock(block) {
   return randomAt(block, 3600) < .24 && q < -29 ? { s, u: (q - 12) / 2 } : null;
 }
 
-// A few composed rooms along the walk, with generous gaps between them. The
-// complete footprint is decided before street furniture or trees are planted.
-// Absolute block seeds and center ownership keep both directions and seams stable.
+// Seeded by absolute block index so results match across seams and in either
+// driving direction. Footprints are decided before furniture and trees.
 export function waterfrontSiteForBlock(block) {
   if (waterfrontKioskForBlock(block) || randomAt(block, 3740) > .7) return null;
   const from = blockBoundary(block) + STREET_HALF_WIDTH + 7, to = blockBoundary(block + 1) - STREET_HALF_WIDTH - 7;
@@ -27,8 +26,7 @@ export function waterfrontSiteForBlock(block) {
   const roadEdge = parking ? -Math.max(...samples.map(t => cityParkingWidth(t, parking))) - 3.5 : -11.8;
   const u1 = Math.min(u0 + 7.2, roadEdge);
   if (u1 - u0 < 3.6) return null;
-  // Dock stairs retain their approach from the boulevard, not just a gap in
-  // the railing. A mooring block remains a quieter planted stretch of the walk.
+  // Keep the approach to near-bank dock stairs clear.
   if (cityDocks(s - half - 12, s + half + 12).some(site => site.bank === 'near')) return null;
   return { block, s, half, u0, u1, kind: u1 - u0 >= 5 && randomAt(block, 3741) < .58 ? 'pergola' : 'terrace' };
 }
@@ -55,9 +53,8 @@ export function reserveCityWaterfront(chunk) {
   chunk.features.waterfront = sites.filter(site => chunk.inChunk(site.s));
 }
 
-// All surfaces, pergola timbers and planters are baked into the promenade.
-// Benches share the city's existing instances. There are no new scene objects,
-// textures, lights or animation callbacks for these places.
+// Everything is baked into the details batch and benches reuse the city
+// instances. No new meshes, textures, lights or animation.
 export function buildWaterfrontPlaces(chunk) {
   const target = chunk.scenery.details;
   const patch = (s0, s1, u0, u1, color, lift = .065) => chunk.quad(target,
@@ -72,13 +69,11 @@ export function buildWaterfrontPlaces(chunk) {
   function planter(s0, s1, u0, u1) {
     box(s0, s1, u0, u1, -.05, .65, STONE, true);
     box(s0 + .14, s1 - .14, u0 + .14, u1 - .14, .65, 1.02, LEAF);
-    // One broad flowering ribbon reads as planting, without individual petals.
     if (s1 - s0 > 2 && u1 - u0 > .7) box(s0 + .3, s1 - .3, u0 + .28, u1 - .28, 1.02, 1.12, new THREE.Color('#b5a270'));
   }
   for (const site of chunk.features.waterfront) {
     const { s, half, u0, u1, block, kind } = site, a = s - half, b = s + half;
     const pergola = kind === 'pergola', yaw = -roadFrame(s).angle;
-    // Broad boards or slabs with a stone frame and open ends toward the walk.
     const count = Math.ceil(half * 2 / (pergola ? 1 : 2.2));
     for (let k = 0; k < count; k++) {
       const from = a + half * 2 * k / count, to = a + half * 2 * (k + 1) / count;
@@ -86,7 +81,6 @@ export function buildWaterfrontPlaces(chunk) {
       patch(from, to - .035, u0, u1, tint);
     }
     for (const u of [u0, u1 - .22]) patch(a, b, u, u + .22, STONE, .075);
-    // The seat backs and planting face the boulevard; the open side faces water.
     for (const t of [s - half * .47, s + half * .47]) chunk.furniture('bench', t, u0 + 1.25, yaw, { lift: .065 });
     planter(a + .15, a + 1.25, u0 + 2.4, u1 - .2);
     planter(b - 1.25, b - .15, u0 + 2.4, u1 - .2);
@@ -96,16 +90,13 @@ export function buildWaterfrontPlaces(chunk) {
         box(t - .12, t + .12, u - .12, u + .12, .07, 3.15, WOOD, true);
         box(t - .17, t + .17, u - .17, u + .17, .07, .36, IRON);
       }
-      // Open slats preserve the low skyline and give the rain a silhouette.
       for (const u of [front, back]) box(left - .4, right + .4, u - .13, u + .13, 3.02, 3.25, WOOD);
       for (let k = 0; k < 7; k++) {
         const t = left - .25 + (right - left + .5) * k / 6;
         box(t - .09, t + .09, front - .45, back + .45, 3.24, 3.4, WOOD.clone().multiplyScalar(1.08));
       }
-      // A small climbing canopy occupies one end, leaving most of the roof open.
       box(right - 2, right + .2, back - .9, back + .35, 3.4, 3.64, LEAF);
     } else {
-      // Long, low seat walls give the simpler lookout a different silhouette.
       box(s - 2.7, s + 2.7, u1 - .9, u1 - .18, .03, .5, STONE, true);
       box(s - 2.8, s + 2.8, u1 - 1, u1 - .08, .5, .61, WOOD);
       planter(s - 2.2, s + 2.2, u1 - .65, u1 - .25);
@@ -137,7 +128,7 @@ export function buildWaterfrontCafe(chunk, site, seed) {
       solidSpan(chunk, chunk.at(t - .38, v, 0), chunk.at(t + .38, v, 0), .31);
     }
     if (index !== 0) continue;
-    // Eight broad fabric facets give the coffee stand a recognizable silhouette.
+    // Eight-sided umbrella.
     chunk.prism(target, t - .055, t + .055, tableU - .055, tableU + .055, y + .9, y + 3.1, STONE);
     const peak = chunk.at(t, tableU, y + 3.2), radius = 1.65;
     for (let k = 0; k < 8; k++) {
@@ -151,8 +142,7 @@ export function buildWaterfrontCafe(chunk, site, seed) {
   }
 }
 
-// A simple nautical accent, built as an eight-sided ring against its cabinet.
-// It uses the same opaque vertex-colour batch as the masonry around it.
+// Eight-sided life ring on a backing board, in the details batch.
 export function quayLifeRing(chunk, s, u, y, facing = -1) {
   const target = chunk.scenery.details, cream = new THREE.Color('#d4cbb1'), orange = new THREE.Color('#b9714c');
   chunk.prism(target, s - .52, s + .52, u - .12, u + .12, y - .61, y + .61, IRON);

@@ -7,8 +7,8 @@ function meshGeometry(positions) {
   result.computeVertexNormals(); result.computeBoundingSphere(); return result;
 }
 
-// Unequal fracture planes and an offset crown give each stone its own
-// silhouette. The snow shell follows that crown instead of floating above it.
+// Jittered rings and an offset crown vary each stone's silhouette.
+// The snow shell follows the crown so it doesn't float.
 function rockVariant(seed) {
   const sides = 5 + seed % 3, rock = [], snow = [];
   const face = (target, a, b, c) => target.push(...a, ...b, ...c);

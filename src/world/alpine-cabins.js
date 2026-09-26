@@ -4,25 +4,23 @@ import { randomAt } from './route.js';
 import { alpineLake, snowHeight, snowPosition } from './snow-route.js';
 
 export const CABIN_SPACING = 512;
-// The bluff toe climbs steeply out of the water, so a cabin dropped at a fixed
-// offset can end up pitched on the cliff face. Each one hunts along its stretch
-// of shore for the flattest bench instead, close to the water.
+// The shore is steep, so each cabin searches its stretch for the flattest spot
+// near the water.
 const cabinSlope = (s, u) => Math.max(Math.abs(snowHeight(s, u + 3) - snowHeight(s, u - 3)) / 6,
   Math.abs(snowHeight(s + 3, u) - snowHeight(s - 3, u)) / 6);
-// Scenery asks where the cabins are for every tree and boulder it places, so
-// each stretch of shore is surveyed once and kept.
+// Cached because scenery placement queries it for every tree and boulder.
 const cabins = new Map();
 export function alpineCabin(index) {
   if (cabins.has(index)) return cabins.get(index);
   const anchor = index * CABIN_SPACING + 54 + randomAt(index, 884) * 44;
   let best = null;
-  // A coarse sweep of the stretch, then a fine one around the best bench found.
+  // Coarse sweep, then a fine one around the best result.
   const survey = (from, to, stepS, fromU, toU, stepU) => {
     for (let ds = from; ds <= to; ds += stepS) {
       const s = anchor + ds;
       for (let du = fromU; du <= toU; du += stepU) {
         const u = alpineLake(s).near + du;
-        // Stay on dry land as the shoreline shifts along the cabin's stretch.
+        // Stay clear of the shoreline 4 m either side too.
         if ([-4, 4].some(step => u - 2.5 <= alpineLake(s + step).near)) continue;
         const score = cabinSlope(s, u) + Math.abs(ds) * .002 + du * .01;
         if (!best || score < best.score) best = { s, u, ds, du, score };
@@ -78,8 +76,7 @@ export function buildAlpineCabin(index, start) {
   }
   part(glass, [0, 3.6, 3.025], [.85, .7, .025]);
   part(wood, [0, .9, 3.025], [.95, 1.8, .05]);
-  // Each corner post runs down to its own ground, so a cabin on a shore bench
-  // stands level instead of floating on its downhill side.
+  // Each corner post reaches its own ground height so the downhill side doesn't float.
   for (const x of [-1.9, 1.9]) for (const z of [-2.5, 2.5]) {
     const foot = Math.min(snowHeight(cabin.s - z, cabin.u + x), cabin.y) - .45;
     part(wood, [x, (foot - cabin.y) / 2, z], [.26, cabin.y - foot, .26]);

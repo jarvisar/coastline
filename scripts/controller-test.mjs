@@ -57,7 +57,7 @@ try {
   assert.equal(await page.locator('#autodrive').getAttribute('aria-pressed'), 'false', 'manual steering takes control');
   assert.equal(await page.evaluate(() => window.__coastline.input.state.right), true, 'held steering remains active after takeover');
   await page.keyboard.up('d'); await frames();
-  // The D-pad shares Up with autodrive; that shortcut must not break the code.
+  // D-pad Up also toggles autodrive; that must not break the code.
   const konami = [12, 12, 13, 13, 14, 15, 14, 15, 1, 0];
   for (const index of konami) await press(index);
   assert.equal(await page.evaluate(() => window.__coastline.vehicle.rainbow), true);
@@ -100,8 +100,6 @@ try {
   assert.equal(await page.evaluate(() => window.__coastline.input.state.forward), false);
   await button(7, 0); await frames(); await button(7, 1); await frames();
   assert.equal(await page.evaluate(() => window.__coastline.input.state.forward), 1);
-  // The garage: right stick press opens it, the grid is crossed along and by
-  // row, A selects, and the drive carries on from the same place.
   await button(7, 0); await frames();
   await press(10); await frames();
   assert.equal(await page.locator('#car-dialog').isVisible(), true, 'right stick press opens the garage');
@@ -112,8 +110,6 @@ try {
   assert.ok(second && second !== 'auto', `right moves along the grid (${second})`);
   await press(14); await frames();
   assert.equal(await focused(), 'auto', 'left returns along the grid');
-  // The paint chips share the garage's focus ring, so the stick reaches them
-  // and A repaints the car in place rather than closing the panel.
   await press(12); await frames();
   const swatch = await page.evaluate(() => document.activeElement?.dataset?.paint ?? null);
   assert.ok(swatch, 'up from the fleet reaches the paint chips');
@@ -147,9 +143,6 @@ try {
   await press(1); await frames();
   assert.equal(await page.locator('#car-dialog').isVisible(), false, 'B closes the garage');
   await page.evaluate(() => window.__coastline.chooseCar('auto')); await frames();
-  // The pause screen answers the pad as a menu of its own: the ring walks
-  // resume, the garage and the graphics settings, A presses the focused one,
-  // and B resumes the drive.
   await press(9); await frames();
   assert.equal(await page.evaluate(() => window.__coastline.paused), true);
   assert.equal(await page.locator('#pause-overlay').isVisible(), true);
@@ -199,8 +192,7 @@ try {
   await press(0); await frames();
   assert.equal(await page.evaluate(() => window.__coastline.graphics.mode), nextLevel, 'A sets the focused level');
   assert.equal(await page.evaluate(() => window.__coastline.paused), true, 'a setting does not resume the drive');
-  // The five levels wrap to a second row on a narrow screen, so down walks the
-  // rows it finds rather than a fixed count.
+  // Levels wrap to a second row on narrow screens, so walk down until found.
   for (let step = 0; step < 4 && await focus() !== 'soft-shading'; step++) { await press(13); await frames(); }
   assert.equal(await focus(), 'soft-shading', 'down reaches the soft shading switch');
   const shading = await page.locator('#soft-shading').getAttribute('aria-pressed');

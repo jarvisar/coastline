@@ -48,8 +48,7 @@ try {
     await page.close();
   }
   assert.ok(records.some(r => r.sedges > 0), 'shore planting must reach the renderer');
-  // Shared assets are uploaded on first visibility. Compare repeated visits
-  // after those uploads, rather than treating their first use as a leak.
+  // Shared assets upload on first view, so compare two later visits to detect leaks.
   const first = records.find(r => r.name === 'return'), last = records.find(r => r.name === 'return-repeat');
   await writeFile(`${directory}/report.json`, JSON.stringify({errors, records}, null, 2));
   assert.ok(last.geometries <= first.geometries, 'returning releases streamed geometry');

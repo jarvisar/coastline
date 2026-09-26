@@ -26,8 +26,8 @@ waterMaterial.onBeforeCompile = shader => {
     float s = vRiverCoord.x;
     float u = vRiverCoord.y;
     float depth = max(0., vRiverCoord.z);
-    // Sand shows through the shallows; a cool, subdued reflection distinguishes
-    // open water from the asphalt without bringing back saturated blue or green.
+    // Sand through the shallows. The reflection stays muted so water reads apart
+    // from the asphalt without turning saturated blue.
     diffuseColor.rgb = mix(desertShallow, desertShelf, smoothstep(0., .36, depth));
     diffuseColor.rgb = mix(diffuseColor.rgb, desertDeep, smoothstep(.28, 1.3, depth));
     float sky = .5 + .5 * sin(s * .027 + u * .17 + sin(s * .011));
@@ -57,8 +57,8 @@ function clipPolygon(source, distance) {
   return result;
 }
 
-// Clip the water to the actual faceted ground, so even coarse valley triangles
-// have a clean shoreline. Adjacent chunks calculate identical intersections.
+// Clipped to the faceted ground for a clean shoreline. Adjacent chunks compute
+// identical intersections.
 export function buildDesertWater(chunk, triangles) {
   const positions = [], colors = [], coords = [], shores = [], shoreColors = [];
   const wetSand = new THREE.Color('#9d9985'), drySand = new THREE.Color('#ceba96');
@@ -68,8 +68,7 @@ export function buildDesertWater(chunk, triangles) {
       return { ...p, level: creek.level, depth: creek.level - p.y,
         left: p.u - creek.center + bank, right: creek.center + bank - p.u };
     });
-    // A coarse triangle can reach a low hollow behind a mesa. Clip to the
-    // river's banks first so that hollow never becomes an accidental gray lake.
+    // Clip to the banks first so a low hollow behind a mesa doesn't fill with water.
     const corridor = clipPolygon(clipPolygon(source, p => p.left), p => p.right);
     const water = clipPolygon(corridor, p => p.depth);
     const shoreline = clipPolygon(clipPolygon(corridor, p => -p.depth), p => p.depth + .45);
@@ -133,15 +132,11 @@ export function buildDesertCrossing(chunk, instances, assets) {
       if (!owns(s)) continue;
       const width = 12.6 + (randomAt(i, 4210) - .5) * .24;
       box(timber, s, (randomAt(i, 4211) - .5) * .1, roadHeight(s) - .065, [width, .28, pitch + .008], woods[Math.floor(randomAt(bridge.index * 100 + i, 4201) * woods.length)]);
-      // Short, sparse splits and dark end nails give the planks a weathered
-      // surface without external textures or a noisy checkerboard pattern.
       if (i % 3 === 0) {
         box(timber, s + .09, (randomAt(i, 4202) - .5) * 9, roadHeight(s) + .079, [1 + randomAt(i, 4203) * 2, .012, .024], '#876745');
         for (const u of [-5.6, 5.6]) box(iron, s, u, roadHeight(s) + .085, [.065, .016, .065]);
       }
     }
-    // Heavier ranch-style posts and plain, slightly uneven rails give these
-    // low crossings their own silhouette, without the alpine X-braced sides.
     const bays = 8, bayLength = (end - start) / bays;
     for (let i = 0; i <= bays; i++) {
       const s = start + i * bayLength;
@@ -163,13 +158,11 @@ export function buildDesertCrossing(chunk, instances, assets) {
       const next = s + bayLength;
       for (const u of [-5.3, -2.5, 2.5, 5.3]) bar(timber, point(s, u, roadHeight(s) - .48), point(next, u, roadHeight(next) - .48), .36, .54, '#73583f');
     }
-    // Sandstone abutments are small and partly buried in the existing banks.
     for (const s of [start, end]) if (owns(s)) {
       const bottom = Math.min(...[-6, 0, 6].map(u => at(s, u).y)) - .55;
       box(masonry, s, 0, (roadHeight(s) - .3 + bottom) / 2, [12.8, Math.max(.5, roadHeight(s) - .3 - bottom), 1.4], '#b28a62');
       box(timber, s, 0, roadHeight(s) - .015, [12.65, .19, .55], '#b39570');
     }
-    // Low, splayed bents support the deck; the channel stays open between them.
     for (const s of [start + 10, end - 10]) if (owns(s)) {
       const top = roadHeight(s) - .8;
       box(timber, s, 0, top, [12.4, .4, .48], '#785a40');
@@ -189,7 +182,6 @@ export function buildDesertCrossing(chunk, instances, assets) {
   const stoneColors = ['#bfa480', '#cbb18a', '#b49b7a', '#d3b48b'];
   const greens = ['#87925a', '#929d61', '#a2a669', '#7f8d56'];
   const clear = (s, u, radius = 1) => Math.abs(u) > 8 + radius && desertCreekDistance(s, u) > radius * .4 && !insideMesa(s, u, 1.2);
-  // Broken shingle bars and sparse rushes soften the meeting of water and sand.
   for (let i = 0; i < 110; i++) {
     const s = chunk.start + random() * CHUNK_LENGTH, creek = desertCreek(s);
     if (Math.sin(s / 11) + Math.sin(s / 27 + .8) < -.5) continue;
@@ -212,8 +204,6 @@ export function buildDesertCrossing(chunk, instances, assets) {
     p.y += size * .2;
     rocks.push({ p: p.toArray(), scale: [size * 1.2, size * .8, size], r: [.12, random() * 6, -.1], color: stoneColors[i % 4] });
   }
-  // Low, spreading sage-green bushes gather in irregular pockets along the
-  // banks, leaving the water visible and the original desert trees distinct.
   for (let i = 0; i < 7; i++) {
     const s = chunk.start + 9 + i * 16 + random() * 9, creek = desertCreek(s);
     if (Math.sin(s / 29 + .4) + Math.sin(s / 13) < -.15) continue;

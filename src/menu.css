@@ -1,4 +1,3 @@
-/* The title screen sits directly over the living landscape. */
 :root {
   --menu-ink: #fffdf3;
   --action: #254f44;
@@ -24,7 +23,7 @@ body[data-journey=city] { --action: #304853; --action-hover: #42616f; }
 }
 #welcome.hidden { opacity: 0; visibility: hidden; transform: none; transition: opacity .45s, visibility 0s .45s; }
 #welcome .menu-brand { display: flex; flex-direction: column; gap: 0; text-shadow: 0 2px 4px #10272060, 0 6px 24px #1027204d; }
-/* Soft pools of shade separate the menu from passing scenery without a panel. */
+/* Radial shade keeps the menu legible over the scenery without a panel. */
 #welcome .menu-brand, #welcome .menu-actions { position: relative; isolation: isolate; }
 #welcome .menu-brand::before, #welcome .menu-actions::before {
   content: ''; position: absolute; z-index: -1; pointer-events: none;
@@ -61,8 +60,7 @@ body .start-button:hover { background: var(--action-hover); box-shadow: inset 0 
 #welcome .start-button:hover { background: #fffef9; box-shadow: 0 0 0 5px #fffdf326, 0 12px 32px #10272040, inset 0 1px 0 #ffffff; }
 #welcome .start-button:focus-visible { outline: 3px solid var(--menu-ink); outline-offset: 8px; }
 #welcome .wheel-icon { width: 43px; height: 43px; }
-/* The route and VR buttons share the main action's finish at a smaller size.
-   Both stack under it, so the toolbar has nothing left to show on the menu. */
+/* Route and VR buttons stack under the main action, so the toolbar hides on the menu. */
 #welcome .start-button.menu-secondary {
   position: static; width: clamp(148px, 15vw, 190px); min-height: 44px; margin-top: 12px; padding: 9px 16px; gap: 9px;
   font-size: clamp(14px, 1.25vw, 15px); font-weight: 600; letter-spacing: -.3px;
@@ -72,7 +70,6 @@ body .start-button:hover { background: var(--action-hover); box-shadow: inset 0 
 #app:has(#welcome:not(.hidden)) .drive-actions { display: none; }
 #app:has(#welcome:not(.hidden)) .vignette { background: linear-gradient(180deg, #173b3826, transparent 35%, transparent 55%, #173b381a); }
 
-/* Shared shapes and icon weight continue into the pause screen and choosers. */
 button svg:not(.chooser-art) { stroke-linecap: round; stroke-linejoin: round; }
 .drive-actions { border-radius: 999px; padding: 3px; }
 .drive-actions button { border-radius: 999px; }

@@ -31,7 +31,7 @@ test('perspective joystick follows all screen directions on every route and afte
         const origin = Math.floor(s / 1024) * 1024;
         car.render(1, origin);
         const rig = new ThirdPersonCamera(); rig.resize(aspect); rig.update(car.car, 0);
-        // Also exercise an off-center car, where perspective depth matters.
+        // Offset the camera so perspective depth matters.
         rig.camera.position.x += 1;
         rig.camera.updateMatrixWorld();
         const before = car.car.position.clone().project(rig.camera), length = Math.hypot(x, y);

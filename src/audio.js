@@ -5,8 +5,8 @@ import { SoundDirector } from './audio/director.js';
 
 const STORAGE_KEY = 'coastline-audio-v1';
 
-// One lazy graph for the entire visit. Sources and event voices are bounded;
-// all transitions use the audio clock, and silent contexts sleep after fading.
+// One lazy graph per visit. Sources and event voices are bounded, transitions
+// use the audio clock, and a silent context suspends after fading.
 export class DriveAudio {
   constructor() {
     this.enabled = false; this.context = null; this.graph = null; this.journey = 'coast'; this.car = 'auto';
@@ -150,8 +150,7 @@ export class DriveAudio {
     const envelope = this.journey === 'coast' ? swell : this.journey === 'city' ? .62 + gust * .38 : gust;
     set(g.bed.level, profile.bed + envelope * profile.swell);
     set(g.bed.frequency, profile.low);
-    // The breaking crest and retreating foam lag the low surf surge. Wind
-    // and foliage breathe slowly; city rain uses a separate droplet texture.
+    // Foam lags the surf surge. City rain uses a separate droplet texture.
     const foam = this.journey === 'coast' ? (.5 + .5 * Math.sin(now * .47 - .7 + .6 * Math.sin(now * .113))) ** 3 : envelope ** 1.5;
     set(g.air.level, this.journey === 'city' ? .025 : profile.air + foam * profile.wash, 1);
     set(g.air.frequency, profile.high * (.8 + envelope * .4), 1);
@@ -166,7 +165,7 @@ export class DriveAudio {
       this.shiftSerial = state.shiftSerial;
       if (state.load > .18) this.graph.event('engine', { duration: .13, frequency: 170, endFrequency: 70, level: .055 });
     }
-    // An event serial survives multiple fixed physics ticks in one video frame.
+    // A serial survives several fixed physics ticks in one frame.
     if (Number.isFinite(telemetry.impactSerial) && telemetry.impactSerial !== this.impactSerial) {
       this.impactSerial = telemetry.impactSerial;
       if (now - this.lastImpact > .3 && Number.isFinite(telemetry.impact) && telemetry.impact > .4) {
@@ -178,8 +177,8 @@ export class DriveAudio {
   updateTraffic(scene) {
     const player = scene?.player, fleet = scene?.traffic?.enabled ? scene.traffic.vehicles : [];
     const candidates = player ? fleet.map(car => ({ car, sound: trafficSound(player, car, scene.heading ?? player.heading) })).filter(entry => entry.sound.distance < 85).sort((a, b) => a.sound.distance - b.sound.distance).slice(0, 4) : [];
-    // Keep a car in the same stereo voice while it passes, even when ranking
-    // changes. Recycling a distant car cannot teleport an audible source.
+    // Keep a car in the same voice while it passes, even if ranking changes,
+    // so recycling a slot can't teleport an audible source.
     for (let i = 0; i < this.trafficSlots.length; i++) if (!candidates.some(entry => entry.car === this.trafficSlots[i])) this.trafficSlots[i] = null;
     for (const { car } of candidates) if (!this.trafficSlots.includes(car)) this.trafficSlots[this.trafficSlots.indexOf(null)] = car;
     for (let i = 0; i < this.graph.traffic.length; i++) {

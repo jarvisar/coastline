@@ -18,8 +18,8 @@ export function seededRandom(seed) {
   return () => randomAt(seed, i++);
 }
 
-// Seed the phases and wavelengths as well as the scenery. Keep bends at least
-// as gentle as the original road so terrain normals and lane assistance stay safe.
+// Seeded spans only ever lengthen, so bends stay gentle enough for terrain
+// normals and lane assist.
 const bends = [130, 60, 260].map((span, i) => ({ span: span * (1 + randomAt(i, 1901) * .35), phase: randomAt(i, 1902) * Math.PI * 2 }));
 const hills = [173, 83].map((span, i) => ({ span: span * (1 + randomAt(i, 1903) * .35), phase: randomAt(i, 1904) * Math.PI * 2 }));
 export function roadX(s) { return 27 * Math.sin(s / bends[0].span + bends[0].phase) + 24 * Math.sin(s / bends[1].span + bends[1].phase) + 6 * Math.sin(s / bends[2].span + bends[2].phase); }
@@ -27,8 +27,7 @@ export function roadDerivative(s) { return 27 / bends[0].span * Math.cos(s / ben
 export function roadHeight(s) { return 24 + 6 * Math.sin(s / hills[0].span + hills[0].phase) + 3 * Math.sin(s / hills[1].span + hills[1].phase); }
 
 export function journeyStart(routeNumber) {
-  // Each route gets its own stretch, in either direction from the world origin.
-  // Mileage tracks driving separately, so even a distant spawn starts at zero.
+  // Distance is tracked separately from s, so it starts at zero wherever we spawn.
   return { s: Math.floor((randomAt(routeNumber, 1910) - .5) * 40000), distance: 0 };
 }
 function drivingCoastOffset(s) { return -28 - 8 * Math.sin(s / 107 + .8) - 4 * Math.sin(s / 43) - 3 * Math.sin(s / 23 + 2); }
@@ -68,21 +67,17 @@ export function beachWidth(s) {
     const profile = 1 - smoothstep(.06, 1, Math.abs(s - center) / span);
     pocket = Math.max(pocket, profile * (19 + randomAt(i, 1663) * 8));
   }
-  // Sand accumulates in the recess between neighboring headlands. Unequal
-  // sides and widths create coves while leaving the rocky points legible.
   return 5.8 + coastNoise(s, 83, 1664) * 2 + pocket * .86;
 }
 export function shorelineOffset(s) { return coastOffset(s) - 10 - beachWidth(s) - 2.4; }
 
 function coastalShoulder(s) {
-  // A headland can rise above, or dip below, the roadside shelf. This changes
-  // the silhouette in broad masses instead of adding small surface noise.
   return (coastNoise(s, 83, 1611) * 14 - 5) * smoothstep(-18, -29, coastOffset(s));
 }
 
 export function cliffRib(s, height = 0) {
-  // Broad, tilted joints run from the cliff toe to its crown. Sampling one
-  // field at different heights creates connected buttresses and recesses.
+  // Tilted joints. Sampling one field at several heights keeps buttresses
+  // connected from toe to crown.
   const cell = Math.floor(s / 38);
   let rib = 0;
   for (let i = cell - 1; i <= cell + 1; i++) {
@@ -101,14 +96,12 @@ function cliffJoint(s, height) {
   for (let i = cell - 2; i <= cell + 2; i++) {
     const center = i * 13 + randomAt(i, 1651) * 7 + height * (randomAt(i, 1652) - .5) * 15;
     const width = 5 + randomAt(i, 1653) * 5;
-    // An angular shoulder and a narrow recess, with the same fracture leaning
-    // through successive tiers. This relief belongs to the terrain surface.
     joint = Math.max(joint, Math.max(0, 1 - Math.abs(s - center) / width));
   }
   return joint;
 }
 
-// Landmarks use world-space intervals, independently of streaming chunk boundaries.
+// Landmarks sit on world-space intervals, independent of chunk boundaries.
 export function bridgeAt(s) {
   const index = Math.round((s - 148) / 896);
   const center = 148 + index * 896;
@@ -126,25 +119,20 @@ export function pondAt(s) {
 }
 export function pondRadius(s, u, pond = pondAt(s)) {
   const x = (s - pond.center) / pond.rs;
-  // A bent valley floor gives the water a sheltered bay and an unequal pair
-  // of lobes. The warp fades outside the basin, keeping the outer slopes calm.
+  // The warp fades outside the basin so the outer slopes stay smooth.
   const bend = (.16 + randomAt(pond.index, 373) * .16) * Math.sin(x * 2.4) * (1 - smoothstep(1, 2.5, Math.abs(x)));
   const y = (u - pond.u) / pond.ru - bend;
   const angle = Math.atan2(y, x);
   return Math.hypot(x, y) / (1 + .13 * Math.sin(angle * 3 + pond.index) + .055 * Math.sin(angle * 2 + pond.index * .7));
 }
 function fieldNoise(s, u, span, salt) {
-  // Smooth two-dimensional value noise for cohesive patches on the hillsides.
   const cs = Math.floor(s / span), cu = Math.floor(u / span);
   const ts = smoothstep(0, 1, s / span - cs), tu = smoothstep(0, 1, u / span - cu);
   const at = (i, j) => randomAt(i * 1031 + j, salt);
   return lerp(lerp(at(cs, cu), at(cs + 1, cu), ts), lerp(at(cs, cu + 1), at(cs + 1, cu + 1), ts), tu);
 }
-// The coast range behind the road, after the Santa Lucia front: spur ridges
-// run down from a high main crest toward the sea, separated by steep canyons.
-// Each spur bends as it descends and ends in a blunt nose at its own distance
-// from the road, so the range reads as broad sunlit and shaded planes rather
-// than a scatter of cones. `spur` is 1 on a crest line and 0 in a canyon.
+// Spur ridges run from a main crest toward the sea, split by canyons.
+// `spur` is 1 on a crest line and 0 in a canyon.
 const SPUR_SPACING = 132;
 export function coastRange(s, u) {
   const rise = smoothstep(24, 160, u);
@@ -155,29 +143,22 @@ export function coastRange(s, u) {
   for (let i = cell - 1; i <= cell + 1; i++) {
     const center = i * SPUR_SPACING + 24 + randomAt(i, 1742) * 84;
     const half = 50 + randomAt(i, 1743) * 32, toe = 24 + randomAt(i, 1744) * 36;
-    // A sharp crest over concave flanks: the canyons between are V-shaped.
+    // Exponent above 1 gives sharp crests and V-shaped canyons.
     const across = Math.max(0, 1 - Math.abs(t - center) / half);
     spur = Math.max(spur, Math.pow(across, 1.4) * smoothstep(toe, toe + 40, u) * (.72 + randomAt(i, 1745) * .28));
   }
-  // Saddles and summits along the main crest, which the spur heads join.
   const crestU = 165 + 22 * Math.sin(s / 263 + 1.3), summit = .7 + .6 * fieldNoise(s, 0, 160, 1746);
   const floor = rise * (16 + 12 * fieldNoise(s, u, 140, 1747));
   const ridge = spur * Math.pow(rise, .5) * (44 + 30 * summit) * (.85 + .3 * fieldNoise(s, u, 38, 1748));
   const crest = (1 - smoothstep(0, 60, Math.abs(u - crestU))) * summit * 20;
-  // Past the crest the range starts down its far side.
   const beyond = 1 - .35 * smoothstep(crestU + 10, crestU + 70, u);
   return { height: (floor + ridge + crest) * beyond, spur, rise };
 }
 export function mountainHeight(s, u) { return coastRange(s, u).height; }
 export function hillsideSteepness(s) {
-  // Some stretches of hill rise straight behind the roadside terrace; others
-  // open into gradual meadow before the ridge.
   return smoothstep(.35, .8, coastNoise(s, 230, 1721));
 }
 export function rockCover(s, u) {
-  // Bare rock breaks out along the high spur crests and the main crest's
-  // summits, with a few smaller patches on the upper flanks; the canyons and
-  // the low meadow keep their turf.
   const shelter = smoothstep(1.1, 3.4, pondRadius(s, u));
   const gorge = 1 - .8 * (1 - smoothstep(46, 125, Math.abs(s - bridgeAt(s).center)));
   const { spur, rise } = coastRange(s, u);
@@ -186,25 +167,19 @@ export function rockCover(s, u) {
   return clamp((crest + patches) * shelter * gorge, 0, 1);
 }
 export function coastalGrove(s, u) {
-  // A shared habitat field makes tree groups and their darker understory agree.
-  // Broad clearings separate sheltered groves; exposed headlands stay open.
-  // Up in the range, forest keeps to the canyon floors and the flanks that
-  // face away from the sun; sunward slopes and spur crests stay open grass,
-  // so each ridge reads from far off.
+  // Trees and their understory share this field so they agree. In the range,
+  // forest favours canyons and slopes facing away from the sun.
   const habitat = fieldNoise(s, u, 54, 1751) * .72 + fieldNoise(s, u, 23, 1752) * .28;
   if (u < 30) return habitat;
   const { spur, rise } = coastRange(s, u);
-  // The sun stands to the south, toward falling s: a slope that climbs with s faces it.
+  // The sun is toward falling s, so a slope that climbs with s faces it.
   const sunward = clamp((coastRange(s + 5, u).height - coastRange(s - 5, u).height) / 10 * 1.8, -1, 1);
   const forest = .5 - sunward * .38 + (1 - spur) * .2 - spur * .22 + (habitat - .5) * .35;
   return lerp(habitat, forest, smoothstep(30, 85, u) * Math.min(1, rise * 4));
 }
-// Where the coast range dominates the ground's color, from 0 on the terrace.
+// 0 on the terrace, 1 where the coast range sets the ground colour.
 export const rangeInfluence = u => smoothstep(28, 90, u);
 export function wildflowers(s, u) {
-  // Spring bloom lies in broad drifts on open turf, never under the groves or
-  // on the mown verge. Poppies take the sunny terrace, lupine the swales, and
-  // mustard the upper meadow, so neighbouring drifts rarely share a color.
   const open = (1 - smoothstep(.44, .6, coastalGrove(s, u))) * smoothstep(8.5, 15, Math.abs(u));
   const poppy = smoothstep(.57, .76, fieldNoise(s, u, 43, 1781)) * open;
   const lupine = smoothstep(.58, .78, fieldNoise(s + 17, u, 61, 1782)) * open * (1 - poppy * .8);
@@ -212,7 +187,6 @@ export function wildflowers(s, u) {
   return { poppy, lupine, mustard };
 }
 export function icePlant(s) {
-  // Succulent mats hang over the bluff in long, broken runs.
   return smoothstep(.45, .65, coastNoise(s, 29, 1791)) * smoothstep(.2, .5, coastNoise(s, 11, 1792));
 }
 export function roadFrame(s) {
@@ -221,11 +195,10 @@ export function roadFrame(s) {
   return { x: roadX(s), y: roadHeight(s), z: -s, nx: 1 / scale, nz: dx / scale, angle: Math.atan(dx), scale };
 }
 export function positionAt(s, u, height, target = {}) {
-  // Position callers need the road normal, not a full frame's heading and
-  // road height. Avoid those extra trig calls and the intermediate object.
+  // Hot path: skips roadFrame's unused trig and allocation.
   const dx = roadDerivative(s), scale = Math.sqrt(1 + dx * dx);
-  // Fade out the normal offset beyond the shoulders so wide hills cannot fold
-  // over themselves on the inside of a bend. The road itself uses exact normals.
+  // Compress the offset past the shoulders so wide hills can't fold over on the
+  // inside of a bend. The road itself uses exact normals.
   const offset = Math.abs(u) <= 7 ? u : Math.sign(u) * (7 + 30 * Math.tanh((Math.abs(u) - 7) / 30));
   target.x = roadX(s) + u + offset * (1 / scale - 1);
   target.y = height ?? terrainHeight(s, u);
@@ -245,34 +218,28 @@ function baseTerrainHeight(s, u, radius) {
   if (u < -7) {
     const shelf = h + (1.2 + ripple) * smoothstep(-7, coast, u)
       + (u < -18 ? coastalShoulder(s) * smoothstep(-18, Math.min(-18.01, coast), u) : 0);
-    // Paved pullouts lie on the road's shelf; their outer bank rejoins the bluff.
+    // Overlook aprons flatten to road height and blend back into the bluff.
     const overlook = overlookAt(s);
     const apron = overlook.enabled ? 1 - smoothstep(32, 48, Math.abs(s - overlook.center)) : 0;
     return lerp(shelf, h, apron * (1 - smoothstep(20, 25, -u)) * smoothstep(coast, coast + 6, u));
   }
   if (u < 7) return h;
-  // Ponds sit on a sheltered shelf: the mountain, steep hillsides, and knolls
-  // all ease off around them so the water does not lie in a crater.
+  // Hills ease off around ponds so the water doesn't sit in a crater.
   const shelter = smoothstep(1.1, 3.4, radius);
-  // The ridge also stands back from each viaduct, so the inlet stays a rocky
-  // gorge instead of a chasm between two summits.
+  // Keep the ridge back from each viaduct so the inlet stays a shallow gorge.
   const gorge = 1 - .8 * (1 - smoothstep(46, 125, Math.abs(s - bridgeAt(s).center)));
   const inland = Math.max(smoothstep(12, 110, u), hillsideSteepness(s) * .7 * shelter * smoothstep(20, 88, u));
   const hill = 13 + 23 * fieldNoise(s, u, 115, 1731) + 12 * fieldNoise(s + u * .4, u, 67, 1732);
   const knolls = (fieldNoise(s, u, 29, 1733) - .5) * 7 * smoothstep(16, 50, u) * shelter;
-  // The coast range carries its own rise off the terrace, beyond the verge.
   return h + inland * hill * gorge + ripple * smoothstep(7, 26, u) + knolls + mountainHeight(s, u) * shelter * gorge;
 }
 export function groundHeight(s, u) {
   const pond = pondAt(s), radius = pondRadius(s, u, pond);
   let height = baseTerrainHeight(s, u, radius);
   if (radius < 2.3) {
-    // Shape a broad dry bank on the existing hillside mesh. Its width exceeds
-    // a coarse terrain edge, so those faces cannot cut through the rim into
-    // low meadow. The outer slope eases back into the surrounding land.
+    // The dry bank is wider than a coarse terrain edge so no face cuts through the rim.
     const basin = pond.level - 3.4 + 5.6 * smoothstep(.3, 1.18, radius);
-    // Let the uphill bank rise toward the ridge while the seaward bank stays
-    // a low meadow. A broad dry rim still contains every coarse terrain face.
+    // Uphill bank rises toward the ridge; the seaward side stays low.
     const bank = smoothstep(.86, 1.5, radius) * smoothstep(pond.u - 8, pond.u + 40, u) * 2.3;
     height = lerp(basin + bank, height, smoothstep(1.35, 2.3, radius));
   }
@@ -281,7 +248,7 @@ export function groundHeight(s, u) {
   return height;
 }
 export function terrainHeight(s, u) {
-  // Driving queries see the bridge deck; scenery queries see the inlet beneath it.
+  // Driving sees the bridge deck; scenery uses groundHeight for the inlet below.
   if (Math.abs(u) <= 7) return roadHeight(s);
   return groundHeight(s, u);
 }
@@ -290,21 +257,20 @@ export function terrainHeight(s, u) {
 export function terrainColumns(s) {
   const c = coastOffset(s);
   const b = c - 10 - beachWidth(s);
-  // Keep the established rock-foot shape independent of the wider sand coves.
+  // Kept independent of the sand coves so their width doesn't reshape the rock foot.
   const toeSpread = Math.min(4.5, 1.2 + 8 * smoothstep(-.15, .85, Math.sin(s / 137 + 1.1)) * (1 - headlandAmount(s) / 44));
   const foot = c - 10 - toeSpread * cliffRib(s);
   const crown = c - cliffRib(s, 1) * 3.6;
   const lower = lerp(foot, crown, .16 + (1 - cliffJoint(s, .3)) * .22);
   const upper = lerp(foot, crown, .56 + (1 - cliffJoint(s, .75)) * .24);
-  // A stable roadside row resolves the flat turnout apron without rapidly
-  // moving vertices across neighboring rows at either tapered entrance.
+  // A fixed shelf row flattens the turnout apron without vertices jumping
+  // between rows at its tapered ends.
   const shelf = (Math.max(crown, -31) - 7) / 2;
   return [-420, -300, b - 90, b - 35, b - 17, b - 7, b, foot, lower, upper, crown, shelf, -7, 0, 7, ...Array.from({ length: 23 }, (_, i) => 14 + i * 12)];
 }
 export function terrainVertex(row, column) {
   if (column === 6.5) {
-    // One broad intermediate beach row breaks the long shore-to-cliff strips.
-    // Reuse the existing edges so sand stays joined to the water and rock toe.
+    // Extra beach row, lerped from its neighbours so it stays joined to both.
     const shore = terrainVertex(row, 6), foot = terrainVertex(row, 7);
     const t = .5 + (randomAt(row, 2241) - .5) * .16;
     const p = {column};
@@ -313,27 +279,25 @@ export function terrainVertex(row, column) {
     return p;
   }
   if (column > 10 && column < 11) {
-    // Broad bluff tops need two-dimensional facets, rather than long triangles
-    // stretched all the way from the cliff crown to the roadside apron.
+    // Fractional columns facet the bluff top so triangles don't stretch from
+    // the crown to the apron.
     const left = terrainVertex(row, 10), right = {};
     const low = terrainVertex(Math.floor(row), 11), high = terrainVertex(Math.ceil(row), 11);
     for (const axis of ['x', 'y', 'z', 's', 'u']) right[axis] = lerp(low[axis], high[axis], row - Math.floor(row));
     const t = column - 10;
     const blend = t + (randomAt(row, Math.round(column * 10) + 1841) - .5) * .055 * Math.sin(t * Math.PI);
     const s = lerp(left.s, right.s, blend), u = lerp(left.u, right.u, blend);
-    // Interpolate the projected edge positions too. Independent along-road
-    // jitter can invert narrow cells where a headland rapidly recedes.
+    // Lerp projected x/z too. Separate jitter can invert narrow cells where a
+    // headland recedes fast.
     const p = { x: lerp(left.x, right.x, blend), z: lerp(left.z, right.z, blend), y: groundHeight(s, u) };
-    // The turf follows the sculpted crown, easing into the meadow well before
-    // the flat paved apron. All rows are global, including chunk boundaries.
+    // Carry crown relief onto the turf, fading out before the apron.
     const crownRelief = left.y - groundHeight(left.s, coastOffset(left.s));
     p.y += crownRelief * (1 - smoothstep(0, .7, t));
     return { ...p, s, u, column };
   }
   if (column === 9.5) {
     const face = terrainVertex(row, 9), rim = terrainVertex(row, 10);
-    // A narrow rolling shoulder lets turf wrap over the crest. Sheltered
-    // recesses carry a wider lip; exposed ribs keep a thinner, steeper cap.
+    // Turf lip over the crest: wider in recesses, thinner and steeper on ribs.
     const exposure = cliffRib(rim.s, 1);
     const t = .18 + exposure * .46 + coastNoise(rim.s, 17, 1691) * .12;
     const drop = .4 + exposure * 1.2 + coastNoise(rim.s, 23, 1692) * .9;
@@ -345,7 +309,7 @@ export function terrainVertex(row, column) {
   }
   const baseS = row * TERRAIN_STEP;
   const seedRow = Number.isInteger(row) ? row : row * 2 + 1048576;
-  // The extra cliff shoulder does not reseed or move the road and inland hills.
+  // Skip the extra cliff column so road and inland seeds stay unchanged.
   const seedColumn = column > 8 ? column - 1 : column;
   const cliff = column >= 6 && column <= 10;
   const along = lerp(randomAt(Math.floor(row), 7), randomAt(Math.ceil(row), 7), row - Math.floor(row));
@@ -364,8 +328,7 @@ export function terrainVertex(row, column) {
     const top = groundHeight(s, coastOffset(s));
     const crown = top + (cliffRib(s, 1) * 5.5 - 2 + (coastNoise(s, 19, 1631) - .5) * 3) * smoothstep(-18, -29, coastOffset(s));
     const fracture = coastNoise(s, 23, 1632);
-    // Stagger the breaks in height as well as depth. A high shoulder can meet
-    // a low neighboring slab, so no seam runs continuously along the wall.
+    // Stagger break heights so no seam runs continuously along the wall.
     const lower = .24 + fracture * .2 + rib * .07;
     const upper = .65 + coastNoise(s, 29, 1633) * .18;
     const fraction = column === 7 ? 0 : column === 8 ? lower : column === 9 ? upper : 1;
@@ -383,8 +346,8 @@ export function terrainVertex(row, column) {
 export function terrainCell(row, col, vertex = terrainVertex) {
   const a = vertex(row, col), b = vertex(row + 1, col);
   const c = vertex(row, col + 1), d = vertex(row + 1, col + 1);
-  // Spend the extra faces on cliff joints. Transition triangles stitch those
-  // joints into the original coarse beach and meadow, with no open T-junctions.
+  // Extra faces go to cliff joints. Transition triangles stitch them into the
+  // coarse beach and meadow with no T-junctions.
   if (col === 6) {
     const m = vertex(row + .5, 7);
     const splitA = Math.hypot(c.x - a.x, c.z - a.z) > 14;
@@ -402,7 +365,7 @@ export function terrainCell(row, col, vertex = terrainVertex) {
     const columns = [10, 10.2, 10.4, 10.6, 10.8, 11];
     const triangles = [];
     // Carry the cliff's half-row joints across the bluff, then stitch them
-    // into the coarse roadside row. This also resolves sharply turning coves.
+    // into the coarse roadside row.
     for (let i = 0; i < columns.length - 2; i++) for (const offset of [0, .5]) {
       const p = vertex(row + offset, columns[i]), q = vertex(row + offset + .5, columns[i]);
       const r = vertex(row + offset, columns[i + 1]), t = vertex(row + offset + .5, columns[i + 1]);
@@ -429,18 +392,15 @@ export function terrainCell(row, col, vertex = terrainVertex) {
   return triangles;
 }
 
-// Where a galvanized guardrail stands on the ocean side: along bends where the
-// ground falls away close to the road, and on the short approaches to a
-// viaduct. Scenery and driving both read this, so the car is stopped by exactly
-// the rails it can see. `coastOffset` is the cliff edge in closed form, which
-// keeps this cheap enough to call from every physics step.
+// Ocean-side guardrail. Scenery and driving both read this so the car hits
+// exactly the rails it can see. `coastOffset` is closed form, which keeps this
+// cheap enough for every physics step.
 export const GUARDRAIL_OFFSET = -6.65;
 // The car's centre stops with its flank against the rail.
 export const GUARDRAIL_STOP = GUARDRAIL_OFFSET + 1.05;
 export const GUARDRAIL_SEGMENT = 4;
 function guardrailBeam(middle) {
-  // A beam spans 4 m, so judge both of its ends: half a beam left standing on a
-  // viaduct deck or across an overlook apron is still in the wrong place.
+  // Check both ends so no beam overhangs a viaduct deck or overlook apron.
   const half = GUARDRAIL_SEGMENT / 2;
   let bridgeDistance = Infinity, apron = 0;
   for (const s of [middle - half, middle + half]) {
@@ -451,19 +411,15 @@ function guardrailBeam(middle) {
   return bridgeDistance <= 64 || coastOffset(middle) >= -35;
 }
 export function coastalGuardrail(s) {
-  // Rails are built one 4 m beam at a time, so answer for the beam covering s.
-  // Scenery and driving then agree metre for metre, with no stretch of rail you
-  // can drive through and no invisible wall past its end.
+  // Answer for the whole beam covering s so scenery and collision match exactly.
   const middle = Math.floor(s / GUARDRAIL_SEGMENT) * GUARDRAIL_SEGMENT + GUARDRAIL_SEGMENT / 2;
-  // A lone 4 m beam in open meadow reads as a stray piece of metal rather than
-  // a guardrail, so a beam needs a neighbour to be worth standing up.
+  // Skip lone beams, which look like stray metal.
   return guardrailBeam(middle)
     && (guardrailBeam(middle - GUARDRAIL_SEGMENT) || guardrailBeam(middle + GUARDRAIL_SEGMENT));
 }
 
-// How far the car may roam from the centre line where nothing stands in its
-// way. The inland meadow stays gentle well past this, and the ponds sit far
-// beyond it; the ocean side is cut short by the cliff term in bounds().
+// Free-roam limits from the centre line. The cliff term in bounds() can cut
+// the ocean side shorter.
 export const COAST_VERGE = { ocean: 18, inland: 22 };
 
 export const coastalDrivingRoute = {
@@ -472,14 +428,13 @@ export const coastalDrivingRoute = {
   height: terrainHeight,
   bounds(s) {
     if (Math.abs(s - bridgeAt(s).center) < 49) return [-4.65, 4.65];
-    // Open meadow either side, but never nearer the cliff edge than six metres.
+    // Never nearer the cliff edge than 6 m.
     const open = Math.max(drivingCoastOffset(s) + 6, -COAST_VERGE.ocean);
-    // A rail is solid; without one the roadside limit stays soft.
+    // A rail is a hard stop; without one the limit stays soft.
     return [coastalGuardrail(s) ? Math.max(open, GUARDRAIL_STOP) : open, COAST_VERGE.inland];
   },
-  // Where a free-roaming car would be driving into water: the sea and its
-  // inlets a little above the waterline, so the car stops on the wet sand
-  // with its nose dry, and the inside of a pond's basin.
+  // Sea counts from slightly above the waterline so the car stops on wet sand.
+  // Ponds count inside their basin.
   water(s, u, height) {
     if (height < .35) return true;
     const pond = pondAt(s);

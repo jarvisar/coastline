@@ -1,6 +1,5 @@
-// Read the motion inputs as positions for simulation assertions. The browser
-// weather test separately executes the real GLSL and checks it against the
-// original seeded motion equations, including long drives and time rebasing.
+// CPU copy of the weather shader's motion for assertions. The browser weather
+// test checks the real GLSL against the same equations.
 export function weatherPositions(weather) {
   const { position, weatherMotion } = weather.geometry.attributes;
   const u = weather.motion.uniforms, anchor = u.weatherAnchor.value;

@@ -22,8 +22,7 @@ test('plains discoveries are sparse, varied, level, and stable across reversed c
     for (const spot of spots) {
       assert.ok(Math.abs(spot.u) >= 26, 'structures stay well off the road');
       assert.ok(creekDistance(spot.s, spot.u) > 30, 'structures keep clear of the creek');
-      // Level under the buildings, which is the ground each site declares it
-      // needs; a compound keeps more ground clear than it builds on.
+      // Only the build area must be level. The cleared area can be larger.
       const { build } = site;
       const heights = [-1, 0, 1].flatMap(ds => [-1, 0, 1].map(du => plainsGroundHeight(spot.s + ds * build.s, spot.u + du * build.u)));
       assert.ok(Math.max(...heights) - Math.min(...heights) < 3.1, `${site.kind} on uneven ground at ${site.s}`);
@@ -33,12 +32,11 @@ test('plains discoveries are sparse, varied, level, and stable across reversed c
       assert.equal(site.towers.length, 3);
       assert.ok(site.side === 1 && site.towers.every(tower => tower.u > 0), 'turbines stand on the far side of the road');
       assert.ok(Math.abs(site.towers[2].s - site.towers[0].s - 2 * TURBINE_SPACING) < 1e-9);
-      // Only the footings are cleared: the fields between the turbines stay farmed.
+      // Only footings are cleared. Fields between turbines stay planted.
       assert.ok(!plainsDiscoveryClears(site.towers[1].s, site.towers[1].u, [site], 2));
       assert.ok(plainsDiscoveryClears(site.towers[1].s + TURBINE_SPACING / 2, site.towers[1].u, [site], 2));
     } else {
       assert.ok(!plainsDiscoveryClears(site.s, site.u, [site]));
-      // The drive from the road to the yard is kept clear of fences too.
       assert.ok(!plainsDiscoveryClears(site.s + site.drive, site.side * 20, [site]));
       assert.ok(plainsDiscoveryClears(site.s + site.halfS + 12, site.u, [site]));
       if (site.kind === 'grain-elevator') assert.equal(site.side, 1);
@@ -52,8 +50,7 @@ test("a farm's drive and its yard are one unbroken piece of bare earth", () => {
     const site = sites.find(other => other.kind === kind);
     const chunk = new PlainsChunk(Math.floor(site.s / 128));
     const dirt = chunk.group.getObjectByName('farm-tracks').geometry.attributes.position;
-    // Group the bare earth into the pieces a tractor could cross without
-    // leaving it: triangles that share a corner are the same piece of ground.
+    // Union-find over dirt triangles that share a corner.
     const parent = [], root = t => parent[t] === t ? t : (parent[t] = root(parent[t]));
     const seen = new Map(), middle = [];
     for (let t = 0; t * 3 < dirt.count; t++) {
@@ -72,7 +69,7 @@ test("a farm's drive and its yard are one unbroken piece of bare earth", () => {
       assert.ok(gap(best) < 4, `no bare earth at ${Math.round(s)}, ${Math.round(u)}`);
       return best;
     };
-    // The drive's mouth at the highway, and the middle of the yard it serves.
+    // Drive entrance at the road and the yard centre.
     assert.equal(root(nearest(site.s + site.drive, site.side * 8)), root(nearest(site.s, site.u)),
       `a ${kind}'s drive stops short of its yard, leaving standing crop between the two`);
     chunk.dispose();
@@ -80,8 +77,7 @@ test("a farm's drive and its yard are one unbroken piece of bare earth", () => {
 });
 
 test('a farm wears its yard bare over most of the ground it takes in, and only some farms fence it', () => {
-  // Does the point stand on bare earth? A triangle's three edge tests agree
-  // on a sign for a point inside it, whichever way round the triangle is wound.
+  // Point-in-triangle by edge signs, so winding order doesn't matter.
   const bare = (triangles, x, z) => triangles.some(([a, b, c]) => {
     const side = (p, q) => (q[0] - p[0]) * (z - p[1]) - (q[1] - p[1]) * (x - p[0]);
     const ab = side(a, b), bc = side(b, c), ca = side(c, a);
@@ -94,15 +90,14 @@ test('a farm wears its yard bare over most of the ground it takes in, and only s
     for (let i = 0; i < dirt.length; i += 9) {
       triangles.push([[dirt[i], dirt[i + 2]], [dirt[i + 3], dirt[i + 5]], [dirt[i + 6], dirt[i + 8]]]);
     }
-    // The ground the yard takes in, out to the line its fence stands on.
+    // Yard extent, out to the fence line.
     const yardS = site.halfS - 4, yardU = site.halfU - 3;
     let earth = 0, ground = 0;
     for (let ds = -yardS; ds <= yardS; ds += 3) for (let du = -yardU; du <= yardU; du += 3) {
       const p = chunk.ground(site.s + ds, site.u + du * site.side);
       ground++; if (bare(triangles, p.x, p.z)) earth++;
     }
-    // Posts standing over the yard itself. Nothing else may stand this close
-    // to a compound, so a yard with a line of them round it is a fenced one.
+    // No other fences come this close to a compound, so nearby posts mean a yard fence.
     const middle = chunk.ground(site.s, site.u), matrix = new THREE.Matrix4(), post = new THREE.Vector3();
     let standing = 0;
     chunk.group.traverse(object => {
@@ -142,7 +137,6 @@ test('plains discovery meshes and the spinning rotor materials survive worker tr
         assert.match(shader.vertexShader, /transformed.xy = spin/);
       }
       if (kind === 'wind-turbines') {
-        // Every tower stands on its own footing, above the ground it was placed on.
         const towers = restored.group.getObjectByName('plains-wind-turbines'), matrix = new THREE.Matrix4(), position = new THREE.Vector3();
         for (let i = 0; i < towers.count; i++) {
           towers.getMatrixAt(i, matrix); position.setFromMatrixPosition(matrix);
@@ -208,8 +202,7 @@ test('railways bend out of view on both sides and join across every streamed chu
             mesh.getMatrixAt(i, matrix); segments++;
             for (const end of [-.5, .5]) {
               const p = new THREE.Vector3(0, end, 0).applyMatrix4(matrix); p.z -= chunk.start;
-              // Instance matrices are float32; merge within a millimetre
-              // rather than separating near-identical points at rounding bins.
+              // Float32 matrices, so match ends within a millimetre instead of by rounded key.
               const shared = endpoints.find(endpoint => endpoint.point.distanceToSquared(p) < 1e-6);
               if (shared) shared.count++; else endpoints.push({ point: p, count: 1 });
             }

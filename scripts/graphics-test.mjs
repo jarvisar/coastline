@@ -3,9 +3,8 @@ import { chromium } from '@playwright/test';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { QUALITY_LEVELS, renderScale } from '../src/graphics.js';
 
-// The quality levels, the settings panel and the adaptive controller, against a
-// real renderer at three display densities. Frame delivery is fed deterministically
-// so a headless software GPU's speed never decides the outcome.
+// Quality levels, settings panel and adaptive controller at three display densities.
+// Frame times are fed in so the headless software GPU's speed can't decide the result.
 const browser = await chromium.launch({ executablePath: 'C:/Program Files/Google/Chrome/Application/chrome.exe', headless: true,
   args: ['--enable-webgl', '--ignore-gpu-blocklist', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
 try {
@@ -26,7 +25,7 @@ try {
       observer.observe(renderer.domElement, { attributes: true, attributeFilter: ['width', 'height'] });
       const reads = () => observer.takeRecords().length;
 
-      // Each level must reach the renderer, not just the stored preference.
+      // Read back from the renderer, since the stored preference alone proves nothing.
       const levels = [];
       for (const id of ['high', 'balanced', 'smooth', 'basic']) {
         graphics.setMode(id);
@@ -44,9 +43,8 @@ try {
       graphics.toggleAmbientOcclusion();
       reads();
 
-      // Deterministic frame delivery. `rates` is either a fixed refresh rate or
-      // the rate this pretend device reaches at each level, so stepping down
-      // actually buys frames, which is the signal the controller reads.
+      // `rates` is a fixed refresh rate or a per-level rate, so stepping down
+      // buys frames the way the controller expects.
       const order = ['high', 'balanced', 'smooth', 'basic'];
       const drive = (rates, start, seconds) => {
         graphics.sample(start, false);
@@ -66,7 +64,6 @@ try {
       clock = drive(60, clock + 1000, 40);
       const recovered = { level: graphics.levelId, writes: reads() };
 
-      // A pinned level ignores frame times entirely.
       graphics.setMode('high'); reads();
       clock = drive(12, clock + 1000, 30);
       const pinned = { level: graphics.levelId, writes: reads() };
@@ -82,9 +79,7 @@ try {
 
     const density = id => result.levels.find(level => level.id === id);
     const expected = id => renderScale(QUALITY_LEVELS.find(level => level.id === id).density, deviceScaleFactor);
-    // Every level must remove pixels at every density — the point of scaling the
-    // device's own ratio rather than capping it. A cap left a 1x panel rendering
-    // 1x at three of the four levels.
+    // Levels scale the device ratio so each one drops pixels at every density.
     for (const id of ['high', 'balanced', 'smooth', 'basic']) assert.equal(density(id).ratio, expected(id), `${id} density`);
     for (let i = 1; i < result.levels.length; i++) {
       assert.ok(result.levels[i].ratio < result.levels[i - 1].ratio, `${result.levels[i].id} must draw fewer pixels than ${result.levels[i - 1].id}`);
@@ -100,11 +95,10 @@ try {
 
     assert.equal(result.steady.level, 'high', 'a display-rate device keeps its level');
     assert.equal(result.steady.writes, 0, 'no resize without a decision');
-    // Auto changes resolution without changing the independent AO choice.
     assert.equal(result.slowed.softShading, false, 'soft shading stays off');
     assert.equal(result.slowed.level, 'balanced', 'one step down per decision');
     assert.equal(result.slowed.ratio, expected('balanced'));
-    // One resize writes the canvas width and height: two attribute records.
+    // One resize writes width and height, so two attribute records.
     assert.equal(result.slowed.writes, 2, 'one canvas resize per adjustment');
     assert.equal(result.recovered.level, 'balanced', 'a settled level does not climb back');
     assert.equal(result.recovered.writes, 0);
@@ -113,7 +107,7 @@ try {
     assert.ok(Math.abs(result.highRefresh.target - 120) < 1);
     assert.equal(result.highRefresh.ratio, expected('smooth'));
 
-    // The panel reflects the renderer, and survives a rotation and a reload.
+    // Panel matches the renderer across a rotation and a reload.
     await page.setViewportSize({ width: 844, height: 390 });
     await page.waitForFunction(() => document.querySelector('#scene').style.width === '844px');
     await page.evaluate(() => window.__coastline.graphics.setMode('smooth'));
@@ -124,7 +118,7 @@ try {
     assert.equal(await page.evaluate(() => window.__coastline.graphics.mode), 'smooth', 'the choice is remembered');
     assert.equal(await page.locator('[data-quality="smooth"]').getAttribute('aria-checked'), 'true');
 
-    // The slider changes the real drawing buffer, including above the old 2x cap.
+    // The slider sets the real drawing buffer, including above 2x.
     await page.evaluate(() => window.__coastline.action('pause'));
     await page.locator('#graphics-toggle').click();
     const slider = page.locator('#pixel-density');

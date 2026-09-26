@@ -14,8 +14,7 @@ export function buildVolcanicDiscoveries(chunk, sites) {
   for (const site of sites) {
     if (site.s < chunk.start || site.s >= chunk.start + CHUNK_LENGTH) continue;
     const { s, u, side, kind } = site;
-    // Adit openings face the open basin/camera side even when the mine sits
-    // on the left shelf. The buried rock rear meets the uphill ground.
+    // Mine openings face the basin and camera even on the left shelf.
     const angle = volcanicDiscoveryAngle(site);
     const root = chunk.at(s, u), cos = Math.cos(angle), sin = Math.sin(angle);
     const point = (x, y, z) => [root.x + x * cos + z * sin, y, root.z + z * cos - x * sin];
@@ -35,8 +34,8 @@ export function buildVolcanicDiscoveries(chunk, sites) {
     function owned(name, parts, paint = material, solid = false) {
       const g = parts.finish(); chunk.owned.push(g); return add(name, g, paint, point(0, base, 0), solid);
     }
-    // A level working surface blends into the actual terrain around its edge.
-    // Sample the skirt densely so it cannot bridge over a dip in the hillside.
+    // Level pad with a skirt down to the terrain. Sample the skirt densely so it
+    // can't bridge a dip.
     function embankment(name, outline, top, flare = 2) {
       const parts = new VolcanicParts(), vertices = [];
       const cx = outline.reduce((sum,p) => sum+p[0],0)/outline.length;
@@ -111,15 +110,13 @@ export function buildVolcanicDiscoveries(chunk, sites) {
       antenna.boundingSphere.radius = Math.max(antenna.boundingSphere.radius, 2.5);
       add('volcanic-research-beacon', assets.beacon, volcanicBeaconMaterial, point(5.5, base + 10.6, -.5));
       const fissure = new VolcanicParts(), rim = new VolcanicParts(), strip=[];
-      // One continuous, finely sampled surface follows the terrain; separate
-      // horizontal boxes used to leave glowing gaps and floating ends.
+      // One continuous, finely sampled strip that follows the terrain.
       for(let i=0;i<=72;i++) {
         const z=-10+i*.25,x=10+Math.sin((z+10)/2.7*1.8)*.8,width=.14+.06*Math.sin(i*.4);
         strip.push([x-width,floor(x-width,z)-base+.055,z],[x+width,floor(x+width,z)-base+.055,z]);
       }
       const faces=[],surface=new FlowSurface(2,-Infinity),terrain=chunk.terrain.geometry.attributes.position;
-      // Clip against the actual facets at platform edges as well as sampling
-      // the ribbon ends; a triangle spanning a crease can otherwise sink in.
+      // Clip against the real facets. A triangle spanning a crease can otherwise sink in.
       for(let i=0;i<terrain.count;i+=3) {
         const tri=[];
         for(let j=0;j<3;j++) {
@@ -147,7 +144,7 @@ export function buildVolcanicDiscoveries(chunk, sites) {
     } else if (kind === 'basalt-arch') {
       base = site.roadSpanning ? roadHeight(s) : Math.max(floor(-17,0), floor(17,0)) + .2;
       add('volcanic-basalt-arch', assets.arch);
-      // Only the two grounded feet are solid; the channel stays open below.
+      // Only the two feet are solid so the channel below stays open.
       for (const x of [-17,17]) {
         const a = point(x,base,-3.5), b = point(x,base,3.5);
         solidSpan(chunk, {x:a[0],z:a[2]}, {x:b[0],z:b[2]}, 4.5);

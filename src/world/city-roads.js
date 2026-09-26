@@ -10,8 +10,7 @@ const DECK_HALF = STREET_HALF_WIDTH, ROAD_HALF = SIDE_ROAD_HALF_WIDTH;
 const groundHeight = cityStreetHeight;
 const WALK_LIFT = .095;
 
-// Split at actual junction edges, including when they fall inside a chunk.
-// Midpoint-only skips leave four-metre notches and kerbs across the road.
+// Split at every junction edge as well as every 4 m, or junctions get notches.
 function intervals(from, to, boundaries) {
   const cuts = [from, to, ...boundaries.filter(n => n > from && n < to)];
   for (let n = Math.ceil(from / 4) * 4; n < to; n += 4) cuts.push(n);
@@ -23,14 +22,14 @@ export function crossRoadHeight(s, u, crossing) {
   return crossing && u >= FAR_BANK_TOP - 2 && u <= quayOffset(s) + 1.5 ? bridgeSurfaceHeight(s, u) : groundHeight(s, u);
 }
 
-// All the secondary roads share one asphalt/marking mesh. Their sidewalks
-// and bridge masonry join the promenade batch; railings reuse the box batch.
+// Asphalt and markings go in the streets batch, pavements and bridge masonry in
+// details, railings in boxes. No new meshes.
 export function buildCityRoads(chunk) {
   const { streets, details, boxes } = chunk.scenery, end = chunk.start + CHUNK_LENGTH;
   function patch(target, s0, s1, u0, u1, color, height = groundHeight, lift = 0) {
     s0 = Math.max(s0, chunk.start); s1 = Math.min(s1, end);
     if (s1 <= s0 || u1 <= u0) return;
-    // Subdivision follows the same curved frame as the buildings and terrain.
+    // Subdivide so patches follow the curved road frame like the terrain does.
     const step = Math.max(Math.abs(u0), Math.abs(u1)) <= 8 ? 2 : 4;
     for (let s = s0; s < s1;) {
       const t = Math.min(Math.floor(s / step) * step + step, s1);
@@ -51,8 +50,7 @@ export function buildCityRoads(chunk) {
   const landDiscoveries = chunk.discoveries.filter(site => site.kind !== 'river-bridge');
   const first = blockAt(chunk.start - 24), last = blockAt(end + 24) + 1;
   const centers = Array.from({ length: last - first + 1 }, (_, i) => blockBoundary(first + i));
-  // Quiet asphalt repairs and slotted kerb drains add scale close to the car.
-  // Flush, opaque polygons share the existing road batch and never add solids.
+  // Road repairs and kerb drains. Flat patches in the streets batch, no colliders.
   const repair = new THREE.Color('#55595b'), drain = new THREE.Color('#333e43'), slots = new THREE.Color('#707a7b');
   for (let n = Math.floor((chunk.start - 3) / 32); n * 32 < end + 3; n++) {
     const s = n * 32 + 5;
@@ -77,8 +75,7 @@ export function buildCityRoads(chunk) {
       const meetsStreet = u >= range.from && u <= range.to, junction = meetsStreet && distance < ROAD_HALF;
       patch(streets, s, t, u - w, u + w, ASPHALT);
       for (const side of [-1, 1]) {
-        // The closed side of a T junction keeps its pavement and edge line.
-        // In particular a river-facing kerb must never open into the water.
+        // The closed side of a T junction keeps its pavement, so no kerb opens onto the river.
         const armExists = side < 0 ? u > range.from : u < range.to;
         if (junction && armExists) continue;
         const edge = u + side * w;
@@ -125,11 +122,9 @@ export function buildCityRoads(chunk) {
         if (!junction && !nearCrossing && Math.floor(mid / 4) % 2 === 0) patch(streets, s - .08, s + .08, u, Math.min(u + 3.6, v), YELLOW, height, .018);
       }
     }
-    // Chamfered pavement corners turn the boulevard kerb into each side
-    // street. The walking surface stays at the promenade's existing level.
+    // Chamfered pavement corners where side streets meet the boulevard.
     for (const direction of crossing ? [-1, 1] : [1]) for (const side of [-1, 1]) {
-      // Cover the terrain row beside the road cut, so the new sidewalk
-      // meets the existing promenade without a sunken strip at its back.
+      // Also cover the terrain row behind, or a sunken strip shows at the back.
       const from = direction > 0 ? 6.7 : Math.max(quayOffset(s - 16), quayOffset(s), quayOffset(s + 16)) + 1.25;
       const to = direction > 0 ? 13.8 : -6.7;
       for (const [u, v] of intervals(from, to, [])) {
@@ -137,24 +132,20 @@ export function buildCityRoads(chunk) {
       }
       const outer = [[8, 6.05], [8, 8], [5.5, 8], [6.7, 6.05]];
       const point = ([ds, u], lift = .02) => chunk.at(s + side * ds, direction * u, pavementHeight(s + side * ds) + lift);
-      // Boundary centers and the corner extent are terrain-row aligned, so
-      // a corner belongs entirely to one side of a chunk seam.
+      // Corners are terrain-row aligned, so each lies wholly in one chunk.
       if (!chunk.inChunk(s + side * 4)) continue;
       chunk.quad(details, outer.map(p => point(p)), WALK, [0, 1, 0]);
       const a = [6.7, 6.05], b = [5.5, 8], c = [5.72, 8], d = [6.92, 6.05];
       chunk.quad(details, [a, b, c, d].map(p => point(p, .024)), KERB, [0, 1, 0]);
       chunk.quad(details, [point(a, .024), point(b, .024), point(b, -.075), point(a, -.075)], KERB, [-direction, 0, side]);
     }
-    // Crosswalks across the side streets make the boulevard footpaths
-    // continuous; stop bars sit just behind them in the approaching lane.
+    // Side-street crosswalks with a stop bar behind each in the approach lane.
     for (const u of crossing ? [10.5, -10.5] : [10.5]) {
       for (let k = 0; k < 8; k++) patch(streets, s - 4.9 + k * 1.28, s - 4.23 + k * 1.28, u - 1.2, u + 1.2, WHITE, height, .022);
       patch(streets, u > 0 ? s - 4.9 : s + .4, u > 0 ? s - .4 : s + 4.9, u + Math.sign(u) * 2.4 - .16, u + Math.sign(u) * 2.4 + .16, WHITE, height, .023);
     }
 
-    // Match the boulevard's zebra crossings on the opposite bank. The
-    // waterfront and outer avenue have T junctions where a street terminates;
-    // paint only the arms that actually exist, including bridge approaches.
+    // Far-bank crosswalks. T junctions only get crossings on arms that exist.
     for (const u of BANK_ROADS) {
       if (u < bankRange.from || u > bankRange.to) continue;
       for (const side of [-1, 1]) {
@@ -169,8 +160,8 @@ export function buildCityRoads(chunk) {
 
     if (!crossing) continue;
     const near = quayOffset(s) + 1.5, far = FAR_BANK_TOP - 2;
-    // The bridge deck and road use exactly the same height profile. Clip
-    // deck faces at chunk seams, while one owner builds each set of supports.
+    // Deck uses the road's height profile. Deck faces are clipped at chunk seams.
+    // Railings and piers are built only by the chunk that owns s.
     for (let u = far; u < near; u += 4) {
       const v = Math.min(u + 4, near);
       patch(details, s - DECK_HALF, s + DECK_HALF, u, v, CONCRETE, height, -.02);
@@ -207,8 +198,7 @@ export function buildCityRoads(chunk) {
     }
   }
 
-  // The opposite bank is a neighbourhood, with lamps and occasional parked
-  // cars along its waterfront avenue and the street behind the wharf blocks.
+  // Lamps and parked cars along the first two far-bank roads.
   for (const u of BANK_ROADS.slice(0, 2)) {
     for (let n = Math.floor(chunk.start / 28); n * 28 + 7 < end; n++) {
       const s = n * 28 + 7;

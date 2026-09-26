@@ -7,16 +7,15 @@ const STRAIGHT = 40, RADIUS = 200, FAR_CROSS = 540;
 export const PLAINS_RAIL_SPAN = STRAIGHT + RADIUS;
 const ballastTint = new Color('#c0a778');
 
-// A straight loading siding eases into two broad curves away from the highway.
-// The ends lie beyond the widest roadside view and the third-person fog.
+// Straight siding, then two broad curves away from the highway. The ends lie
+// past the widest roadside view and the third-person fog.
 export function plainsRailPath(site, parameter) {
   const base = Math.abs(site.u) + site.halfU + 1.5;
   const direction = Math.sign(parameter - site.s), distance = Math.abs(parameter - site.s);
   if (distance <= STRAIGHT) return { s: parameter, u: site.side * base, ds: 1, du: 0 };
   const angle = Math.min(Math.PI / 2, (distance - STRAIGHT) / RADIUS * Math.PI / 2);
   const tail = Math.max(0, distance - PLAINS_RAIL_SPAN) / (PLAINS_RAIL_REACH - PLAINS_RAIL_SPAN);
-  // A generous, constant-radius quarter turn, followed by a straight run
-  // into the far fields. Both joins are tangent: no tightening hook at the end.
+  // Constant-radius quarter turn, then a straight run to the far fields. Both joins are tangent.
   return { s: site.s + direction * (STRAIGHT + RADIUS * Math.sin(angle)),
     u: site.side * (base + RADIUS * (1 - Math.cos(angle)) + tail * (FAR_CROSS - base - RADIUS)),
     ds: Math.cos(angle), du: site.side * direction * Math.sin(angle) };
@@ -47,9 +46,9 @@ export function buildPlainsRailway(chunk, site) {
     if (!vertices.has(key)) vertices.set(key, plainsVertex(row, col));
     return vertices.get(key);
   };
-  // Sample the same field facets on either side of a chunk seam. A chunk's
-  // local terrain sampler cannot see the neighboring facet under a rail end.
-  // Sites reserve enough dry ground to keep these cells outside pond basins.
+  // Sample the shared terrain facets so both sides of a seam agree. The chunk's
+  // own sampler can't see the neighbour's facet under a rail end. Sites keep
+  // these cells out of pond basins.
   const ground = (s, u) => {
     const p = positionAt(s, u), baseRow = Math.floor(s / PLAINS_STEP);
     const column = PLAINS_COLUMNS.findIndex(cross => cross > u) - 1;
@@ -78,7 +77,7 @@ export function buildPlainsRailway(chunk, site) {
     return result;
   };
   const { railwayRails, railwaySleepers, dirt, dirtTints, painted } = chunk.scenery;
-  // Match the ordinary dirt ballast tint without overlapping another ground mesh.
+  // Matches the dirt tint so the ballast needs no separate ground mesh.
   const tint = ballastTint;
   const face = (a, b, c) => {
     if ((b.z - a.z) * (c.x - a.x) - (b.x - a.x) * (c.z - a.z) < 0) [b, c] = [c, b];
@@ -88,9 +87,9 @@ export function buildPlainsRailway(chunk, site) {
     const end = Math.min(last, (Math.floor(s / 2) + 1) * 2);
     const a = at(s, -1.9, .07), b = at(end, -1.9, .07), c = at(s, 1.9, .07), d = at(end, 1.9, .07);
     face(a, b, c); face(b, d, c);
-    // Rails remain continuous through field crossings; adjacent scenery gives way.
+    // Rails stay continuous through field crossings. Scenery gives way.
     for (const side of [-1, 1]) chunk.beam(railwayRails, at(s, side * .75, .23), at(end, side * .75, .23), .13, '#6a675f');
-    // Space ties by distance along the curve, rather than crowding them on bends.
+    // Space sleepers by arc length so they don't crowd on bends.
     const count = Math.max(1, Math.round(Math.hypot(b.x - a.x, b.z - a.z) / 1.4));
     for (let i = 0; i < count; i++) {
       const t = s + (end - s) * (i + .5) / count;

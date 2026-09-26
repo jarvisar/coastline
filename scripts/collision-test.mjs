@@ -12,8 +12,7 @@ try {
   await page.goto(`${process.env.TEST_URL ?? 'http://127.0.0.1:5173'}/?seed=42`, { waitUntil: 'networkidle' });
   await page.waitForFunction(() => window.__coastline?.traffic && document.querySelector('#loading').classList.contains('loaded'));
   await page.click('#start');
-  // Traffic gives way. Run into the back of a car and it is shoved on; lean on
-  // the side of one and it is pushed across its lane, turned, and recovers.
+  // Rear hits shove traffic forward. Side hits push it across its lane, then it recovers.
   const watch = scenario => page.evaluate(({ scenario }) => {
     const a = window.__coastline, v = a.vehicle, car = a.traffic.vehicles.find(car => car.direction > 0);
     v.reset(); a.traffic.clearNear(v);
@@ -45,7 +44,7 @@ try {
   assert.ok(side.contacts > 0 && side.pushed > .05 && side.turned > .01 && side.slowest > 20 && side.finite, `leaning on the side of a car: ${JSON.stringify(side)}`);
   assert.ok(side.lane === 2.4 && side.yaw === 0, `the car should be back in its lane: ${JSON.stringify(side)}`);
   records.push(rear, side);
-  // Drive the real loop across the road at the first row of buildings.
+  // Drive the real game loop across the road into the first row of buildings.
   const start = await page.evaluate(async () => {
     const a = window.__coastline, v = a.vehicle;
     await a.changeJourney('city');
@@ -62,7 +61,6 @@ try {
   assert.ok(stopped.u > 7 && stopped.u < 16, `the car should stand against the building line, u=${stopped.u}`);
   assert.ok(Math.abs(stopped.speed) < 3 && stopped.impacts > 0);
   await page.screenshot({ path: '.artifacts/collision-city.png' });
-  // The river stops it on the other side, at the quay.
   await page.evaluate(() => { const v = window.__coastline.vehicle; v.reset(); v.heading = v.route.frame(v.s).angle - Math.PI / 2; });
   await page.keyboard.down('KeyW'); await page.waitForTimeout(6000);
   const quay = await page.evaluate(async () => {
@@ -70,10 +68,9 @@ try {
     return { u: v.u, edge: quayOffset(v.s) };
   });
   await page.keyboard.up('KeyW');
-  // Nose on to the water, the whole car is still on the quay.
   assert.ok(quay.u < -7 && quay.u - quay.edge > 1.7 && quay.u - quay.edge < 3, `the car should stop at the quay's edge, u=${quay.u} edge=${quay.edge}`);
   await page.screenshot({ path: '.artifacts/collision-quay.png' });
-  // The whole scenery pass, measured in the jungle, which has the most trunks standing in it.
+  // Timed in the jungle, which has the most trunks.
   const cost = await page.evaluate(async () => {
     const a = window.__coastline, { collideScenery } = await import('/src/collision.js');
     await a.changeJourney('jungle');

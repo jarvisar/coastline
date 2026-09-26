@@ -3,13 +3,13 @@ import { snowGroundHeight, snowRoadHeight, snowBridgeAt, ledgeEdge, lampAt, LAMP
 import { nearCabin } from './alpine-cabins.js';
 import { createDiscoverySchedule } from './discovery-schedule.js';
 
-// Approximate miles between sightings of EACH kind. Lower = more frequent.
-// Edit one number, then reload. Infinity disables a kind. Together: ~2.5 miles.
+// Rough miles between sightings of each kind. Lower is more frequent.
+// Infinity disables a kind. About 2.5 miles combined.
 export const SNOW_DISCOVERY_MILES = {
   'cable-car': 5,
-  snowmen: 5, // One group of three figures.
+  snowmen: 5, // Group of three.
 };
-// Lakeside cabins retain their original frequency in alpine-cabins.js.
+// Lakeside cabins are scheduled separately in alpine-cabins.js.
 const schedule = createDiscoverySchedule(SNOW_DISCOVERY_MILES,
   { 'cable-car': .60, snowmen: .99 }, 3101, districtSite);
 export const SNOW_DISCOVERY_SPACING = schedule.spacing;
@@ -18,7 +18,7 @@ export const CABLE_ROPE_OFFSET = 3;
 // Cabin floor below the rope, and the clearance kept beneath it.
 export const CABIN_DROP = 5.2;
 const ROPE_CLEARANCE = 6.5;
-// The bench between the road's guardrail and the bluff rim carries the pylon.
+// Pylon on the bench between the guardrail and the bluff rim.
 const LOWER_STATION_U = -15.5;
 
 // Rope height above the line at u, following each span's sag.
@@ -39,7 +39,7 @@ function worstClearance(s, points) {
   // Cabins may sit low only beside the station platforms.
   for (let u = first + 3; u < last - 3; u += 1) {
     const rope = ropeHeight(points, u), road = snowRoadHeight(s);
-    // Cabins must clear traffic on the road and the lamp heads on its inner shoulder.
+    // Clear road traffic and the lamp heads on the inner shoulder.
     const fixtures = Math.abs(u) < 5 ? road + 2.5 : u >= 5 && u < 10.5 ? road + 6.5 : -Infinity;
     const floor = Math.max(...[-4, 0, 4].map(ds => snowGroundHeight(s + ds, u)), fixtures);
     const clearance = rope - floor - ROPE_CLEARANCE;
@@ -66,17 +66,17 @@ function nearFixtures(s, reach) {
 }
 
 function cableCarAt(s, index) {
-  // A nearly straight road keeps each rope span straight in world space.
+  // Spans are straight in world space, so the road must be nearly straight.
   if ([-10, 0, 10].some(ds => Math.abs(roadDerivative(s + ds)) > .3) || nearFixtures(s, 9)) return null;
   if ([-7, -3.5, 0, 3.5, 7].some(ds => ledgeEdge(s + ds) > -23)) return null;
   const road = snowRoadHeight(s);
-  // The valley station stands on the lake shore, clear of the cabins there.
+  // Valley station on the lake shore, clear of lakeside cabins.
   const shoreU = alpineLake(s).near + 7;
   if ([-12, 0, 12].some(ds => nearCabin(s + ds, shoreU))) return null;
   const shore = footingRange(s, shoreU, 4.5);
   if (shore.high - shore.low > 2.6 || shore.high > LAKE_LEVEL + 7) return null;
   const shorePoint = { u: shoreU, y: shore.high + 7.6, ground: shore.high, low: shore.low };
-  // A tall pylon on the roadside bench lifts the rope off the bluff rim.
+  // The bench pylon is tall to lift the rope over the bluff rim.
   const bench = footingRange(s, LOWER_STATION_U, 3);
   if (bench.high - bench.low > 2.5) return null;
   let best = null;
@@ -91,7 +91,7 @@ function cableCarAt(s, index) {
     upper: { u: best.u, ground: best.high, low: best.low }, points });
   const benchPoint = { u: LOWER_STATION_U, y: bench.low + 15, ground: bench.high, low: bench.low };
   const points = [shorePoint, benchPoint, upperPoint];
-  // Towers go up near the middle of a span, as an even row up the mountainside.
+  // Inserts a tower near mid-span.
   const brace = (index, lift) => {
     const a = points[index - 1], b = points[index];
     if (points.length >= 6) return false;
@@ -106,8 +106,8 @@ function cableCarAt(s, index) {
     }
     return false;
   };
-  // Wherever the rope runs too close to the mountain, brace that span or raise
-  // the tower beside it; then even out whatever span is left much the longest.
+  // Where the rope runs too low, brace that span or raise the nearest tower.
+  // Then split the longest span if it's much longer than the rest.
   for (let pass = 0; pass < 7; pass++) {
     const worst = worstClearance(s, points);
     if (worst.clearance >= 0) break;
@@ -129,8 +129,8 @@ function cableCarAt(s, index) {
       break;
     }
   }
-  // Adding a tower changes what its neighbours carry. Every pylon must still
-  // stand above the line through the two beside it, holding the rope up.
+  // Each pylon must stay above the chord through its neighbours to hold the
+  // rope up. Adding towers can break that, so recheck all of them.
   for (let i = 1; i < points.length - 1; i++) {
     const point = points[i], a = points[i - 1], b = points[i + 1];
     const chord = lerp(a.y, b.y, (point.u - a.u) / (b.u - a.u));
@@ -139,12 +139,11 @@ function cableCarAt(s, index) {
     if (point.y - point.ground > 26) return null;
     i = 0;
   }
-  // A denser search reaches shelves the old survey missed. Reject a layout
-  // if bracing cannot keep its spans proportionate, then try the next shelf.
+  // Reject lopsided spans; the caller tries the next shelf.
   const spans = points.slice(1).map((point, i) => point.u - points[i].u);
   if (Math.min(...spans) <= 20 || Math.max(...spans) >= Math.min(...spans) * 2.6) return null;
-  // Wide terrain offsets curve away from road normals. Check the rendered
-  // crossing too, so both cabins still meet the road at their scheduled time.
+  // Wide terrain offsets curve away from road normals, so check the rendered
+  // crossing too. Both cabins must meet the road at their scheduled time.
   const from = positionAt(s, points[0].u), to = positionAt(s, points.at(-1).u);
   const length = Math.hypot(to.x - from.x, to.z - from.z);
   const across = { x: (to.z - from.z) / length, z: (from.x - to.x) / length };
@@ -170,8 +169,7 @@ function snowmenAt(s, index) {
 
 function districtSite(kind, index, desired) {
   const create = kind === 'cable-car' ? cableCarAt : snowmenAt;
-  // A finer survey finds usable shelves that the old 30 m steps skipped.
-  // Snowmen need only their own footing checks, not a whole cable-car corridor.
+  // 6 m survey steps. Coarser steps skip usable shelves.
   const reach = Math.min(1200, SNOW_DISCOVERY_SPACING / 4);
   for (let step = 0; step <= Math.floor(reach / 6) * 2; step++) {
     const s = Math.round(desired / 2) * 2 + (step % 2 ? -1 : 1) * Math.ceil(step / 2) * 6;

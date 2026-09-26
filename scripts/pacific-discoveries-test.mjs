@@ -36,7 +36,7 @@ try {
     assert.equal(record.chunks, record.resident);
     assert.equal(record.features.filter(other => other.kind === site.kind && other.index === site.index).length, 1);
     await page.screenshot({path: `${directory}/${site.kind}-drive.png`});
-    // A close detail of each model catches placement, scale, and material errors.
+    // Close-up of each model to catch placement, scale and material errors.
     await page.evaluate(async site => {
       const a = window.__coastline, {positionAt} = await import('/src/world/route.js');
       const p = positionAt(site.s, site.u, site.kind === 'lighthouse' ? undefined : 1);

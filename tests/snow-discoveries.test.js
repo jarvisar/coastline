@@ -17,7 +17,7 @@ const groundUnder = (chunk, x, z) => {
 
 test('snow discovery sites stay rare and stable when streamed in either direction', () => {
   const sites = snowDiscoveries(-150000, 150000);
-  // 300 km of route should offer roughly 75 discoveries, not the old 10–20.
+  // About 75 over 300 km.
   assert.ok(sites.length > 55 && sites.length < 95, `unexpected discovery count ${sites.length}`);
   assert.deepEqual([...new Set(sites.map(site => site.kind))].sort(), ['cable-car', 'snowmen']);
   assert.deepEqual(snowDiscoveries(-150000, 0).concat(snowDiscoveries(0, 150000)), sites);
@@ -25,7 +25,6 @@ test('snow discovery sites stay rare and stable when streamed in either directio
   for (const site of [...sites].reverse()) {
     const start = Math.floor(site.s / CHUNK_LENGTH) * CHUNK_LENGTH;
     assert.deepEqual(snowDiscoveries(start, start + CHUNK_LENGTH), [site], 'exactly one chunk owns each site');
-    // Lines keep clear of the trestles, the lamps and the summit relays.
     assert.ok(Math.abs(site.s - snowBridgeAt(site.s).center) > 72);
     for (let i = Math.floor((site.s - 70) / LAMP_SPACING); i * LAMP_SPACING < site.s + 70; i++) {
       const lamp = lampAt(i);
@@ -40,7 +39,7 @@ test('snow discovery sites stay rare and stable when streamed in either directio
       assert.ok(snowDiscoveryClears(site.s + 40, site.u, [site]));
       continue;
     }
-    // The line runs from the lake shore, over the road, up to a mountain shelf.
+    // Cable cars run from the lake shore over the road to a mountain shelf.
     assert.ok(site.lower.u < alpineLake(site.s).near + 9 && site.lower.u > alpineLake(site.s).near);
     assert.equal(snowDiscoveryClears(site.s, site.lower.u, [site]), false);
     assert.ok(snowDiscoveryClears(site.s + 40, site.lower.u, [site]), 'the corridor ends with the line');
@@ -101,8 +100,7 @@ test('cable cars carry lit cabins clear of the mountain, the road and the lamps'
       const feature = chunk.features.discoveries[0];
       assert.equal(feature.kind, 'cable-car');
       const line = chunk.group.getObjectByName('cable-car-line');
-      // Two stations, the ropes, and a braced lattice tower per pylon: a build
-      // that stopped early (bare legs, say) falls well short of this.
+      // Rough vertex budget for stations, ropes and one lattice tower per pylon.
       assert.ok(line.geometry.attributes.position.count > 3000 + feature.towers.length * 2600,
         `the line is missing structure (${line.geometry.attributes.position.count} vertices)`);
       const cabins = chunk.group.getObjectByName('cable-car-cabins');
@@ -118,7 +116,6 @@ test('cable cars carry lit cabins clear of the mountain, the road and the lamps'
       }
       assert.ok(overRoad.across < 12, 'the line crosses the road');
       assert.ok(overRoad.floor > road + 4, 'cabins pass well above the traffic and the lamp heads');
-      // The two cabins share the line, one on each rope, always moving oppositely.
       for (const time of [0, 7, 23, 44, 61, 88]) {
         const travel = cableTravel(time, feature.index);
         const [left, right] = [-1, 1].map(side => cableCabinPose(feature, side, side < 0 ? travel : 1 - travel));
@@ -130,7 +127,6 @@ test('cable cars carry lit cabins clear of the mountain, the road and the lamps'
       assert.ok(run.filter(travel => travel === 0).length >= 12, 'cabins wait at the valley station');
       assert.ok(run.filter(travel => travel === 1).length >= 12, 'cabins wait at the mountain station');
       assert.ok(run.some(travel => travel > .2 && travel < .8), 'and spend most of the cycle underway');
-      // Every tower leg reaches the rendered snow it stands on.
       assert.equal(feature.towers.length, site.points.length - 2);
       for (const tower of feature.towers) {
         const p = snowPosition(site.s, tower.u, 0), below = groundUnder(chunk, p.x, p.z + chunk.start);
@@ -164,7 +160,7 @@ test('approaching from either direction brings a cabin across the road without c
       for (const direction of [-1, 1]) for (const speed of [8, 20, 40, 65]) for (const start of [0, 137]) {
         const vehicle = { s: site.s - direction * 401, speed: direction * speed };
         animateSnowDiscoveries([chunk], start, vehicle);
-        // Revisit the same streamed chunk, exercising encounter reset too.
+        // Reuses the chunk across runs, which also exercises encounter reset.
         const duration = 370 / speed, steps = Math.ceil(duration * 20);
         let previous;
         for (let step = 0; step <= steps; step++) {
@@ -206,7 +202,6 @@ test('snow discovery geometry, features and cabin motion survive worker transfer
       assert.deepEqual(after.geometry.attributes.position.array, positions);
       assert.deepEqual(after.geometry.attributes.discoveryGlow.array, glow);
       assert.ok([...positions].every(Number.isFinite));
-      // The world animates the transferred cabins, and freezes them when paused.
       const scene = new THREE.Scene(), world = new SnowWorld(scene);
       try {
         world.chunks.set(restored.index ?? 0, restored);

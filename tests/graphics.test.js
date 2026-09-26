@@ -8,10 +8,8 @@ function memoryStorage(initial = {}) {
 }
 const stored = storage => JSON.parse(storage.map.get('coastline.graphics'));
 
-// A stand-in device with a running clock, like requestAnimationFrame has.
-// `rates` is either a fixed refresh rate or the frame rate this device reaches
-// at each quality level, so dropping a level actually buys frames — the signal
-// the controller is reading. A fixed rate models a display or browser cap.
+// Fake device clock. `rates` is a fixed refresh cap or an array of the fps
+// reached at each quality level, so stepping down can actually gain frames.
 class Device {
   constructor(graphics, rates = 60) { this.graphics = graphics; this.rates = rates; this.time = 0; this.changes = 0; this.levels = []; this.steps = []; }
   get hz() { return typeof this.rates === 'number' ? this.rates : this.rates[levelIndex(this.graphics.levelId)]; }
@@ -41,15 +39,12 @@ test('quality levels get cheaper in every dimension, from high down to basic', (
     assert.ok(Number(level.antialias) <= Number(previous.antialias), `${level.id} antialiasing`);
     assert.ok(AO_COST[level.aoQuality] <= AO_COST[previous.aoQuality], `${level.id} AO budget`);
   }
-  // The top level must draw everything, at the density the display asks for.
   assert.deepEqual({ ...QUALITY_LEVELS[0], id: undefined, label: undefined, summary: undefined },
     { id: undefined, label: undefined, summary: undefined, density: 1, shadowMap: 2048, chunks: { behind: 3, ahead: 5 }, antialias: true, aoQuality: 'high' });
 });
 
 test('every level removes pixels, on a 1x panel as much as on a dense one', () => {
-  // A ceiling on the pixel ratio was the old rule, and it did nothing here:
-  // clamping to 3, 2 and 1.5 all leave a 1x laptop panel rendering at 1x, so
-  // three of the four levels were the same picture at the same price.
+  // Density scales the pixel ratio. A cap on it would do nothing on a 1x panel.
   for (const devicePixelRatio of [1, 1.25, 1.5, 2, 3]) {
     const scales = QUALITY_LEVELS.map(level => renderScale(level.density, devicePixelRatio));
     for (let i = 1; i < scales.length; i++) {
@@ -64,20 +59,18 @@ test('every level removes pixels, on a 1x panel as much as on a dense one', () =
 });
 
 test('detection tiers pointer devices on what they are, and touch devices cautiously', () => {
-  // A tower with a discrete card and room to work starts at the top.
   assert.equal(detectLevel({ mobile: false, gpu: 'NVIDIA GeForce RTX 4070', cores: 16, memory: 8, pixels: 2e6 }), 0);
   assert.equal(detectLevel({ mobile: false, gpu: 'AMD Radeon RX 7800 XT', cores: 12, memory: 8, pixels: 2e6 }), 0);
-  // A laptop's integrated chip does not, and neither does a thin machine.
   assert.equal(detectLevel({ mobile: false, gpu: 'Intel(R) UHD Graphics 620', cores: 8, memory: 8, pixels: 2e6 }), levelIndex('balanced'));
   assert.equal(detectLevel({ mobile: false, gpu: 'NVIDIA GeForce RTX 4070', cores: 16, memory: 8, pixels: 8.3e6 }), levelIndex('balanced'), 'a 4K panel is four 1080p frames');
   assert.equal(detectLevel({ mobile: false, gpu: 'Intel(R) HD Graphics 4000', cores: 2, memory: 4, pixels: 1e6 }), levelIndex('basic'));
-  // Drawing on the processor needs the cheapest picture there is.
+  // Software renderers.
   assert.equal(detectLevel({ mobile: false, gpu: 'ANGLE (Google, SwiftShader Device)', cores: 16, memory: 8, pixels: 1e6 }), levelIndex('basic'));
   assert.equal(detectLevel({ mobile: false, gpu: 'llvmpipe (LLVM 15.0.7, 256 bits)', cores: 16, memory: 8, pixels: 1e6 }), levelIndex('basic'));
-  // Mesa drives plenty of discrete cards, and Apple's shared memory is not slow.
+  // Mesa can be a discrete card, and Apple GPUs report no memory.
   assert.equal(detectLevel({ mobile: false, gpu: 'AMD Radeon RX 6700 XT (radeonsi, navi22, LLVM 15.0.7, DRM 3.49), Mesa 23.0.4', cores: 16, memory: 8, pixels: 2e6 }), 0);
   assert.equal(detectLevel({ mobile: false, gpu: 'Apple M3 Pro', cores: 12, memory: 0, pixels: 2e6 }), 0);
-  // Nothing to go on is not a reason to assume the worst.
+  // No hardware info at all starts at the top.
   assert.equal(detectLevel({ mobile: false, gpu: '', cores: 0, memory: 0, pixels: 0 }), 0);
   assert.equal(detectLevel({ mobile: false, gpu: '', cores: 2, memory: 1, pixels: 0 }), levelIndex('smooth'));
   assert.equal(detectLevel({ mobile: true, cores: 8, memory: 8 }), levelIndex('balanced'));
@@ -86,10 +79,9 @@ test('detection tiers pointer devices on what they are, and touch devices cautio
   assert.equal(detectLevel({ mobile: true, cores: 4, memory: 1 }), levelIndex('basic'));
   assert.equal(detectLevel({ mobile: true, cores: 2, memory: 0 }), levelIndex('basic'));
   assert.equal(detectLevel({ mobile: true, cores: 0, memory: 0 }), levelIndex('basic'));
-  // A tablet that calls itself a desktop is still a touch device.
+  // Tablets that report a desktop UA still count as touch.
   assert.equal(detectLevel({ navigator: { userAgentData: { mobile: false } }, coarsePointer: true, cores: 4, memory: 4 }), levelIndex('smooth'));
-  // A touchscreen laptop keeps its fine primary pointer, and is tiered as the
-  // laptop it is rather than as a phone.
+  // Touchscreen laptops have a fine primary pointer and are tiered as laptops.
   assert.equal(detectLevel({ navigator: { userAgentData: { mobile: false } }, coarsePointer: false, gpu: 'Intel(R) Iris(R) Xe Graphics', cores: 4, memory: 4, pixels: 2e6 }), levelIndex('basic'));
 });
 
@@ -105,12 +97,10 @@ test('a device that holds the refresh rate keeps its level, and a single hitch c
 
 test('a slow device steps down one level at a time and never climbs back', () => {
   const graphics = graphicsAt(levelIndex('high'));
-  // An older phone: each step down really does buy frames, and only the
-  // cheapest level reaches the display's rate. AO remains off throughout.
+  // Only the cheapest level reaches 60.
   const phone = new Device(graphics, [22, 31, 43, 61]).run(60);
   assert.deepEqual(phone.steps, ['balanced-ao', 'smooth-ao', 'basic-ao']);
   assert.equal(graphics.levelId, 'basic');
-  // Recovering later must not undo a decision the player has settled into.
   phone.rates = 60;
   phone.run(200);
   assert.equal(graphics.levelId, 'basic');
@@ -160,8 +150,6 @@ test('hidden frames cannot teach Auto an artificial refresh rate', () => {
 
 test('a climb that turns out to be too much settles one level below it, for good', () => {
   const graphics = graphicsAt(levelIndex('smooth'));
-  // This device runs the cheaper levels comfortably but cannot hold the two
-  // heaviest ones, so the upward probe has to be given back.
   const device = new Device(graphics, [25, 41, 61, 61]).run(200);
   assert.equal(graphics.levelId, 'smooth');
   assert.deepEqual(device.steps, ['balanced-ao', 'smooth-ao'], 'one probe up, then the level back');
@@ -174,8 +162,7 @@ test('a new route may reclaim one level, but not the whole ladder at once', () =
   const graphics = graphicsAt(levelIndex('high'));
   const heavy = new Device(graphics, [22, 31, 43, 61]).run(60);
   assert.equal(graphics.levelId, 'basic');
-  // A lighter route runs everything comfortably, but only one level comes back
-  // per route change, so hopping between routes cannot flap the whole ladder.
+  // One level comes back per route change, even when the route could run them all.
   const light = new Device(graphics, 61);
   light.time = heavy.time;
   graphics.relax();
@@ -189,8 +176,7 @@ test('a new route may reclaim one level, but not the whole ladder at once', () =
 });
 
 test('a capped display gets its quality back instead of being stripped for nothing', () => {
-  // 30 Hz throughout: nothing the controller gives up can improve a rate the
-  // display sets. It probes two cheaper levels and restores the original.
+  // A 30 Hz cap. Two cheaper levels gain nothing, so the original is restored.
   const graphics = graphicsAt(levelIndex('balanced'));
   const display = new Device(graphics, 30).run(90);
   assert.equal(graphics.levelId, 'balanced');
@@ -203,7 +189,6 @@ test('a capped display gets its quality back instead of being stripped for nothi
 
 test('a genuine improvement from stepping down is kept', () => {
   const graphics = graphicsAt(levelIndex('high'));
-  // One level step buys enough frames to settle.
   const device = new Device(graphics, [30, 58, 60, 60]).run(200);
   assert.equal(graphics.levelId, 'balanced');
   assert.deepEqual(device.steps, ['balanced-ao']);
@@ -242,7 +227,6 @@ test('auto remembers the level it settled on so the next visit starts there', ()
   const graphics = new Graphics({ storage, detect: () => levelIndex('high') });
   new Device(graphics, [22, 31, 43, 61]).run(60);
   assert.equal(graphics.levelId, 'basic');
-  // Remember the settled level and the unchanged default AO choice.
   assert.deepEqual(stored(storage), { mode: 'auto', level: 'basic', density: null, ambientOcclusion: false });
   const next = new Graphics({ storage, detect: () => levelIndex('high') });
   assert.equal(next.auto, true);

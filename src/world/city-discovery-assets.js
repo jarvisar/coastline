@@ -4,8 +4,7 @@ import { Parts } from './city-assets.js';
 
 const stone = '#9d988f', darkStone = '#7f7a72', slate = '#4b5257', water = '#66818b', iron = '#3d4246';
 
-// A tiered fountain for the square: a wide basin, a pedestal bowl and a
-// figure on a column. Still water; the storm dimples the river, not this.
+// Still water. Storm ripples only apply to the river.
 function fountain() {
   const p = new Parts();
   p.cylinder([0, .45, 0], 5.2, 5.4, .9, stone, 14);
@@ -21,8 +20,7 @@ function fountain() {
   return p.finish();
 }
 
-// A stone church with its clock tower on the corner. The tower faces -x,
-// toward the road; the nave runs back along +x behind it.
+// The tower faces -x toward the road; the nave runs back along +x.
 function clockTower() {
   const p = new Parts();
   p.box([9, 4, 0], [16, 8, 9], stone);

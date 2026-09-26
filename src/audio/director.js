@@ -1,8 +1,8 @@
 import { AMBIENCE } from './profiles.js';
 
 const note = midi => 440 * 2 ** ((midi - 69) / 12);
-// Original, sparse suspended chords. The route changes the key; cruising adds
-// occasional upper notes. No network, recordings or repeating music file.
+// Sparse suspended chords, fully synthesised. The route sets the key and
+// cruising adds occasional upper notes.
 const CHORDS = [[0, 7, 14], [-3, 4, 12], [-5, 2, 9], [-7, 0, 7]];
 export class SoundDirector {
   constructor() { this.seed = 0x51ca9; this.reset(); }
@@ -31,7 +31,7 @@ export class SoundDirector {
       return;
     }
     if (!this.musicActive) { this.musicActive = true; this.nextBeat = now; this.beat = 0; }
-    // Only a short lookahead; never catch up a backlog after a suspended tab.
+    // Short lookahead. Don't replay a backlog after the tab was suspended.
     if (this.nextBeat < now - .15) this.nextBeat = now;
     if (this.nextBeat <= now + .1) {
       if (this.beat % 8 === 0) this.chord = Math.floor(this.beat / 8) % CHORDS.length;

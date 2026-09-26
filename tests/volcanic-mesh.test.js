@@ -4,9 +4,8 @@ import { VolcanicChunk } from '../src/world/volcanic.js';
 import { seededRandom } from '../src/world/route.js';
 import { riftProfile } from '../src/world/volcanic-route.js';
 
-// A shared edge must be traversed in opposite directions by its two faces.
-// Flipping individual triangles can make every normal appear plausible while
-// leaving precisely the back-face slits this check catches.
+// A shared edge must run in opposite directions in its two faces. Per-face
+// normal checks miss the back-face slits this catches.
 function meshEdges(positions) {
   const edges = new Map();
   for (let i = 0; i < positions.length; i += 9) {
@@ -30,7 +29,7 @@ test('basalt shells remain closed and consistently wound at small and large scal
       const angle = k / count * Math.PI * 2, reach = radius * (.85 + random() * .15);
       return [s + Math.cos(angle) * reach * 1.4, d + Math.sin(angle) * reach];
     });
-    // Exercise the production builder without needing an entire streamed world.
+    // Drive the real builder without streaming a whole world.
     const chunk = Object.create(VolcanicChunk.prototype);
     chunk.start = s; chunk.rock = { positions: [], colors: [], heat: [] };
     chunk.block(outline, side, 10, height, random, false);

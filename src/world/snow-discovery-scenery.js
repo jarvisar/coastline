@@ -8,8 +8,8 @@ import { solidBox, solidPost } from './colliders.js';
 const up = new THREE.Vector3(0, 1, 0), transform = new THREE.Object3D();
 const vector = (x, y, z) => new THREE.Vector3(x, y, z);
 
-// Heights sampled from the rendered mountain, so footings and ice meet the
-// facets the player actually sees rather than the smooth analytic surface.
+// Heights from the rendered mesh so footings meet the visible facets, not the
+// analytic surface.
 export function terrainSampler(chunk, x, z, reach) {
   const position = chunk.terrain?.geometry.attributes.position, faces = [];
   for (let i = 0; position && i < position.count; i += 3) {
@@ -31,7 +31,7 @@ export function terrainSampler(chunk, x, z, reach) {
       const w2 = 1 - w0 - w1;
       if (w0 < -.001 || w1 < -.001 || w2 < -.001) continue;
       const y = w0 * a[1] + w1 * b[1] + w2 * c[1];
-      // Overhanging strata can cover a spot twice; the visible one is on top.
+      // Overhanging strata can cover a spot twice. Take the top one.
       if (height === null || y > height) height = y;
     }
     return height;
@@ -44,8 +44,7 @@ function buildSnowmen(chunk, site) {
     const p = snowPosition(figure.s, figure.u, 0), z = p.z + chunk.start;
     const ground = terrainSampler(chunk, p.x, z, 4);
     const y = ground(p.x, z) ?? snowGroundHeight(figure.s, figure.u);
-    // Face the road and approaching drivers. Each figure sits in the rendered
-    // snow, including where its triangles differ from the analytic hillside.
+    // Face the road and oncoming drivers.
     const facing = snowPosition(figure.s - 8, 0, 0);
     const yaw = Math.atan2(facing.x - p.x, facing.z - p.z);
     const first = parts.parts.length;
@@ -95,8 +94,7 @@ function buildCableCar(chunk, site) {
   const groundAt = (p, fallback) => ground(p.x, p.z) ?? fallback;
 
   function station(anchor, place, facing) {
-    // A local frame: +z toward the rope, +x across it, so one layout serves
-    // the valley station and the mountain station alike.
+    // Local frame: +z toward the rope, +x across it, so one layout serves both stations.
     const along = line.clone().multiplyScalar(facing), across = vector(along.z, 0, -along.x);
     const yaw = Math.atan2(along.x, along.z), rotation = [0, yaw, 0];
     const base = anchor.clone().addScaledVector(along, -5.2);
@@ -105,22 +103,20 @@ function buildCableCar(chunk, site) {
     base.setY(Math.max(place.ground, deck));
     const top = anchor.y - base.y;
     const box = (position, size, color, glow = 0) => parts.box(position, size, color, rotation, glow);
-    // The building and its boarding deck stop the car as one block.
+    // Building and deck share one collider.
     const middle = at(0, 0, 1);
     solidBox(chunk, middle.x, middle.z, yaw, 4.8, 5.3);
     box(at(0, (low - base.y + .7) / 2, -1), [9.6, base.y + .7 - low, 6.6], '#495365');
     box(at(0, 2.75, -1), [8.9, 4.1, 5.6], '#6b5448');
     for (const x of [-4.48, 4.48]) for (const z of [-2.5, -1, .5]) box(at(x, 3.05, z), [.1, 1, 1.2], '#ffcf8c', 2.1);
     for (const x of [-1.5, 1.5]) box(at(x, 2.95, -3.83), [1.3, 1.1, .1], '#ffcf8c', 2.1);
-    // A shallow gable with a snow load, like the lakeside cabins.
     for (const side of [-1, 1]) {
       const roll = new THREE.Quaternion().setFromAxisAngle(up, yaw)
         .multiply(new THREE.Quaternion().setFromAxisAngle(vector(0, 0, 1), -side * .34));
       parts.box(at(side * 2.4, 5.35, -1), [5.4, .34, 6.2], '#57606e', roll);
       parts.box(at(side * 2.42, 5.62, -1), [5.2, .2, 6], '#c7d2df', roll);
     }
-    // An open boarding deck, then the sheave gantry: the working end of the
-    // line stays visible above the roof from the fixed camera angle.
+    // The sheave gantry sits above the roof so it stays visible from the fixed camera.
     box(at(0, 2.05, 4), [9.2, .3, 4.6], '#59636f');
     for (const x of [-4.3, 4.3]) for (const z of [2.4, 5.4]) box(at(x, 2.65, z), [.14, 1, .14], '#7e8899');
     for (const x of [-4.3, 4.3]) box(at(x, 3.15, 3.9), [.1, .12, 6], '#7e8899');
@@ -136,7 +132,6 @@ function buildCableCar(chunk, site) {
       parts.add(new THREE.CylinderGeometry(1.5, 1.5, .34, 12), at(side * CABLE_ROPE_OFFSET, top - 1.5, 5.2), '#7a8697', sheave);
       parts.add(new THREE.CylinderGeometry(.42, .42, .5, 8), at(side * CABLE_ROPE_OFFSET, top - 1.5, 5.2), '#4f5866', sheave);
     }
-    // A lamp over the platform, the one warm light on the machinery.
     box(at(0, top - .45, 3.4), [.66, .16, .66], '#ffdca4', 2.6);
     box(at(0, top - .2, 3.4), [.3, .35, .3], '#4f5866');
   }
@@ -149,12 +144,11 @@ function buildCableCar(chunk, site) {
       return [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([sx, sz]) => at(sx * spread, sz * depth, y));
     };
     const feet = corner(0, -height), tops = corner(1, -1.6), footings = [];
-    // Four legs on their blocks, which no car passes between.
+    // One collider over the whole base so cars can't pass between the legs.
     solidBox(chunk, point.x, point.z, Math.atan2(line.x, line.z), 3.1, 2.8);
     feet.forEach((foot, i) => {
       const y = groundAt(foot, place.low);
-      // A concrete block on a steep slope has to reach the ground under its
-      // downhill edge too, or it juts out of the mountainside.
+      // Extend the block to its lowest corner so it doesn't jut out on steep slopes.
       const corners = [[-.8, -.8], [.8, -.8], [.8, .8], [-.8, .8]].map(([dx, dz]) => ground(foot.x + dx, foot.z + dz) ?? y);
       const bottom = Math.min(y, ...corners) - .9, top = y + .25;
       parts.box([foot.x, (bottom + top) / 2, foot.z], [1.6, top - bottom, 1.6], '#4b5465');
@@ -195,7 +189,6 @@ function buildCableCar(chunk, site) {
   station(points.at(-1), site.upper, -1);
   const towers = [];
   for (let i = 1; i < points.length - 1; i++) towers.push({ u: site.points[i].u, footings: pylon(points[i], site.points[i]) });
-  // A few boulders shed from the cut below each pylon footing.
   for (let i = 1; i < points.length - 1; i++) for (let k = 0; k < 3; k++) {
     const spot = points[i].clone().addScaledVector(across, (random() - .5) * 9).addScaledVector(line, (random() - .5) * 8);
     const size = .5 + random() * .9;
@@ -208,14 +201,14 @@ function buildCableCar(chunk, site) {
   cabins.name = 'cable-car-cabins'; cabins.castShadow = true; cabins.receiveShadow = true;
   const feature = { ...site, rope, towers, lateral: [across.x, across.z] };
   poseCabins(cabins, feature, 0);
-  // One sphere spans the whole line, so the pair never pops while travelling.
+  // One bounding sphere over the whole line so the cabins never cull mid-run.
   cabins.boundingSphere = new THREE.Sphere(points[0].clone().lerp(points.at(-1), .5).addScaledVector(up, -CABIN_DROP / 2),
     points[0].distanceTo(points.at(-1)) / 2 + 8);
   chunk.group.add(cabins);
   return feature;
 }
 
-// Where a cabin hangs at a given point of its run, following the sagging spans.
+// Cabin pose at a point along its run, following the sagging spans.
 export function cableCabinPose(feature, side, travel) {
   const strand = feature.rope[side < 0 ? 0 : 1];
   const total = strand.reduce((sum, span) => sum + span.length, 0);
@@ -232,8 +225,7 @@ export function cableCabinPose(feature, side, travel) {
   return { position, yaw: Math.atan2(direction.x, direction.z) + (side < 0 ? Math.PI : 0) };
 }
 
-// Pick the point in the existing journey where the uphill cabin crosses the
-// road. The crossing is not necessarily halfway between the two stations.
+// Cycle time when the uphill cabin crosses the road. Not necessarily halfway.
 function roadCrossingTime(feature) {
   let distance = 0;
   const length = feature.rope[0].reduce((sum, span) => sum + span.length, 0);
@@ -248,7 +240,7 @@ function roadCrossingTime(feature) {
 
 function encounterClock(chunk, feature, time, vehicle) {
   const distance = Math.abs(feature.s - vehicle.s);
-  // Schedule a fresh encounter outside the driving view, also on return visits.
+  // Reset out of view so return visits get a fresh encounter.
   if (distance > 400) { chunk.cableTiming = null; return time; }
   const speed = Math.abs(vehicle.speed ?? 0);
   const arrival = Math.max(0, distance - 30) / Math.max(8, speed);
@@ -262,15 +254,15 @@ function encounterClock(chunk, feature, time, vehicle) {
   if (!timing.passed && speed > 2 && (feature.s - vehicle.s) * vehicle.speed > 0) {
     const error = timing.crossing - arrival - (time + timing.offset);
     const wrapped = ((error + CABLE_CYCLE / 2) % CABLE_CYCLE + CABLE_CYCLE) % CABLE_CYCLE - CABLE_CYCLE / 2;
-    // Accommodate changes in driving speed without jumping the cabins along
-    // the rope. Stopping the car lets the lift continue its ordinary cycle.
+    // Adjust gradually so speed changes don't make the cabins jump.
+    // A stopped car lets the lift run its normal cycle.
     timing.offset += clamp(wrapped, -.75 * dt, dt);
   }
   return time + timing.offset;
 }
 
-// The scene clock still controls movement and pausing; approaching the lift
-// schedules a road crossing shortly before the driver passes underneath.
+// Scene time still drives movement and pausing. Approaching the lift shifts the
+// schedule so a cabin crosses the road just before the car passes under.
 export function animateSnowDiscoveries(chunks, time, vehicle) {
   for (const chunk of chunks) {
     for (const feature of chunk.features?.discoveries ?? []) {
@@ -288,7 +280,7 @@ export function poseCabins(mesh, feature, time) {
     const side = i ? 1 : -1, travel = i ? 1 - cableTravel(time, feature.index) : cableTravel(time, feature.index);
     const pose = cableCabinPose(feature, side, travel);
     transform.position.copy(pose.position);
-    // A slow pendulum swing, strongest just after leaving a station.
+    // Pendulum swing, zero at the stations.
     const swing = Math.sin(time * .9 + feature.index) * .035 * (1 - Math.abs(travel * 2 - 1)) ** .5;
     transform.rotation.set(0, pose.yaw, swing);
     transform.updateMatrix(); mesh.setMatrixAt(i, transform.matrix);

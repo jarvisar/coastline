@@ -1,3 +1,3 @@
-// Give the Node suite the same reproducible URL seed supported by the browser.
-// Set TEST_WORLD_SEED to exercise the complete suite against another world.
+// Node tests read the seed from the URL like the browser does.
+// Set TEST_WORLD_SEED to run the suite against another world.
 globalThis.location = new URL(`http://localhost/?seed=${process.env.TEST_WORLD_SEED ?? 4817}`);

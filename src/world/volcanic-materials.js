@@ -1,9 +1,8 @@
 import * as THREE from 'three';
 
 export const volcanicClock = { value: 0 };
-// `heat` is a vertex's height in metres above the molten surface that lights it
-// (COLD where nothing does). Height interpolates exactly across a flat facet, so
-// the glow gathers at the foot of a cliff drawn with one vertex top and bottom.
+// `heat` is height in metres above the lava lighting the vertex, or COLD. It
+// interpolates linearly, so a one-facet cliff glows at its foot.
 export const COLD = 100;
 export const basaltMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 });
 basaltMaterial.onBeforeCompile = shader => {
@@ -20,10 +19,9 @@ basaltMaterial.onBeforeCompile = shader => {
 };
 basaltMaterial.customProgramCacheKey = () => 'volcanic-basalt-v10';
 
-// Lava reuses the `heat` slot as a per-facet phase, so the mosaic shimmers
-// facet by facet under one slow travelling swell. The depth offset keeps thin
-// veins laid over coarse terrain facets from sinking into them.
-// Positive `flow` marks ground-bound lava, negative marks a falling sheet.
+// Lava reuses `heat` as a per-facet phase. The polygon offset stops thin veins
+// sinking into coarse terrain facets. Positive `flow` is ground lava, negative
+// a falling sheet.
 export const lavaMaterial = new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
 lavaMaterial.onBeforeCompile = shader => {
   shader.uniforms.volcanicTime = volcanicClock;
@@ -37,12 +35,11 @@ lavaMaterial.onBeforeCompile = shader => {
   `);
   shader.fragmentShader = 'uniform float volcanicTime; varying vec2 vFlowCoordinates; varying float vLavaPulse; varying float vSurfaceFlow; varying vec3 vFlowPosition;\n' + shader.fragmentShader;
   shader.fragmentShader = shader.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
-    // Moving hot folds follow decreasing elevation over the rock steps.
+    // Hot folds moving down the rock steps.
     float fold = sin(vFlowPosition.y * 2.6 + volcanicTime * 1.15 + .35 * sin(vFlowPosition.x * .7));
     diffuseColor.rgb *= vLavaPulse * (1.0 + abs(vSurfaceFlow) * fold * .065);
     if (vSurfaceFlow > .5) {
-      // One restrained triangular mosaic spans every ground flow. Global
-      // route coordinates keep facets fixed across joins and origin shifts.
+      // Route coordinates keep the facets fixed across joins and origin shifts.
       vec2 tiles = vec2(vFlowCoordinates.x * .45 + vFlowCoordinates.y * .18, vFlowCoordinates.y * .8 - vFlowCoordinates.x * .12);
       vec2 cell = floor(tiles), within = fract(tiles);
       float face = step(1.0, within.x + within.y);
@@ -53,15 +50,12 @@ lavaMaterial.onBeforeCompile = shader => {
 };
 lavaMaterial.customProgramCacheKey = () => 'volcanic-lava-v9';
 
-// Light spilling from molten rock onto whatever lies beside it: vertex colours
-// fade to black at the outer edge, so adding them leaves no visible border.
-// Additive light must fade out in fog instead of blending toward its colour.
+// Vertex colours fade to black at the edge so additive glow leaves no border.
+// Additive light has to fade to black in fog instead of toward the fog colour.
 export const glowMaterial = new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false, transparent: true,
   blending: THREE.AdditiveBlending, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 });
-// The same batch carries the heat rising off the basin (`haze` = 1): light
-// scattered in the fumes above the lava. Seen across the ground it glows over
-// the shelf that hides the lava itself; from the overhead views, or edge on,
-// it fades away and leaves the lava clear.
+// The same batch carries basin heat haze (`haze` = 1). It shows when seen
+// across the ground and fades out from overhead or edge on.
 glowMaterial.onBeforeCompile = shader => {
   shader.uniforms.volcanicTime = volcanicClock;
   shader.vertexShader = 'uniform float volcanicTime; attribute float haze; varying float vHaze;\n' + shader.vertexShader;
@@ -84,10 +78,9 @@ glowMaterial.onBeforeCompile = shader => {
 };
 glowMaterial.customProgramCacheKey = () => 'volcanic-glow-v2';
 
-// Geometry carries the chimney's anchor, phase and scale. Expanding puffs rise
-// in the shader so worker-transferred chunks share one clock and no CPU updates.
-// A puff is a unit sphere, so its position doubles as a smooth normal and the
-// silhouette fades out softly rather than facet by facet.
+// Puffs animate in the shader from per-vertex anchor, phase and scale, so
+// worker-built chunks share one clock with no CPU updates. A puff is a unit
+// sphere, so position doubles as a smooth normal for the edge fade.
 export const smokeMaterial = new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, opacity: .44 });
 smokeMaterial.onBeforeCompile = shader => {
   shader.uniforms.volcanicTime = volcanicClock;
@@ -97,8 +90,7 @@ smokeMaterial.onBeforeCompile = shader => {
     vSmokeAge = age;
     vSteam = smokeKind;
     vSmokeShape = position;
-    // Each puff leaves the column its own way, so a plume seen from the road
-    // billows instead of stacking up like a row of identical discs.
+    // Per-puff drift so a plume billows instead of stacking identical discs.
     vec2 drift = vec2(sin(smokeCycle.x * 31.0), cos(smokeCycle.x * 47.0)) * age * 2.5;
     vec3 centre = smokeAnchor + vec3(age * age * 6.0 + drift.x, age * (17.0 + 3.0 * sin(smokeCycle.x * 19.0)), sin(age * 5.0 + smokeCycle.x * 6.28) * age * 1.6 + drift.y) * smokeCycle.y;
     vec3 puffScale = vec3(1.0 + .15 * sin(smokeCycle.x * 23.0), .88 + .12 * cos(smokeCycle.x * 17.0), 1.0);
@@ -108,7 +100,7 @@ smokeMaterial.onBeforeCompile = shader => {
   `);
   shader.fragmentShader = 'varying float vSteam; varying float vSmokeAge; varying float vSmokeEdge; varying vec3 vSmokeShape;\n' + shader.fragmentShader;
   shader.fragmentShader = shader.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
-    // Copper at the throat, dusty mauve in the rising ash. Linear colours.
+    // Copper near the vent, fading to ash. Linear colours.
     diffuseColor.rgb = mix(mix(vec3(.85, .19, .038), vec3(.24, .115, .09), smoothstep(0.0, .3, vSmokeAge)), vec3(.14, .13, .16), smoothstep(.2, .85, vSmokeAge));
     diffuseColor.rgb = mix(diffuseColor.rgb, mix(vec3(.38, .40, .43), vec3(.23, .24, .28), vSmokeAge), vSteam);
     float billow = sin(vSmokeShape.x * 4.5 + vSmokeAge * 3.0) * sin(vSmokeShape.y * 5.0 - vSmokeAge * 2.0) * sin(vSmokeShape.z * 3.5);

@@ -1,11 +1,9 @@
 import * as THREE from 'three';
 
-// Three.js renders every shadow caster with one shared MeshDepthMaterial, so a
-// scene that mixes plain meshes, instanced meshes and per-instance colours
-// re-derives that material's program on nearly every shadow draw call. Handing
-// each signature its own material lets the renderer keep a cached program.
-// The renderer still overwrites side, alphaTest and the maps from the caster's
-// own material before drawing, so each variant only has to agree on those.
+// Three.js shares one MeshDepthMaterial across shadow casters, so mixing plain,
+// instanced and instance-coloured meshes switches its program on most shadow
+// draws. One material per signature keeps each program cached. The renderer
+// still copies side, alphaTest and maps from the caster's material.
 const shadowSide = { [THREE.FrontSide]: THREE.BackSide, [THREE.BackSide]: THREE.FrontSide, [THREE.DoubleSide]: THREE.DoubleSide };
 const depthMaterials = new Map();
 
@@ -15,8 +13,8 @@ function depthMaterial(object, material) {
   const key = `${kind}/${side}`;
   let depth = depthMaterials.get(key);
   if (!depth) {
-    // r186's PCF shadows sample a native depth texture. Packed RGBA output
-    // is unused, so avoid its fragment work and color-attachment writes.
+    // r186 PCF shadows sample a native depth texture, so skip packed RGBA
+    // output and colour writes.
     depth = new THREE.MeshDepthMaterial({ depthPacking: THREE.BasicDepthPacking, colorWrite: false, side });
     depth.name = `shadow-depth-${key}`;
     depthMaterials.set(key, depth);
@@ -24,7 +22,7 @@ function depthMaterial(object, material) {
   return depth;
 }
 
-// Materials that make the renderer clone a depth variant of its own (cutouts,
+// Materials the renderer builds its own depth variant for (cutouts,
 // displacement, clipped shadows) keep the stock path.
 const needsOwnVariant = material => Boolean(material.displacementMap && material.displacementScale !== 0)
   || Boolean(material.alphaMap && material.alphaTest > 0) || Boolean(material.map && material.alphaTest > 0)

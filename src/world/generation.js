@@ -1,5 +1,5 @@
-// Resolve once per page load, before any terrain or shared scenery is built.
-// An explicit seed makes a particular drive reproducible for testing or sharing.
+// Set once per page load, before any terrain or shared scenery is built.
+// An explicit seed makes a drive reproducible.
 export let workerSeed;
 export function initializeWorkerSeed(seed) {
   if (!Number.isInteger(seed) || seed < 0 || seed > 0xffffffff || workerSeed !== undefined) throw new Error('Invalid worker seed initialization');
@@ -17,8 +17,7 @@ export function resolveWorldSeed(search = '', randomSeed = freshSeed) {
 
 export function freshSceneStart(currentS, random = Math.random) {
   let s = Math.floor(random() * 40000) - 20000;
-  // Leave the entire resident and prefetched area behind, even if the random
-  // draw lands near the car. Keep starts in the same range as a new journey.
+  // Move clear of the resident and prefetched area, staying in the new-journey range.
   if (Math.abs(s - currentS) < 2048) s += currentS >= 0 ? -4096 : 4096;
   return { s, distance: 0 };
 }

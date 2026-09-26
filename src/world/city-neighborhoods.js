@@ -12,9 +12,8 @@ const canopy = new THREE.IcosahedronGeometry(1, 0);
 const canopyPositions = Array.from(canopy.attributes.position.array);
 canopy.dispose();
 
-// Background density comes from compact silhouettes and simple facades.
-// Everything is baked into existing chunk batches; there are no additional
-// objects, materials, shadow lights or per-frame updates.
+// Baked into the existing chunk batches: no extra objects, materials, shadow
+// lights or per-frame updates.
 export function buildNeighborhoods(chunk) {
   const { blocks, skyline, details, boxes } = chunk.scenery;
   const plantings = [];
@@ -62,8 +61,7 @@ export function buildNeighborhoods(chunk) {
       const a = corners[i], b = corners[j], length = Math.hypot(b.x - a.x, b.z - a.z);
       const point = (distance, y) => ({ x: lerp(a.x, b.x, distance / length) + outward[0] * .04, y, z: lerp(a.z, b.z, distance / length) + outward[2] * .04 });
       const panel = (from, to, low, high, tint) => chunk.quad(target, [point(from, low), point(to, low), point(to, high), point(from, high)], tint, outward);
-      // Broad trim carries the detail into the last residential rows, where
-      // individual window frames would cost geometry without reading on screen.
+      // Broad trim only. Window frames cost geometry and don't read at this distance.
       panel(0, length, base + .15, base + .6, stone);
       panel(0, length, top - .55, top - .12, stone);
       for (const d of [.12, length - .5]) panel(d, d + .38, base + .6, top - .55, stone);
@@ -87,8 +85,7 @@ export function buildNeighborhoods(chunk) {
 
   for (let block = first; block <= last; block++) {
     const start = blockBoundary(block) + STREET_HALF_WIDTH + 3, end = blockBoundary(block + 1) - STREET_HALF_WIDTH - 3;
-    // A stepped fringe: compact residential blocks on the opposite bank,
-    // and shorter town blocks between the inland avenue and distant skyline.
+    // Residential blocks on the opposite bank, shorter town blocks inland of the avenue.
     for (const [lane, front, back] of [[0, -282, -257], [1, -328, -298], [2, 178, 205], [3, 215, 241]]) {
       const count = Math.max(1, Math.floor((end - start) / (lane === 1 ? 35 : 29))), width = (end - start) / count;
       for (let k = 0; k < count; k++) {
@@ -103,29 +100,25 @@ export function buildNeighborhoods(chunk) {
         const s0 = center - width / 2 + 1.5 + r(3) * 2.5, s1 = center + width / 2 - 2;
         const height = (lane === 1 ? 6 : 8) + Math.floor(r(4) * (lane > 1 ? 5 : 3)) * 3.4;
         building(target, s0, s1, u0, u1, height, seed);
-        // Small, irregular yards soften the building row without filling
-        // every lot with another costly foreground tree or parked vehicle.
+        // Only some lots get a yard tree, to keep foreground cost down.
         if (chunk.inChunk(center) && r(5) < .55) tree(target, s1 + .8, back - 2, 4.5 + r(6) * 2, seed);
       }
     }
-    // The waterfront gets a few planted setbacks between bridge approaches.
     const count = Math.max(1, Math.floor((end - start) / 38));
     for (let k = 0; k < count; k++) {
       const s = start + (end - start) * (k + .5) / count, seed = block * 13 + k;
       if (chunk.inChunk(s)) tree(blocks, s, -132, 4.2 + randomAt(seed, 3685), seed);
       if (randomAt(seed, 3686) < .7) green(details, s, -177.2, 12, 3.4, seed);
     }
-    // Where a short side street stops, the former empty outer block becomes
-    // a little green court rather than another repeated cross intersection.
+    // Where a side street stops short, the empty outer block becomes a green court.
     if (bankStreetRange(block).from > -245) green(blocks, blockBoundary(block), -217, 12, 29, block);
   }
 
-  // Check after every lot is reserved, including buildings owned by the next
-  // chunk. Planting must not depend on which side of a seam was built first.
+  // Plant after every lot is reserved, including the next chunk's buildings, so
+  // the result doesn't depend on which side of a seam was built first.
   plantings.forEach(plantTree);
 
-  // Continuous riverfront edge. The rail opens at bridges and dock access, so
-  // T junctions retain a walking route instead of ending abruptly at water.
+  // Riverfront rail opens at bridges and dock access so T junctions keep a walking route.
   for (let s = chunk.start; s < chunk.start + CHUNK_LENGTH; s += 8) {
     const index = blockAt(s + 4), nearest = Math.abs(s + 4 - blockBoundary(index)) < Math.abs(s + 4 - blockBoundary(index + 1)) ? index : index + 1;
     const center = blockBoundary(nearest), edge = STREET_HALF_WIDTH - .3;

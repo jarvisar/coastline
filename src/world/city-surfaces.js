@@ -1,6 +1,5 @@
-// Split a convex polygon without moving it off its original terrain plane.
-// Both halves share the same intersection vertices, avoiding cracks or layers
-// competing for depth where grass meets paving.
+// Splits a convex polygon on its own terrain plane. Both halves share the cut
+// vertices so grass and paving meet without cracks or z-fighting.
 function split(points, distance) {
   const inside = [], outside = [];
   for (let i = 0; i < points.length; i++) {
@@ -56,16 +55,14 @@ export function paintCityPark(triangle, layout, emit) {
   for (const polygon of lawn) emit(polygon, 'grass');
 }
 
-// Small courtyard lawns use the actual terrain triangles, clipped to their
-// footprint, rather than one large quad that can cut through a slope.
+// Clips the terrain triangles to the lawn footprint so it follows the slope.
 export function drapeCityLawn(chunk, target, corners, color) {
   const outline = corners.map(([s, u]) => chunk.at(s, u, 0));
   const minX = Math.min(...outline.map(p => p.x)), maxX = Math.max(...outline.map(p => p.x));
   const minZ = Math.min(...outline.map(p => p.z)), maxZ = Math.max(...outline.map(p => p.z));
   const positions = chunk.terrain.geometry.attributes.position;
   for (let i = 0; i < positions.count; i += 3) {
-    // Reject distant facets before allocating polygon vertices; most lawns
-    // touch only a handful of the chunk's terrain triangles.
+    // Bounds check before allocating. Most lawns touch only a few triangles.
     if (Math.max(positions.getX(i), positions.getX(i + 1), positions.getX(i + 2)) < minX ||
         Math.min(positions.getX(i), positions.getX(i + 1), positions.getX(i + 2)) > maxX ||
         Math.max(positions.getZ(i), positions.getZ(i + 1), positions.getZ(i + 2)) < minZ ||

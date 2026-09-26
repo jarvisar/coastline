@@ -15,7 +15,7 @@ try {
   await page.waitForFunction(() => window.__coastline && document.querySelector('#loading.loaded'));
   assert.equal(await page.locator('html').getAttribute('lang'), 'en-US');
   assert.match(await page.locator('.location-sub').textContent(), /mi driven$/);
-  // The readout lives on the pause screen, so read it with that screen up.
+  // The readout is only visible on the pause screen.
   await page.evaluate(() => window.__coastline.action('pause'));
   assert.equal(await page.locator('.location').isVisible(), true);
   for (const [distance, expected] of [[0, '0.0'], [1609.344, '1.0'], [804.672, '0.5'], [1986638.3616, '1,234.4']]) {

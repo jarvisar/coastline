@@ -49,7 +49,7 @@ try {
       const { behind, ahead } = a.graphics.settings.chunks;
       return { s: a.vehicle.s, chunks: a.world.chunks.size, resident: behind + ahead + 1, origin: a.world.origin, carZ: a.vehicle.car.position.z, geometries: a.rendering.renderer.info.memory.geometries, textures: a.rendering.renderer.info.memory.textures, triangles: a.rendering.renderer.info.render.triangles, calls: a.rendering.renderer.info.render.calls, oceans, mesas };
     });
-    // One mesa group per resident chunk, however many the quality level keeps.
+    // One mesa group per resident chunk at the current quality level.
     assert.equal(result.chunks, result.resident); assert.equal(result.oceans, 0); assert.equal(result.mesas, result.resident);
     assert.ok(result.geometries < 180); assert.ok(Math.abs(result.carZ) < 1030);
     records.push(result);

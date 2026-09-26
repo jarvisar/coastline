@@ -75,8 +75,8 @@ test('passes a slower car and returns to the right lane without contact', () => 
 
 test('curved passes keep the earlier pace with smooth steering across simulation rates', () => {
   const samples = [];
-  // Measured completion times before the slow-steering tuning, rounded up by
-  // less than one 30 Hz step. Include the wait for oncoming traffic and merge.
+  // Pre-tuning completion times plus under one 30 Hz step, including the wait
+  // for oncoming traffic and the merge.
   const scenarios = [
     { positions: [55], deadline: { auto: 8.85, formula: 4.75 } },
     { positions: [55, 180], deadline: { auto: 10.45, formula: 8.9 } },
@@ -99,7 +99,7 @@ test('curved passes keep the earlier pace with smooth steering across simulation
       previousRate = rate;
       assert.ok(camera.camera.quaternion.angleTo(rotation) * fps < .4, 'windshield view also turns smoothly');
       assert.ok(Math.abs(f.player.u) < 2.41, 'settle inside the lane without overshoot');
-      // A gentle arc can clear traffic before reaching the exact lane center.
+      // A gentle arc can clear traffic before reaching the lane centre.
       passedLeft ||= f.player.u < 0 && f.player.s > f.traffic.vehicles[0].s;
       if (mergedAt === null && passedLeft && f.player.u > 2.3 && Math.abs(f.player.heading) < .005) mergedAt = (i + 1) / fps;
       if (i === fps - 1 && id === 'auto' && scenario === scenarios[0]) samples.push(f.player.u);

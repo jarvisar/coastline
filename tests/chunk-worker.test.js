@@ -61,7 +61,7 @@ test('transferred chunks retain geometry, transforms, shaders, bounds and animat
           assert.equal(after[i].material, object.material, 'shared shader callbacks must survive transfer');
           if (!expected.owned.includes(object.geometry)) assert.equal(after[i].geometry, object.geometry);
         });
-        // Both construction paths must preserve automatic transforms through rebases.
+        // Both build paths must match auto-updated transforms through rebases.
         const automatic = expected.group.clone(true), reference = [];
         automatic.traverse(object => { object.matrixAutoUpdate = true; if (object.isMesh) reference.push(object); });
         for (const origin of [0, 1024, -1024, 32768]) {
@@ -174,21 +174,20 @@ test('several workers build the first view side by side and a failed one stops a
     transports[0].send({ type: 'ready', seed: SEED }); transports[2].send({ type: 'ready', seed: SEED });
     const source = worker.source('coast'), preparation = source.prepare(24);
     const building = () => transports.map(transport => transport.messages.filter(message => message.type === 'build').map(message => message.index));
-    // Nearest first, one job per ready worker; the slow one joins when it is ready.
+    // Nearest first, one job per ready worker. The slow one joins once ready.
     assert.deepEqual(building(), [[0], [], [1]]);
     transports[1].send({ type: 'ready', seed: SEED });
     assert.deepEqual(building(), [[0], [-1], [1]]);
     const finish = transport => { const { id } = transport.messages.findLast(message => message.type === 'build'); transport.send({ type: 'chunk', id, chunk: {} }); };
     finish(transports[2]);
     assert.ok(source.cache.has(1)); assert.deepEqual(building()[2], [1, 2]);
-    // A reply to another worker's job is a fault in that worker alone. Its own
-    // job is given up, to be built on the page; the others keep building.
+    // Replying to another worker's job faults only that worker. Its own job
+    // falls back to the page.
     transports[1].send({ type: 'chunk', id: transports[2].messages.at(-1).id, chunk: {} });
     assert.ok(transports[1].terminated); assert.ok(!transports[0].terminated && !transports[2].terminated);
     assert.equal(worker.lanes.length, 2); assert.ok(!source.pending.has(-1));
     finish(transports[0]); finish(transports[2]);
     assert.ok(source.cache.has(0) && source.cache.has(2));
-    // With the last worker gone every job falls back to the page.
     transports[0].onerror({ preventDefault() {} }); transports[2].send({ type: 'error', message: 'boom' });
     assert.equal(worker.worker, null); assert.equal(source.pending.size, 0); assert.equal(worker.queue.length, 0);
     await preparation;
@@ -204,7 +203,7 @@ test('a silent worker hands its job to another', async t => {
     const [first] = transports[0].messages.filter(message => message.type === 'build');
     assert.equal(first.index, 5);
     const reply = () => { const { id } = transports[1].messages.at(-1); transports[1].send({ type: 'chunk', id, chunk: {} }); };
-    // The second worker keeps answering; the first says nothing for 20 s.
+    // The first worker stays silent for 20 s while the second keeps answering.
     t.mock.timers.tick(10000); reply(); t.mock.timers.tick(10000);
     assert.ok(transports[0].terminated); assert.equal(worker.lanes.length, 1);
     assert.ok(source.pending.has(5)); assert.equal(worker.queue[0].index, 5, 'the job is next in line');

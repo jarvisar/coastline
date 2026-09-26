@@ -28,8 +28,7 @@ water.onBeforeCompile = shader => {
     float patches = smoothstep(0.38, 0.78, lakeNoise(p * 0.19 + vec2(lakeTime * 0.015, 0.0)));
     float sheen = pow(max(0.0, sin(p.x * 0.018 + p.y * 0.006 + 1.2)), 5.0);
     float glint = pow(max(0.0, ripple), 22.0) * patches * (0.2 + sheen * 0.8);
-    // Dark sheltered water at the foot of the trees, silver-blue ripples
-    // across open water. All phases use route coordinates, never chunk IDs.
+    // Darker near the shore. Phases use route coordinates, never chunk IDs.
     float reflection = exp(-vLakeCoord.z * 0.09) * (0.5 + lakeNoise(vec2(p.y * 0.045, 3.7)) * 0.5);
     diffuseColor.rgb *= 1.0 - reflection * 0.55;
     diffuseColor.rgb += vec3(0.11, 0.17, 0.19) * (glint * 0.75 + sheen * 0.13);
@@ -87,7 +86,6 @@ export function buildAlpineLake(start) {
       triangle(frozen, rim(s + 4, false), rim(s + 4, true), rim(s, true));
     }
   }
-  // Small fractured ice plates sit close to sheltered coves.
   for (let i = 0; i < 10; i++) {
     const seed = start + i, s = start + 5 + randomAt(seed, 825) * (CHUNK_LENGTH - 10);
     const u = alpineLake(s).near - 5 - randomAt(seed, 826) * 9;

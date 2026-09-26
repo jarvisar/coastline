@@ -1,6 +1,4 @@
-﻿// electron-builder configuration.
-// Name, description, and homepage come from the web app's own metadata so the
-// desktop packages follow the web app without a second copy to maintain.
+﻿// Name, description and homepage come from the web app's metadata so there's no second copy.
 const { execFileSync } = require('node:child_process');
 const { existsSync, mkdirSync, readFileSync, rmSync } = require('node:fs');
 const path = require('node:path');
@@ -13,13 +11,10 @@ const pkg = read('package.json');
 const productName = manifest.short_name;
 const executableName = pkg.name;
 
-// By default electron-builder extracts the Electron zip into release/<target>.tmp
-// and renames it. On Windows, antivirus or search indexing can hold files in a
-// freshly extracted tree open and that rename fails with EPERM (persistently on
-// some machines). Windows hosts therefore stage Electron by copying an already
-// unpacked distribution: node_modules/electron/dist for Windows targets, and a
-// cached extraction of the official zip (same version) for other targets.
-// Other hosts, including CI, use electron-builder's default flow.
+// On Windows, electron-builder's extract-then-rename of the Electron zip fails with
+// EPERM when antivirus or indexing holds the new tree open. Windows hosts copy an
+// unpacked Electron instead: node_modules/electron/dist for Windows targets, a cached
+// extraction of the same version for others. Other hosts, including CI, use the default.
 async function electronDist({ platformName, arch, version }) {
   if (process.platform !== 'win32') return undefined;
   const archName = typeof arch === 'number' ? Arch[arch] : String(arch); // enum in some hooks, name in others
@@ -30,7 +25,7 @@ async function electronDist({ platformName, arch, version }) {
   const out = path.join(root, 'node_modules', '.cache', 'coastline-electron', name);
   try {
     if (!existsSync(path.join(out, 'version'))) {
-      const { downloadArtifact } = require('@electron/get'); // Electron's own downloader and cache
+      const { downloadArtifact } = require('@electron/get');
       const zip = await downloadArtifact({ version: electronVersion, platform: platformName, arch: archName, artifactName: 'electron' });
       rmSync(out, { recursive: true, force: true });
       mkdirSync(out, { recursive: true });
@@ -60,8 +55,8 @@ module.exports = {
   },
   directories: { buildResources: 'electron/build', output: 'release' },
   electronDist,
-  // The renderer is fully bundled by Vite, so its libraries stay out of the package. The only
-  // runtime node_modules shipped are electron-updater and its dependencies, for electron/main.js.
+  // Vite bundles the renderer, so the only node_modules shipped are electron-updater
+  // and its dependencies, for electron/main.js.
   files: [
     'electron/main.js',
     'electron/preload.cjs',
@@ -73,8 +68,8 @@ module.exports = {
   asar: true,
   npmRebuild: false,
   nodeGypRebuild: false,
-  // Tells electron-updater where releases live and makes each build emit its latest*.yml
-  // update manifest. The build scripts pass --publish never: the workflow uploads the files.
+  // Tells electron-updater where releases live and makes builds emit latest*.yml.
+  // Build scripts pass --publish never; the workflow uploads the files.
   publish: { provider: 'github', owner: 'jarvisar', repo: 'coastline' },
   artifactName: '${productName}-${version}-${os}-${arch}.${ext}',
 

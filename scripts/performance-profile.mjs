@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import { chromium } from '@playwright/test';
 import { mkdir, writeFile } from 'node:fs/promises';
 
-// Fixed seed, pose, time and quality make work counts and canvas captures
-// comparable. CPU timings are diagnostic; SwiftShader is not a phone GPU.
+// Fixed seed, pose, time and quality keep counts and captures comparable.
+// CPU timings are diagnostic only; SwiftShader is not a phone GPU.
 const label = process.env.PROFILE_LABEL ?? 'current';
 assert.match(label, /^[a-z0-9-]+$/i);
 const quality = process.env.PROFILE_QUALITY ?? 'balanced';

@@ -1,15 +1,13 @@
 import { clamp } from './world/route.js';
 
-// A lane change follows distance travelled, so braking slows progress along the
-// curve and stopping never slides the car sideways. Faster cars use a tighter
-// 1.7-second maneuver; ordinary cruising takes 2.15 seconds, including both
-// rounded ends (no long settling tail).
+// Lane changes advance with distance, not time, so a stopped car never slides
+// sideways. Duration runs from 2.15 s at cruise down to 1.7 s at high speed.
 
 export class LaneChange {
   constructor(player, lane, previous = null, speedLimit = player.stats.topSpeed) {
     this.start = player.distance;
-    // Include the run-up to cruise speed. Otherwise a powerful car beginning
-    // behind slow traffic would accelerate through a short curve too quickly.
+    // Size the curve for the speed the car will reach, or a fast car starting
+    // slow would accelerate through it too quickly.
     const speed = Math.abs(player.speed);
     const cruise = Math.max(speed, Math.min(speedLimit, speed + player.stats.acceleration * 2.15));
     const referenceSpeed = (speed + cruise) / 2;
@@ -20,8 +18,8 @@ export class LaneChange {
     const slope = pose?.slope ?? Math.sin(player.heading - player.route.frame(player.s).angle);
     const v = slope * this.length, a = (pose?.curvature ?? 0) * this.length ** 2;
     const change = lane - player.u;
-    // Quintic Hermite: preserve position, tangent and curvature when a target
-    // changes mid-pass, and finish parallel to the lane with zero curvature.
+    // Quintic Hermite keeps position, slope and curvature continuous when the
+    // target changes mid-pass, and ends parallel to the lane with zero curvature.
     this.coefficients = [player.u, v, a / 2,
       10 * change - 6 * v - 1.5 * a,
       -15 * change + 8 * v + 1.5 * a,

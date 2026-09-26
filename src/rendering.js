@@ -7,15 +7,13 @@ import { Graphics, renderScale } from './graphics.js';
 import { XRCameraRig } from './xr-camera.js';
 import { volcanicPalette } from './world/volcanic-palette.js';
 
-// How fast the overhead views close on the car, per second. Ground is what the
-// player reads as responsiveness, so it settles in about an eighth of a second;
-// height keeps the older, gentler rate so the view does not bob over terrain.
+// Overhead follow rates per second. Ground settles fast so steering feels
+// immediate. Height stays slow so the view doesn't bob over terrain.
 const FOLLOW_GROUND = 8, FOLLOW_HEIGHT = 3;
 
 export function createRendering(canvas, graphics = new Graphics()) {
   stabilizeShadowFiltering();
-  // Multisampling belongs to the context and cannot be changed later, so the
-  // level this page starts on decides it.
+  // Multisampling is fixed when the context is created, so the starting level decides it.
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: graphics.antialias, powerPreference: 'high-performance' });
   let canvasWidth, canvasHeight, pixelRatio;
   function resizeCanvas() {
@@ -28,7 +26,7 @@ export function createRendering(canvas, graphics = new Graphics()) {
     canvasWidth = width; canvasHeight = height; pixelRatio = ratio;
   }
   resizeCanvas();
-  // Frame times only describe the scene while it is actually drawing it.
+  // Only sample frame times while the scene is actually drawing.
   const recordFrame = (timestamp, active) => graphics.sample(timestamp, active);
   document.addEventListener('visibilitychange', () => graphics.suspend());
   window.addEventListener('blur', () => graphics.suspend());
@@ -36,8 +34,7 @@ export function createRendering(canvas, graphics = new Graphics()) {
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = .94;
   const scene = new THREE.Scene(); scene.background = new THREE.Color('#b8dfe0'); scene.fog = new THREE.Fog('#c2e2db', 460, 860);
-  // The scene stays at the origin. Updating its identity matrix every frame
-  // forces all static descendants to recompute their world matrices too.
+  // The scene never moves. Auto-updating it makes every static child recompute its world matrix.
   scene.matrixAutoUpdate = false;
   const sky = new THREE.HemisphereLight('#e4f2f5', '#617149', 1.45); scene.add(sky);
   const sun = new THREE.DirectionalLight('#fff1db', 2.5); sun.castShadow = true;
@@ -52,8 +49,7 @@ export function createRendering(canvas, graphics = new Graphics()) {
   renderer.xr.cameraAutoUpdate = false;
   renderer.xr.addEventListener('sessionend', () => { graphics.suspend(); resizeCanvas(); });
   const ambientOcclusion = new AmbientOcclusion(renderer, scene, camera);
-  // Resolution, sun-shadow detail and the AO budget follow the quality level;
-  // whether AO is on at all is the player's own choice.
+  // AO on or off is the player's choice. The quality level sets everything else.
   // A new shadow map size only takes effect once the old texture is released.
   function applyQuality(settings) {
     ambientOcclusion.enabled = settings.ambientOcclusion;
@@ -79,9 +75,8 @@ export function createRendering(canvas, graphics = new Graphics()) {
   let snowy = false;
   let journey = 'coast';
   const fogProfiles = {
-    // The coast range stands 100-250 m inland; the driving views see its spurs
-    // before the haze takes them. The shortest resident window still ends
-    // past `thirdFar` ahead, and the sea mesh reaches 420 m offshore.
+    // The coast range is 100-250 m inland and should show through the haze.
+    // Resident chunks always extend past thirdFar. The sea mesh reaches 420 m offshore.
     coast: { color: '#b9def3', near: 600, far: 1150, thirdNear: 190, thirdFar: 380 },
     desert: { color: '#dab49b', near: 460, far: 860, thirdNear: 210, thirdFar: 350 },
     snow: { color: '#243949', near: 340, far: 760, thirdNear: 190, thirdFar: 330 },
@@ -92,8 +87,7 @@ export function createRendering(canvas, graphics = new Graphics()) {
   };
   function updateFog() {
     const profile = fogProfiles[journey];
-    // Keep the miniature views' atmosphere; fade distant driving-view scenery.
-    // Matching the sky exactly lets fully faded terrain disappear without a seam.
+    // Driving views fog to the exact sky colour so faded terrain leaves no seam.
     if (activeCamera().isPerspectiveCamera) {
       scene.fog.color.copy(scene.background);
       scene.fog.near = profile.thirdNear; scene.fog.far = profile.thirdFar;
@@ -107,8 +101,7 @@ export function createRendering(canvas, graphics = new Graphics()) {
   function resize() {
     const width = window.innerWidth, height = window.innerHeight;
     const aspect = width / height;
-    // The alpine road sits high above its lake. Portrait needs room for both
-    // elevations; landscape already has that room across the diagonal view.
+    // Portrait needs extra height to fit the alpine road and the lake below it.
     const size = viewHeight * (aspect < 1 ? (snowy ? 1.12 : 1.12) : 1);
     camera.left = -size * aspect / 2; camera.right = size * aspect / 2; camera.top = size / 2; camera.bottom = -size / 2; camera.updateProjectionMatrix();
     thirdPerson.resize(aspect);
@@ -119,13 +112,7 @@ export function createRendering(canvas, graphics = new Graphics()) {
     followedCar = car;
     const originShift = origin - previousOrigin; follow.z += originShift; previousOrigin = origin;
     if (!initialized) { follow.copy(car.position); initialized = true; }
-    // Follow the car across the ground quickly and up the hill slowly. The two
-    // used to share one rate, and the slow one won: a steering input moved the
-    // car at once but took a third of a second to move the world, which reads
-    // as the car itself being late. Height is the one that has to stay gentle,
-    // because most of it is terrain rather than driving, and tracking every
-    // rise makes the whole miniature view bob. Reduced motion pins both, as
-    // before, which leaves the car nearly still on screen.
+    // Reduced motion tracks height at the ground rate too, keeping the car still on screen.
     const groundRate = 1 - Math.exp(-dt * FOLLOW_GROUND);
     follow.x += (car.position.x - follow.x) * groundRate;
     follow.z += (car.position.z - follow.z) * groundRate;
@@ -137,15 +124,14 @@ export function createRendering(canvas, graphics = new Graphics()) {
     target.copy(follow).addScaledVector(lookAhead, framing);
     if (snowy) { target.y -= 14 * framing; target.z += 18 * framing; }
     if (touchScreen.matches || window.innerWidth < window.innerHeight) {
-      // Ease the desktop framing slightly toward center without changing vertical look-ahead.
+      // Ease framing toward centre without changing vertical look-ahead.
       const lateralOffset = framingOffset.copy(target).sub(follow).dot(cameraRight);
-      // The look-ahead is a world distance, so a narrow portrait screen pushed
-      // the car near its right edge. Cap it at a quarter of the half-width.
+      // Look-ahead is a world distance, so cap it on narrow screens.
       const limit = .25 * (camera.right - camera.left) / 2;
       const eased = lateralOffset * .70;
       target.addScaledVector(cameraRight, THREE.MathUtils.clamp(eased, -limit, limit) - lateralOffset);
     }
-    // Fixed ocean-side azimuth and ~36° elevation preserve the reference's miniature view.
+    // Fixed ocean-side azimuth at about 36° elevation.
     camera.position.copy(target).add(cameraOffset); camera.lookAt(target);
     camera.userData.focusDistance = cameraOffset.length();
     if (views[view].thirdPerson) { thirdPerson.update(car, dt); target.copy(car.position); }
@@ -153,7 +139,7 @@ export function createRendering(canvas, graphics = new Graphics()) {
     sun.position.copy(target).add(sunOffset); sun.target.position.copy(target);
     fitSunShadow(activeCamera(), sun, journey === 'jungle' ? sun.target.position.y : 0, origin);
   }
-  // Zoom only changes the projection; resizing the canvas every zoom frame reallocates its buffers.
+  // Zoom only changes the projection. Resizing the canvas per zoom frame reallocates buffers.
   window.addEventListener('resize', () => { graphics.suspend(); resizeCanvas(); resize(); }); resize();
   function setJourney(id) {
     journey = fogProfiles[id] ? id : 'coast';
@@ -167,8 +153,7 @@ export function createRendering(canvas, graphics = new Graphics()) {
       return;
     }
     if (id === 'jungle') {
-      // Light filtered through a canopy: a weak, green-tinted sun almost
-      // overhead, so the emergent crowns shade the road, and a strong green bounce.
+      // Weak sun nearly overhead so the canopy shades the road, with strong green fill.
       scene.background.set('#a9c4a2'); updateFog();
       sky.color.set('#c4dcb0'); sky.groundColor.set('#2f4d28'); sky.intensity = 1.75;
       sun.color.set('#eef2c4'); sun.intensity = 1.35; sunOffset.set(-55, 245, 40);
@@ -176,13 +161,8 @@ export function createRendering(canvas, graphics = new Graphics()) {
       return;
     }
     if (id === 'plains') {
-      // Golden hour over open country: the sun sits a little over twenty
-      // degrees up, so every bale, post and tree lays a long shadow across the
-      // fields. A sun that low puts much less light on flat ground than a high
-      // one does, so it burns brighter than the noon journeys' to keep the
-      // crops lit, and the sky fill stays cool: it is the distance between a
-      // warm light and a cool shade that reads as gold, rather than everything
-      // alike behind a yellow filter.
+      // Sun about 20° up for long shadows. Low sun lights flat ground less, so
+      // intensity is higher. The cool fill against a warm sun gives the gold look.
       scene.background.set('#eeb85e'); updateFog();
       sky.color.set('#d5dbd0'); sky.groundColor.set('#8b7444'); sky.intensity = 1.12;
       sun.color.set('#ffc368'); sun.intensity = 3.45; sunOffset.set(-188, 92, 127);
@@ -190,8 +170,7 @@ export function createRendering(canvas, graphics = new Graphics()) {
       return;
     }
     if (id === 'city') {
-      // A daytime storm: a grey sky does most of the lighting, and a weak,
-      // cool sun keeps the facets readable with only faint shadows.
+      // Overcast. Sky fill does most of the lighting and a weak sun keeps facets readable.
       scene.background.set('#adb7bf').multiplyScalar(.9); updateFog();
       sky.color.set('#d8e0e6'); sky.groundColor.set('#5c6369'); sky.intensity = 2;
       sun.color.set('#e2e9ef'); sun.intensity = 1.3; sunOffset.set(-150, 210, 110);
@@ -199,9 +178,7 @@ export function createRendering(canvas, graphics = new Graphics()) {
       return;
     }
     if (id === 'volcanic') {
-      // A lower, warm sun through the ash models every shelf and block;
-      // a weaker, cooler fill keeps their shadowed walls apart from the warm
-      // light at their feet.
+      // Low warm sun with a weaker cool fill to separate lit and shadowed faces.
       scene.background.set(volcanicPalette.horizon); updateFog();
       sky.color.set(volcanicPalette.skyLight); sky.groundColor.set(volcanicPalette.groundLight); sky.intensity = 1.65;
       sun.color.set(volcanicPalette.sun); sun.intensity = 2.55; sunOffset.set(-175, 185, 110);
@@ -209,22 +186,20 @@ export function createRendering(canvas, graphics = new Graphics()) {
       return;
     }
     const desert = id === 'desert';
-    // Clear coastal daylight: blue sky fill and a near-neutral sun keep the
-    // ocean cyan and separate warm rock faces from cool, deeper shadows.
+    // Blue fill and a near-neutral sun keep the ocean cyan.
     scene.background.set(desert ? '#dfb399' : '#b5dff5'); updateFog();
     sky.color.set(desert ? '#e5d8d0' : '#c4e5ff'); sky.groundColor.set(desert ? '#79635a' : '#365544');
     sky.intensity = desert ? 1.27 : 1.12;
-    // The coast's afternoon sun stands about 43 degrees up, over the sea, so
-    // trees and headlands lay readable shadows inland; it burns a little
-    // brighter to keep the flat meadows as lit as under a higher sun.
+    // Coast sun is about 43° up over the sea so shadows fall inland.
+    // Slightly brighter to keep flat meadows lit.
     sun.color.set(desert ? '#ffe0bc' : '#fff1da'); sun.intensity = desert ? 2.45 : 3.1;
     sunOffset.set(...(desert ? [-170, 150, 120] : [-190, 215, 125]));
     renderer.toneMappingExposure = desert ? .92 : 1.02;
   }
   setJourney('coast');
   function draw(viewCamera, stereo = false) {
-    // Hide the player's exterior for the whole first-person draw, including
-    // shadows and AO. Restore it for other views and after render failures.
+    // Hide the car for the whole first-person draw, shadows and AO included.
+    // Restored in finally so a render error can't leave it hidden.
     const car = views[view].firstPerson ? followedCar : null;
     const visible = car?.visible;
     if (car) car.visible = false;
@@ -240,8 +215,7 @@ export function createRendering(canvas, graphics = new Graphics()) {
       renderer.xr.updateCamera(vrCamera.camera);
       beforeXRRender?.();
       if (!renderer.xr.isPresenting) { draw(activeCamera()); return; }
-      // The AO compositor is a monoscopic screen pass. Render the scene
-      // directly so Three.js draws both headset eyes with their own lenses.
+      // AO is a monoscopic screen pass, so render directly and let Three.js draw each eye.
       draw(vrCamera.camera, true);
     } else draw(activeCamera());
   }

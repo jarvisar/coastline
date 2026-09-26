@@ -19,17 +19,15 @@ test('city terrain stays ordered, continuous, level under the road, and lower to
     assert.equal(columns.length, CITY_COLUMN_COUNT);
     for (let col = 1; col < columns.length; col++) assert.ok(columns[col] > columns[col - 1] + .5, `columns cross at ${s}, ${col}`);
     for (const u of [-KERB, 0, KERB]) assert.equal(cityHeight(s, u), cityRoadHeight(s));
-    // The quay wanders inside its range, and the wall drops from the promenade to the river bed.
     const q = quayOffset(s);
     assert.ok(q <= -QUAY_NEAR && q >= -QUAY_FAR, `quay out of range at ${s}`);
     assert.equal(cityGroundHeight(s, q), pavementHeight(s)); assert.ok(Math.abs(cityGroundHeight(s, q - QUAY_WALL) - RIVER_BED) < 1e-9);
     assert.equal(cityGroundHeight(s, (q + FAR_BANK) / 2), RIVER_BED);
     assert.ok(RIVER_LEVEL > RIVER_BED && RIVER_LEVEL < pavementHeight(s) - 2, 'the water stays well below the promenade');
     assert.ok(farBankHeight(s) > RIVER_LEVEL + 1.8);
-    // Nothing on the near side rises into the line of sight to the road.
     for (const u of [-9, -15, -30, -60, -100, -140, -200, -400]) assert.ok(cityGroundHeight(s, u) - cityRoadHeight(s) < 1 - u * .1, `near side blocks the road at ${s}, ${u}`);
     for (const u of [-300, -135, -128, -60, -8, 9, 30, 120, 300, 520]) assert.ok(Math.abs(cityGroundHeight(s + .001, u) - cityGroundHeight(s - .001, u)) < .05, `height jump at ${s}, ${u}`);
-    // The pavements stand one kerb above the road on both sides.
+    // Pavements sit one kerb above the road on both sides.
     for (const side of [-1, 1]) assert.ok(Math.abs(cityGroundHeight(s, side * 9) - cityRoadHeight(s) - .15) < 1e-9);
   }
   for (let chunk = -20; chunk < 40; chunk++) {
@@ -101,11 +99,10 @@ test('city chunks carry buildings, a river and street furniture, and the world s
     chunk.group.traverse(object => { if (object.name) names.add(object.name); });
     const blocks = chunk.group.getObjectByName('city-blocks'), river = chunk.group.getObjectByName('city-river'), skyline = chunk.group.getObjectByName('city-skyline');
     assert.ok(blocks && river && skyline, `chunk ${chunk.index} is missing its buildings, river or skyline`);
-    // Nothing in the skyline stands on the camera's side of the road.
+    // No skyline tower stands on the camera's side of the road.
     const towers = skyline.geometry.attributes.position;
     for (let i = 0; i < towers.count; i++) assert.ok(towers.getX(i) - cityDrivingRoute.position(-(towers.getZ(i) - chunk.start), 0).x > 150);
     assert.ok(blocks.castShadow && !skyline.castShadow && skyline.userData.ambientOcclusion === false);
-    // Every building stands on its footing and no building reaches the road.
     const positions = blocks.geometry.attributes.position, lowest = Math.min(...Array.from({ length: positions.count }, (_, i) => positions.getY(i)));
     assert.ok(lowest > RIVER_LEVEL, 'a building sank into the river');
     for (let i = 0; i < positions.count; i++) {
@@ -113,7 +110,6 @@ test('city chunks carry buildings, a river and street furniture, and the world s
       const s = -z, roadX = cityDrivingRoute.position(s, 0).x;
       assert.ok(Math.abs(x - roadX) > KERB + .5, `building on the road at ${s}`);
     }
-    // The river lies on its level plane.
     const water = river.geometry.attributes.position;
     for (let i = 0; i < water.count; i++) assert.ok(Math.abs(water.getY(i) - RIVER_LEVEL) < 1e-6);
     for (const name of ['street-lamps', 'quay-railings', 'parked-cars', 'city-trunks']) {
@@ -145,13 +141,12 @@ test('rain wraps around the car, pauses with the clock, and lightning is rare an
   for (let i = 0; i < later.length; i += 3) {
     assert.ok(Math.abs(later[i]) <= 150 && Math.abs(later[i + 1]) <= 100 && Math.abs(later[i + 2]) <= 180, 'a drop left the volume');
   }
-  // Drops fall: the same drop is lower half a second later, unless it wrapped.
+  // A drop is lower half a second later unless it wrapped.
   let fell = 0;
   for (let i = 1; i < 300; i += 3) if (later[i] < first[i]) fell++;
   assert.ok(fell > 80);
   assert.equal(rain.points.position.z, anchor.z + 1024 - 1024);
-  // Rain keeps falling vertically even after a long drive; horizontal wind
-  // must not accumulate or oscillate faster as the scene clock grows.
+  // Horizontal drift must not accumulate or speed up as the scene clock grows.
   for (const time of [1.5, 300, 3600]) {
     rain.update(time, anchor, 0);
     const positions = weatherPositions(rain);
@@ -191,8 +186,8 @@ test('building walls face outward and follow facade details through road bends',
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(target.vertices, 3));
     const mesh = new THREE.Mesh(geometry, material);
-    // A ray from outside must meet the expected facade first, within the
-    // window offset. Inward faces and a chord burying the windows both fail.
+    // An outside ray must hit the facade within the window offset. Inward faces
+    // and a chord that buries the windows both fail.
     for (const fraction of [.1, .3, .5, .7, .9]) for (const [s, u, outward] of [
       [s0, u0 + 22 * fraction, new THREE.Vector3(0, 0, 1)],
       [s1, u0 + 22 * fraction, new THREE.Vector3(0, 0, -1)],
@@ -274,9 +269,8 @@ test('river-bound streets connect across both banks, including bridges split by 
       assert.deepEqual(chunk.features.bridges.map(bridge => bridge.street), expected, 'every street reaching the river has exactly one bridge owner');
     }
     scene.updateMatrixWorld(true);
-    // Test real rendered road triangles through both traffic lanes, not just
-    // the bridge metadata. Gaps, disconnected landings and blocked far-bank
-    // intersections all fail this sweep.
+    // Sweep the rendered road triangles through both lanes to catch gaps,
+    // disconnected landings and blocked far-bank intersections.
     for (const ds of [-2.7, 2.7]) for (let u = BANK_ROADS.at(-1) + .4; u < -5.6; u += 3.7) {
       const point = cityPosition(s + ds, u, 150), expected = crossRoadHeight(s + ds, u, true);
       ray.set(new THREE.Vector3(point.x, point.y, point.z), down);
@@ -286,8 +280,6 @@ test('river-bound streets connect across both banks, including bridges split by 
       assert.ok(!terrain || terrain.point.y < road.point.y + .008, `terrain covers the road at ${s + ds}, ${u}`);
       assert.equal(ray.intersectObjects(buildingMeshes).length, 0, `a building blocks street ${index} at ${u}`);
     }
-    // The side-road mouths must meet the boulevard without a step or a
-    // terrain ridge. The corner pavement must stay at the main kerb level.
     for (const side of [-1, 1]) {
       for (const u of [5.4, 5.6, 6.3, 7.2, 8.2, 11]) {
         const point = cityPosition(s + 1.3, side * u, 150);
@@ -302,8 +294,8 @@ test('river-bound streets connect across both banks, including bridges split by 
         assert.ok(pavement && Math.abs(pavement.point.y - pavementHeight(s + side * ds) - .02) < .025, 'sidewalk meets the boulevard pavement');
       }
     }
-    // Probe both sides of the seam: exactly on an edge, Float32 rounding
-    // can put a mathematical ray between triangles by less than 0.1 mm.
+    // Probe both sides of the seam. On an exact edge, Float32 rounding can
+    // slip a ray between triangles.
     for (const u of BANK_ROADS) for (const ds of [-18, -4, -.01, .01, 4, 18]) {
       const point = cityPosition(s + ds, u + 2.2, 150);
       ray.set(new THREE.Vector3(point.x, point.y, point.z), down);

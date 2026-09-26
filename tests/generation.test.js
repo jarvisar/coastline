@@ -60,7 +60,7 @@ test('all journeys spawn grounded with zero mileage and restore their own progre
   }
 });
 
-// Separate module graphs reproduce actual page loads without mutating a live world.
+// A worker gets a fresh module graph, like a real page load, without touching a live world.
 function sampleWorld(seed) {
   return new Promise((resolve, reject) => {
     const worker = new Worker(`

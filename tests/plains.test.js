@@ -41,18 +41,17 @@ test('plains terrain stays ordered, continuous, flat under the road and below th
   for (let col = 1; col < PLAINS_COLUMN_COUNT; col++) assert.ok(PLAINS_COLUMNS[col] > PLAINS_COLUMNS[col - 1]);
   for (let s = -10000; s < 10000; s += 13) {
     for (const u of [-7, 0, 7]) assert.equal(plainsHeight(s, u), plainsRoadHeight(s));
-    // The near side eases down toward the camera; nothing there may rise into the line of sight to the road.
+    // Near-side ground must stay under the camera's line of sight to the road.
     for (const u of [-30, -60, -110, -180, -260, -400]) assert.ok(plainsGroundHeight(s, u) - plainsRoadHeight(s) < -u * .55, `near side blocks the road at ${s}, ${u}`);
     for (const u of [-300, -90, -30, -10.8, 9, 30, 90, 300, 520]) assert.ok(Math.abs(plainsGroundHeight(s + .001, u) - plainsGroundHeight(s - .001, u)) < .05, `height jump at ${s}, ${u}`);
-    // A drainage ditch runs beside the road on both sides, except where the creek channel cuts through it.
     if (Math.abs(s - plainsCreekAt(s).center) > 40) for (const side of [-1, 1]) assert.ok(plainsGroundHeight(s, side * 10.8) < plainsRoadHeight(s) - .4 && plainsGroundHeight(s, side * 10.8) > plainsRoadHeight(s) - 1.6);
-    // The far rises close the horizon in the third-person view, and only there.
+    // Far rises only close the horizon and stay out of the near fields.
     assert.equal(distantRise(s, 250), 0);
   }
   for (let chunk = -20; chunk < 40; chunk++) {
     const rows = CHUNK_LENGTH / PLAINS_STEP;
     for (let col = 0; col < PLAINS_COLUMN_COUNT; col++) assert.deepEqual(plainsVertex(chunk * rows, col), plainsVertex((chunk - 1) * rows + rows, col));
-    // Row refinement around a creek must land back on whole rows by the next chunk.
+    // Row refinement near a creek must realign to whole rows by the next chunk.
     let row = chunk * rows, steps = 0;
     while (row < (chunk + 1) * rows) { row += plainsRowStep(row); steps++; }
     assert.equal(row, (chunk + 1) * rows); assert.ok(steps >= rows && steps <= rows * 2);
@@ -65,8 +64,7 @@ test('plains terrain stays ordered, continuous, flat under the road and below th
 
 test('distant rolling hills have rounded crests and continuous slopes across districts', () => {
   let low = Infinity, high = -Infinity;
-  // A one-metre cross-section catches sharp pyramid crests and the creases
-  // caused by selecting the tallest of two overlapping hills.
+  // 1 m steps catch sharp crests and creases where two overlapping hills meet.
   for (let s = -5000; s <= 5000; s += 11) for (let u = 260; u <= 568; u += 13) {
     const height = distantRise(s, u);
     assert.ok(Number.isFinite(height) && height >= 0 && height < 90);
@@ -85,14 +83,11 @@ test('the creek crosses under a bridge with a level channel, banks that hold the
     const creek = plainsCreekAt(420 + index * CREEK_SPACING);
     assert.equal(creek.index, index); assert.equal(creek.center, 420 + index * CREEK_SPACING);
     assert.ok(creek.level < plainsRoadHeight(creek.center) - 1.5);
-    // Sampled the whole way along the creek, not at a handful of places: the
-    // road runs over swells, and a bed cut to a fixed depth below the local
-    // ground rose through the flat water wherever the channel wandered onto
-    // a rising part of one, which a few spot checks stepped straight over.
+    // Sample the whole creek. It crosses swells, and spot checks can miss the bed
+    // rising through the water.
     for (let u = -400; u <= 568; u += 4) {
       const center = creekCenterS(creek, u);
       assert.ok(Math.abs(center - creek.center) < 130, `the creek wanders too far at ${u}`);
-      // Channel floor under the water, waterline inside the water ribbon, banks above it.
       assert.ok(plainsGroundHeight(center, u) < creek.level - .8, `dry channel at ${index}, ${u}`);
       for (const d of [-CREEK_WATER_HALF_WIDTH, CREEK_WATER_HALF_WIDTH]) assert.ok(plainsGroundHeight(center + d, u) < creek.level, `water ribbon edge floats at ${index}, ${u}`);
       for (const d of [-9, 9]) assert.ok(plainsGroundHeight(center + d, u) > creek.level + .3, `bank under water at ${index}, ${u}`);
@@ -106,7 +101,7 @@ test('the creek crosses under a bridge with a level channel, banks that hold the
     assert.deepEqual(plainsDrivingRoute.bounds(creek.center + 80), [-11.5, 11.5]);
   }
   for (let s = -5000; s < 5000; s += 7) {
-    // The creek keeps to its own crossing: no other point of the road is ever within reach of it.
+    // No other stretch of road comes near the creek.
     if (Math.abs(s - plainsCreekAt(s).center) > 40) assert.ok(creekDistance(s, 0) > 20);
   }
 });
@@ -142,18 +137,14 @@ test('stock ponds are dug basins in the fields, clear of the road and the creek'
     if (!pond) continue;
     count++;
     assert.ok(Math.abs(pond.u) > 24 && Math.abs(pond.u) < 120, 'a pond lies in the near fields, clear of the ditch');
-    // The bank, not just the water, keeps well clear of the creek: its
-    // floodplain and its willows want the ground a pond's basin would take.
+    // The whole bank stays clear of the creek's floodplain and willows.
     assert.ok(creekDistance(pond.s, pond.u) - pond.radius * 1.7 > 35, `pond ${index} is dug into the creek's floodplain`);
-    // A pond is built by the chunk it stands in, on that chunk's facets, so
-    // the whole of it, bank included, keeps inside one chunk.
+    // A pond is built on its own chunk's facets, so the bank must fit in one chunk.
     const chunk = Math.floor(pond.s / CHUNK_LENGTH);
     let reach = 0;
     for (let i = 0; i < 48; i++) reach = Math.max(reach, pondEdge(pond, i / 48 * Math.PI * 2) * 1.4);
     assert.ok(pond.s - reach > chunk * CHUNK_LENGTH && pond.s + reach < (chunk + 1) * CHUNK_LENGTH, `pond ${index} straddles a chunk seam`);
-    // Longer than it is wide: the reach along the long axis, taken over a
-    // spread of angles so the lobes on the outline do not decide it, is
-    // more than the reach across it.
+    // Spans are averaged over several angles so outline lobes don't decide it.
     const span = axis => [-.5, -.25, 0, .25, .5].reduce((sum, off) => sum + pondEdge(pond, axis + off) + pondEdge(pond, axis + Math.PI + off), 0);
     assert.ok(span(pond.tilt) / span(pond.tilt + Math.PI / 2) > 1.08, `pond ${index} is a disc`);
     const { level } = pond;
@@ -164,9 +155,7 @@ test('stock ponds are dug basins in the fields, clear of the road and the creek'
     let crest = -Infinity;
     for (let i = 0; i < 12; i++) {
       const angle = i / 12 * Math.PI * 2;
-      // A flat floor well under the water, a steep bank up to just under the
-      // waterline, a crest of spoil round the rim, and the field's own ground
-      // again where the bank runs out.
+      // Floor, bank to just under the waterline, spoil crest, then untouched field.
       for (const d of [.3, .7]) assert.ok(groundAt(angle, d) < level - 1, `pond ${index} has no depth at ${d} of its edge`);
       assert.ok(groundAt(angle, .96) < level - .3, `pond ${index} shelves up to the water at ${angle.toFixed(2)}`);
       assert.ok(Math.abs(groundAt(angle, 1) - (level - .45)) < .03, `pond ${index} does not meet its waterline`);
@@ -180,8 +169,7 @@ test('stock ponds are dug basins in the fields, clear of the road and the creek'
     assert.ok(crest > .35, `pond ${index} has no crest of spoil`);
     assert.ok(pondsNear(pond.s).some(other => other.s === pond.s && other.u === pond.u));
   }
-  // Common enough to come upon on a drive, and not so common that the
-  // pastures read as a chain of waterholes.
+  // Common enough to find, rare enough that pastures don't read as waterholes.
   const every = 80 * POND_SPACING / count;
   assert.ok(every > 380 && every < 720, `a stock pond every ${Math.round(every)} m`);
 });
@@ -193,10 +181,7 @@ test('a pond stands on facets of its own, and the field never comes up through t
     if (!pond) continue;
     built++;
     const chunk = new PlainsChunk(Math.floor(pond.s / CHUNK_LENGTH));
-    // The field facets under the water, as rendered, lie under it everywhere:
-    // a facet twenty metres wide laid across the basin cut the corner and
-    // came up through the water as a beach, so the cells a pond falls in are
-    // cut finer, and the finer facets follow the bank.
+    // Cells under a pond are cut finer so no coarse facet rises through the water.
     let top = -Infinity, reach = 0;
     for (let i = 0; i < 48; i++) reach = Math.max(reach, pondEdge(pond, i / 48 * Math.PI * 2) * 1.45);
     for (let i = 0; i < 48; i++) for (const d of [.2, .5, .8, .95, .98]) {
@@ -204,18 +189,13 @@ test('a pond stands on facets of its own, and the field never comes up through t
       top = Math.max(top, chunk.ground(pond.s + Math.cos(angle) * reach, pond.u + Math.sin(angle) * reach).y - pond.level);
     }
     assert.ok(top < -.05, `pond ${index}: the field comes up to ${top.toFixed(2)} m of the water`);
-    // The water is one level surface, and the bank rises above it to a crest.
-    // The bank's toe can lie below the water on the low side, where the crest
-    // is the dam that holds it, but never so far below as to be off the field.
-    // A chunk can hold a pond on each side of the road; this pond's water is
-    // the surface lying at its level.
+    // A chunk can hold a pond on each side, so find this one's water by its level.
     const waters = chunk.group.children.filter(mesh => mesh.name === 'stock-pond').map(mesh => mesh.geometry.attributes.position);
     const water = waters.find(w => Math.abs(w.getY(0) - pond.level) < 1e-3);
     assert.ok(water, `pond ${index} has no water at its level`);
     for (let i = 0; i < water.count; i++) assert.ok(Math.abs(water.getY(i) - pond.level) < 1e-3, 'the water lies level');
-    // One chunk can hold a pond on each side of the road, and the far side of
-    // the plain lies well below the near one, so only the bank round this
-    // pond is measured against this pond's water.
+    // Only measure bank near this pond, since the far side of the plain sits lower.
+    // The toe can dip under the water on the low side, where the crest is a dam.
     const bank = chunk.group.getObjectByName('pond-banks').geometry.attributes.position;
     const middle = chunk.ground(pond.s, pond.u);
     let high = -Infinity, low = Infinity;
@@ -225,15 +205,13 @@ test('a pond stands on facets of its own, and the field never comes up through t
     }
     assert.ok(high > pond.level + .3, `pond ${index}: the bank has no crest`);
     assert.ok(low > pond.level - 4, `pond ${index}: the bank falls off the field`);
-    // The waterline is one line: the water's edge vertices are the bank's
-    // innermost ring. The water is drawn in five triangles a step, three of
-    // whose fifteen vertices lie on the edge, so a fifth of them are shared.
+    // The water's edge vertices are the bank's inner ring. Each step is five
+    // triangles with 3 of 15 vertices on the edge, so a fifth are shared.
     const edge = new Set();
     for (let i = 0; i < bank.count; i++) edge.add(`${bank.getX(i).toFixed(3)},${bank.getZ(i).toFixed(3)}`);
     let shared = 0;
     for (let i = 0; i < water.count; i++) if (edge.has(`${water.getX(i).toFixed(3)},${water.getZ(i).toFixed(3)}`)) shared++;
     assert.equal(shared, water.count / 5, `pond ${index}: the waterline is not the bank's edge`);
-    // The finer facets cost little: the terrain stays within its budget.
     assert.ok(chunk.group.getObjectByName('plains-fields').geometry.attributes.position.count / 3 < 4000, 'terrain stays within the shared budget');
   }
   assert.ok(built >= 4, 'several ponds were built');
@@ -265,9 +243,7 @@ test('plains scenery stands on the rendered facets and the world streams and rel
   const ground = [...world.chunks.values()].map(chunk => chunk.group.getObjectByName('plains-fields'));
   const ray = new THREE.Raycaster();
   for (const chunk of world.chunks.values()) {
-    // A tree or a bale on a chunk's seam stands on the neighbour's facets as
-    // often as its own; the outermost chunks loaded have no neighbour beyond
-    // them here, so only the chunks with both neighbours loaded are sampled.
+    // Seam objects can stand on a neighbour's facets, so skip edge chunks.
     if (!world.chunks.has(chunk.index - 1) || !world.chunks.has(chunk.index + 1)) continue;
     for (const name of ['fence-posts', 'hay-bales', 'plains-trunks', 'utility-poles']) {
       chunk.group.traverse(object => {
@@ -278,7 +254,7 @@ test('plains scenery stands on the rendered facets and the world streams and rel
           ray.set(new THREE.Vector3(position.x, position.y + 60, position.z), new THREE.Vector3(0, -1, 0));
           const hit = ray.intersectObjects(ground, false)[0];
           assert.ok(hit, `${name} off the terrain`);
-          // Trunks are sunk a little so no root shows on a creek bank's steeper facets.
+          // Trunks are sunk slightly so roots don't show on steep creek banks.
           assert.ok(position.y - hit.point.y > (name === 'plains-trunks' ? -.6 : -.2) && position.y - hit.point.y < 6, `${name} floats or sinks: ${position.y - hit.point.y}`);
         }
       });
@@ -286,9 +262,7 @@ test('plains scenery stands on the rendered facets and the world streams and rel
   }
   assert.ok([...world.chunks.values()].some(chunk => chunk.group.getObjectByName('creek-water')), 'the creek is built');
   assert.ok([...world.chunks.values()].some(chunk => chunk.group.getObjectByName('creek-bridge')), 'the bridge is built');
-  // The shader draws furrows and headlands from a per-vertex attribute: every
-  // terrain vertex carries one, and the worked fields carry rows while the
-  // road reserve and the pastures do not.
+  // The shader draws furrows from this attribute. Only worked fields carry rows.
   for (const mesh of ground) {
     const furrow = mesh.geometry.attributes.furrow;
     assert.equal(furrow.count, mesh.geometry.attributes.position.count);
@@ -299,8 +273,6 @@ test('plains scenery stands on the rendered facets and the world streams and rel
     }
     assert.ok(worked > 0 && flat > 0, 'a chunk has both worked fields and unworked ground');
   }
-  // Both fringes are present across the drive, throw no shadow, and stay out
-  // of the ambient occlusion prepass.
   const fringes = { 'grass-fringe': 0, 'wheat-fringe': 0 };
   for (const chunk of world.chunks.values()) {
     let stalks = 0;
@@ -348,9 +320,7 @@ test('trees retain their green palette in fields before the world origin', () =>
 
 test('the cow wears its patches proud of its hide, so no two faces flicker against each other', async () => {
   const { cowGeometry } = await import('../src/world/plains-assets.js');
-  // Two faces of different colours on one plane have no stable depth order,
-  // so the renderer picks between them per pixel and per frame: the cow's
-  // back patch once ended exactly level with its back and blinked there.
+  // Coplanar faces of different colours z-fight, so no two may overlap.
   const position = cowGeometry.attributes.position, color = cowGeometry.attributes.color, count = position.count / 3;
   const corners = i => [0, 1, 2].map(k => [position.getX(i * 3 + k), position.getY(i * 3 + k), position.getZ(i * 3 + k)]);
   const plane = triangle => {
@@ -402,9 +372,7 @@ test('no two fence posts stand in the same spot, where their faces would flicker
 
 test('a gabled building is closed from both ends, not open from one of them', async () => {
   const { plainsDiscoveryAssets, plainsDiscoveryMaterial } = await import('../src/world/plains-discovery-assets.js');
-  // The two ends of a roof have to be wound to face out of the building.
-  // Wound the same way round, one of them is a back face, the renderer culls
-  // it, and the roof stands over a gable you see the far wall through.
+  // Both gable ends must wind outward or one is culled as a back face.
   const ends = { barn: 6, farmhouse: 4.8, shed: 3.9, grainElevator: 6.4 };
   for (const [name, height] of Object.entries(ends)) {
     const mesh = new THREE.Mesh(plainsDiscoveryAssets[name], plainsDiscoveryMaterial);
@@ -419,8 +387,7 @@ test('a gabled building is closed from both ends, not open from one of them', as
 test('every plains asset is built from real geometry, so no part is silently missing', async () => {
   const { plainsDiscoveryAssets } = await import('../src/world/plains-discovery-assets.js');
   const { plainsTrees, baleGeometry, squareBaleGeometry, cowGeometry, rushGeometry, stalkGeometry, wheatGeometry, crowGeometry } = await import('../src/world/plains-assets.js');
-  // A colour passed where a segment count belongs yields an empty geometry that
-  // merges away without complaint, which is how the turbines lost their towers.
+  // A colour passed as a segment count makes an empty geometry that merges silently.
   const expected = { barn: 400, silo: 900, farmhouse: 400, windmillTower: 900, windmillRotor: 600,
     tractor: 400, grainElevator: 1500, turbineTower: 200, turbineRotor: 300, shed: 200, box: 24 };
   for (const [name, geometry] of Object.entries(plainsDiscoveryAssets)) {
@@ -428,8 +395,6 @@ test('every plains asset is built from real geometry, so no part is silently mis
     assert.ok(count >= expected[name], `${name} has ${count} vertices, expected at least ${expected[name]}`);
     for (let i = 0; i < count * 3; i++) assert.ok(Number.isFinite(geometry.attributes.position.array[i]), `${name} has a non-finite vertex`);
   }
-  // The tower must be tall enough to carry its own nacelle, and the nacelle must
-  // sit at the top of it rather than in the air.
   const tower = plainsDiscoveryAssets.turbineTower;
   tower.computeBoundingBox();
   assert.ok(tower.boundingBox.max.y > 38 && tower.boundingBox.min.y < .6, 'the turbine tower must reach the ground and the hub');
@@ -437,21 +402,18 @@ test('every plains asset is built from real geometry, so no part is silently mis
   for (let i = 1; i < tower.attributes.position.count * 3; i += 3) lowest = Math.min(lowest, tower.attributes.position.array[i]);
   assert.ok(lowest < .6, 'the turbine tower must stand on the ground');
   for (const list of Object.values(plainsTrees)) for (const variant of list) {
-    // Trunk limbs overlap at their joints, so the bark is one connected solid.
-    // A conifer is a single bare stem, so the floor is one closed cylinder.
+    // The floor is one closed cylinder, since a conifer is a single bare stem.
     assert.ok(variant.bark.attributes.position.count >= 30, 'a tree needs a trunk');
     variant.bark.computeBoundingBox(); variant.leaves.computeBoundingBox();
     assert.ok(variant.bark.boundingBox.min.y < -.05, 'the trunk must reach below the ground it stands on');
     assert.ok(variant.bark.boundingBox.max.y > variant.leaves.boundingBox.min.y, 'the trunk must reach into its crown');
-    // Every crown vertex carries a finite baked shade: a bake that read past
-    // the end of an indexed tier once left whole faces black.
+    // Catches a bake reading past an indexed tier, which leaves faces black.
     const colors = variant.leaves.attributes.color;
     assert.equal(colors.count, variant.leaves.attributes.position.count, 'one colour per crown vertex');
     for (let i = 0; i < colors.array.length; i++) assert.ok(Number.isFinite(colors.array[i]) && colors.array[i] > .4, `crown colour ${i} is ${colors.array[i]}`);
   }
   for (const geometry of [baleGeometry, squareBaleGeometry, cowGeometry, rushGeometry, stalkGeometry, wheatGeometry, crowGeometry]) assert.ok(geometry.attributes.position.count > 12);
-  // Wheat carries its pale ear in its vertex colours, which a per-instance
-  // gold multiplies; without them every stalk would be one flat tone.
+  // The ear tone lives in vertex colours, which the per-instance gold multiplies.
   const grain = wheatGeometry.attributes.color;
   assert.equal(grain.count, wheatGeometry.attributes.position.count);
   const shades = new Set(); for (let i = 0; i < grain.count; i++) shades.add(grain.getX(i).toFixed(3));
@@ -459,8 +421,7 @@ test('every plains asset is built from real geometry, so no part is silently mis
 });
 
 test('a farmyard wears an outline with no straight run in it, and fades into the field it stands in', () => {
-  // The first chunk whose bare earth is one compact patch: a farm's yard
-  // rather than a track running across the fields.
+  // A chunk whose bare earth is one compact patch holds a yard rather than a track.
   let yard = null;
   for (let index = 0; index < 120 && !yard; index++) {
     const chunk = new PlainsChunk(index), mesh = chunk.group.getObjectByName('farm-tracks');
@@ -476,7 +437,7 @@ test('a farmyard wears an outline with no straight run in it, and fades into the
     if (!yard) chunk.dispose();
   }
   assert.ok(yard, 'no farmyard in the first fifteen kilometres');
-  // Walk the patch's boundary: the edges that belong to one triangle only.
+  // Boundary edges belong to only one triangle.
   const key = p => `${Math.round(p.x * 100)},${Math.round(p.z * 100)}`, spot = new Map(), edges = new Map(), neighbours = new Map();
   for (const p of yard.points) if (!spot.has(key(p))) spot.set(key(p), p);
   for (let i = 0; i < yard.points.length; i += 3) for (let k = 0; k < 3; k++) {
@@ -497,16 +458,13 @@ test('a farmyard wears an outline with no straight run in it, and fades into the
   }
   assert.equal(loop.length, neighbours.size, 'the outline must close on itself');
   const ring = loop.map(id => spot.get(id));
-  // A yard worn by the traffic round it turns at nearly every step. The
-  // bare rectangle this replaced ran straight down four long sides.
   const straight = ring.filter((p, i) => {
     const a = ring[(i + ring.length - 1) % ring.length], c = ring[(i + 1) % ring.length];
     const turn = Math.atan2(c.z - p.z, c.x - p.x) - Math.atan2(p.z - a.z, p.x - a.x);
     return Math.abs(Math.atan2(Math.sin(turn), Math.cos(turn))) < .035;
   }).length;
   assert.ok(straight * 3 < ring.length, `${straight} of ${ring.length} steps round the yard run straight on`);
-  // The rim is drawn in the crop's own colour, so the yard has no edge to
-  // see; the middle of it is a different earth altogether.
+  // The rim takes the crop's colour so the yard has no visible edge.
   const field = yard.chunk.group.getObjectByName('plains-fields').geometry.attributes;
   const beside = p => {
     let best = Infinity, color = null;
@@ -523,8 +481,7 @@ test('a farmyard wears an outline with no straight run in it, and fades into the
   const crops = ring.map(beside);
   const rim = mean(crops.map((crop, i) => gap(ring[i].color, crop))), core = mean(crops.map(crop => gap(middle.color, crop)));
   assert.ok(rim * 2 < core, `the rim stands ${rim.toFixed(2)} from the crop's colour and the middle of the yard only ${core.toFixed(2)}`);
-  // And the ground between the two is neither: a yard laid in one flat tone
-  // has an edge wherever it stops, however its outline runs.
+  // A yard in one flat tone shows an edge wherever it stops.
   const tones = new Set(yard.points.map(p => p.color.map(value => value.toFixed(2)).join()));
   assert.ok(tones.size > 20, `the yard is laid in ${tones.size} tones`);
   yard.chunk.dispose();
@@ -537,12 +494,8 @@ test('most field gates are only gates, so a track worn out into a field and stop
     if (gate) rows.push({ row, side, gate });
   }
   const worn = rows.filter(({ gate }) => gate.worn);
-  // The roadside keeps its gates and its mailboxes; what became rare is the
-  // bare earth running away from them into a field and petering out.
   assert.ok(span / rows.length < 700, `a field gate only every ${Math.round(span / rows.length)} m`);
   assert.ok(span / worn.length > 1100, `a track off the road every ${Math.round(span / worn.length)} m`);
-  // And the chunk draws what the route decided: bare earth behind the gates
-  // that are used, and none at all behind the gates that are not.
   const behind = ({ row, side, gate }) => {
     const chunk = new PlainsChunk(Math.floor(gate.s / CHUNK_LENGTH));
     const mesh = chunk.group.getObjectByName('farm-tracks'), found = [];
@@ -554,7 +507,7 @@ test('most field gates are only gates, so a track worn out into a field and stop
     chunk.dispose();
     return Math.min(...found, Infinity);
   };
-  // Gates well clear of any compound, so nothing else can lay earth near them.
+  // Only gates clear of any compound, so nothing else lays earth near them.
   const lone = list => list.filter(({ gate }) => Math.abs(gate.s) > 2000 && Math.abs(gate.s) < 60000
     && plainsDiscoveryClears(gate.s, gate.side * 30, plainsDiscoveries(gate.s - 400, gate.s + 400), 60)).slice(0, 6);
   for (const gate of lone(worn)) assert.ok(behind(gate) < 6, `no track behind a worn gate at ${gate.gate.s}`);
@@ -568,8 +521,7 @@ test('a worn track runs as far as it likes, keeps its ruts clear, and some of th
     const gate = farmGate(row, side);
     if (gate?.worn) worn.push({ row, side, gate });
   }
-  // The first field boundary is as short as a track ever was, and stays the
-  // shortest one there is; past that they run as far as they please.
+  // Every track reaches at least the first field boundary.
   for (const { row, side, gate } of worn) {
     assert.ok(gate.reach >= fieldBands(row, side)[1] - 6.01, `a track stops short of the first boundary at ${gate.s}`);
   }
@@ -577,8 +529,7 @@ test('a worn track runs as far as it likes, keeps its ruts clear, and some of th
   assert.ok(reaches.filter(reach => reach > 150).length > worn.length * .15, 'some tracks cross more than one field');
   assert.ok(Math.max(...reaches) > 300, 'and one now and then runs right out past the view');
   assert.ok(worn.filter(({ gate }) => gate.shed).length > worn.length * .25, 'some tracks are how a farm reaches a shed');
-  // Nothing is planted in the ruts: a boundary fence, a hedge or a line of
-  // trees that meets a track stops either side of it.
+  // Fences, hedges and tree lines stop either side of a track.
   const drive = worn.find(({ gate }) => gate.shed && gate.reach > 55), { gate, side } = drive;
   const chunk = new PlainsChunk(Math.floor(gate.s / CHUNK_LENGTH));
   const ruts = [];
@@ -586,7 +537,7 @@ test('a worn track runs as far as it likes, keeps its ruts clear, and some of th
   assert.ok(ruts.length > 4, 'not enough track to test');
   const matrix = new THREE.Matrix4(), stood = new THREE.Vector3();
   chunk.group.traverse(object => {
-    // The shed at the end of the track and what belongs to it stand on it by design.
+    // The shed and tank at the track's end stand on it by design.
     if (!object.isInstancedMesh || object.name === 'field-sheds' || object.name === 'water-tanks') return;
     for (let i = 0; i < object.count; i++) {
       object.getMatrixAt(i, matrix); stood.setFromMatrixPosition(matrix);
@@ -595,8 +546,7 @@ test('a worn track runs as far as it likes, keeps its ruts clear, and some of th
       }
     }
   });
-  // And where a shed stands at the end of one, the track and the shed's yard
-  // are the one piece of bare earth, as a farm's drive and its yard are.
+  // A track and its shed's yard must be one connected patch of earth.
   const dirt = chunk.group.getObjectByName('farm-tracks').geometry.attributes.position;
   const parent = [], root = t => parent[t] === t ? t : (parent[t] = root(parent[t]));
   const seen = new Map(), middle = [];

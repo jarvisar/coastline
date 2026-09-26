@@ -2,10 +2,9 @@ import assert from 'node:assert/strict';
 import { chromium } from '@playwright/test';
 import { mkdir, writeFile } from 'node:fs/promises';
 
-// Shimmer as the player sees it: the finished canvas, sampled at fixed world
-// points while the camera drives past. The scene is built to the game's scale,
-// where a metre is a handful of pixels and a post is thinner than an AO texel.
-// AO_MODULE measures another implementation on the same terms.
+// Measures AO shimmer on the final canvas at fixed world points as the camera moves.
+// Built to game scale, where a post is thinner than an AO texel.
+// Set AO_MODULE to test another implementation.
 const DISPLAYS = [
   { name: 'desktop', width: 1920, height: 1080, ratio: 1 },
   { name: 'phone', width: 390, height: 844, ratio: 3 },
@@ -22,16 +21,15 @@ try {
     const { AmbientOcclusion, AO_QUALITY } = await import(MODULE);
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     const scene = new THREE.Scene(); scene.background = new THREE.Color('white'); scene.fog = new THREE.Fog('white', 2000, 4000);
-    // Unlit white, so a canvas pixel is exactly the AO shade.
+    // Unlit white so each pixel is the AO value.
     const material = new THREE.MeshBasicMaterial({ color: 'white' });
     const ground = new THREE.Mesh(new THREE.PlaneGeometry(600, 600), material); ground.rotation.x = -Math.PI / 2; scene.add(ground);
     const points = [];
     const place = (width, height, x, z) => {
       const mesh = new THREE.Mesh(new THREE.BoxGeometry(width, height, width), material);
       mesh.position.set(x, height / 2, z); scene.add(mesh);
-      // Ground beside each base, inside the contact shadow, on the two sides that
-      // face the camera: the far sides are hidden behind the object itself, and
-      // sampling across its silhouette measures sharpness rather than flicker.
+      // Sample ground in the contact shadow on the two camera-facing sides only.
+      // Samples across the silhouette would measure edge sharpness instead of flicker.
       for (const reach of [.4, .8, 1.2, 1.6]) for (const [dx, dz] of [[-1, 0], [0, 1]]) {
         const point = new THREE.Vector3(x + dx * (width / 2 + reach), .01, z + dz * (width / 2 + reach));
         point.group = width < 1 ? 'post' : 'box'; points.push(point);
@@ -42,7 +40,7 @@ try {
     for (const display of displays) {
       renderer.setPixelRatio(display.ratio); renderer.setSize(display.width, display.height);
       const width = display.width * display.ratio, height = display.height * display.ratio, aspect = width / height;
-      // The medium view: 165 metres of world down the screen.
+      // Medium zoom: 165 m of world top to bottom.
       const camera = new THREE.OrthographicCamera(-82.5 * aspect, 82.5 * aspect, 82.5, -82.5, 1, 1200);
       const pixels = new Uint8Array(width * height * 4);
       const ao = new AmbientOcclusion(renderer, scene, camera);
@@ -50,7 +48,7 @@ try {
         configure();
         const frames = [];
         for (let frame = 0; frame < 24; frame++) {
-          // About twenty metres a second at sixty frames a second.
+          // About 20 m/s at 60 fps.
           camera.position.set(-220 + frame * .23, 245, 260 - frame * .19); camera.lookAt(frame * .23, 0, -frame * .19); camera.updateMatrixWorld();
           ao.enabled = true; ao.render(camera);
           gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
@@ -82,7 +80,7 @@ try {
   for (const result of results) {
     const label = `${result.display} · ${result.name}`;
     assert.ok(result.darkness > .01, `${label}: contact shading stays visible`);
-    // The 384-pixel, single-denoise budget this replaced read 0.0050 and 0.0042.
+    // The old 384 px single-denoise AO measured .0050 and .0042 here.
     assert.ok(result.shimmer < .0035, `${label}: shading at a fixed world point changes under 0.35% a frame`);
   }
 } finally { await browser.close(); }

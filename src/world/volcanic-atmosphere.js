@@ -7,8 +7,7 @@ import { VolcanicBackdrop, CRATER } from './volcanic-backdrop.js';
 const ASH = 140, EMBERS = 24, WIDTH = 320, HEIGHT = 110, DEPTH = 340;
 const wrap = (value, extent) => value - Math.floor(value / extent) * extent - extent / 2;
 
-// A sky, one sparse particle batch and four unshadowed lights, independent of
-// resident chunks. No textures, extra render targets or shadow maps.
+// Sky, one particle batch and four unshadowed lights, independent of loaded chunks.
 export class VolcanicAtmosphere {
   constructor(scene) {
     this.group = new THREE.Group(); this.group.name = 'volcanic-atmosphere'; scene.add(this.group);
@@ -37,8 +36,7 @@ export class VolcanicAtmosphere {
           vec3 direction = normalize(vSkyDirection);
           float elevation = max(0.0, direction.y);
           vec3 color = mix(horizon, zenith, smoothstep(.02, .8, elevation));
-          // Slowly sheared ash banks, with warm undersides and cooler tops.
-          // Fade every layer into the exact fog colour at the horizon.
+          // Sheared ash banks. Every layer fades to the fog colour at the horizon.
           vec2 p = direction.xz / (elevation + .32);
           vec2 wind = vec2(time * .003, time * .001);
           float broad = cloudNoise(p * vec2(2.2, 3.8) + wind);
@@ -47,8 +45,7 @@ export class VolcanicAtmosphere {
           float bank = smoothstep(.015, .14, elevation) * (1.0 - smoothstep(.55, .95, elevation));
           vec3 ash = mix(glow, zenith * .8, smoothstep(.12, .65, elevation) * .7);
           color = mix(color, ash, cloud * bank * .78);
-          // The eruption on the horizon lights the ash around it from below.
-          // Nothing is added at the horizon itself, where fogged land meets sky.
+          // Eruption glow under the ash. Zero at the horizon, where fogged land meets sky.
           float bearing = max(0.0, dot(direction, eruption));
           float fire = (pow(bearing, 40.0) * .65 + pow(bearing, 7.0) * .35) * smoothstep(0.0, .07, elevation);
           float underlight = (1.0 - smoothstep(.12, .4, elevation)) * bank * broad;
@@ -114,14 +111,12 @@ export class VolcanicAtmosphere {
     for (const chunk of chunks.values()) for (const vent of chunk.features.vents) {
       if (!vent.steam && !vent.dormant && Math.abs(vent.s - s) < 170) vents.push({ ...vent, z: vent.z - chunk.start });
     }
-    // Embers rise only from local vents. Each one cools and disappears before
-    // its cycle restarts, while ash travels mostly sideways instead of falling.
+    // Embers rise from nearby vents and fade out before their cycle restarts.
     for (let i = 0; i < EMBERS; i++) {
       const n = (ASH + i) * 4, vent = vents[i % vents.length], age = (time * .075 + this.seeds[n]) % 1;
       if (!vent) { alpha.setX(ASH + i, 0); continue; }
       const phase = this.seeds[n + 1] * Math.PI * 2;
-      // Some of the same particles now spit up from the molten throat and
-      // fall back into it. Each crater has a quiet interval between spurts.
+      // Every third ember arcs up from the lava and back, with quiet gaps between spurts.
       if (i % 3 === 0) {
         const cycle = (time * .19 + randomAt(Math.floor(vent.s), 80890)) % 1;
         const flight = (time * .6 + this.seeds[n]) % 1, reach = vent.radius * .2;

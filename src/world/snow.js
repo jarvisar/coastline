@@ -18,9 +18,8 @@ import { buildAlpineLandmarks, nearAlpineRelay } from './alpine-landmarks.js';
 const material = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: .95, flatShading: true, ...extra });
 const terrainMaterial = material('#ffffff', { vertexColors: true });
 const snowMaterial = material('#c7d2df');
-// Identical settings, but kept apart from the instanced snow caps: one
-// material shared by instanced and plain meshes makes the renderer
-// re-derive its program on every draw call.
+// Same settings as snowMaterial but separate. Sharing one material between
+// instanced and plain meshes makes three.js switch programs every draw.
 const snowBankMaterial = material('#c7d2df');
 const stoneMaterial = material('#ffffff');
 const pineMaterial = material('#ffffff', { side: THREE.DoubleSide });
@@ -29,8 +28,7 @@ const barkMaterial = material('#3a3e49');
 const roadMaterial = material('#414a53', { roughness: .72 });
 const lineMaterial = material('#b4ab84');
 const edgeMaterial = material('#b1becf');
-// Brown timber vanishes under the blue night ambient, so a little warm
-// emissive keeps the trestle legible beside the lamps.
+// Slight emissive so the timber stays visible under the blue night ambient.
 const timberMaterial = material('#7d6a5c', { roughness: .9, emissive: '#5a4636', emissiveIntensity: .24 });
 const glowMaterial = new THREE.MeshBasicMaterial({ color: '#ffe0a0', toneMapped: false });
 const boxGeometry = new THREE.BoxGeometry(1, 1, 1);
@@ -39,14 +37,14 @@ const dummy = new THREE.Object3D(), up = new THREE.Vector3(0, 1, 0);
 registerChunkResources('snow', { terrainMaterial, snowMaterial, snowBankMaterial, stoneMaterial, pineMaterial, metalMaterial,
   barkMaterial, roadMaterial, lineMaterial, edgeMaterial, timberMaterial, glowMaterial, boxGeometry, poleGeometry, alpinePines, alpineRockVariants });
 
-// Road ribbons, guardrails and stakes stop at the abutments of a timber trestle.
+// Road ribbons, guardrails and stakes skip the trestle span.
 function onDeck(a, b) {
   const bridge = snowBridgeAt((a + b) / 2);
   return b > bridge.start && a < bridge.end;
 }
 
 function headlightPattern() {
-  // Two soft, symmetric lobes projected by one light; no extra shadow pass.
+  // Two headlight lobes from one spotlight map, so no second light or shadow pass.
   const size = 64, pixels = new Uint8Array(size * size * 4);
   for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
     const u = (x + .5) / size * 2 - 1, v = (y + .5) / size * 2 - 1;
@@ -102,9 +100,8 @@ export class SnowChunk {
     buildSnowDiscoveries(this, this.discoveries);
     buildAlpineLandmarks(this);
     solidRocks(this, alpineRockVariants.map(variant => variant.rock));
-    // Lights need the cabins on either side of every position in this chunk.
-    // Survey them in the worker and transfer the results with the scenery:
-    // the main thread's independent cache otherwise repeats this costly search.
+    // Cabin lookup is expensive, so do it in the worker and ship the results.
+    // Covers the cabins either side of every position in this chunk.
     this.features.cabinLights = [];
     for (let i = Math.floor((this.start - 76) / CABIN_SPACING); i <= Math.floor((this.start + CHUNK_LENGTH - 76) / CABIN_SPACING) + 1; i++) {
       this.features.cabinLights.push({ index: i, ...alpineCabin(i) });
@@ -135,9 +132,7 @@ export class SnowChunk {
           const exposure = alpineExposure(s, u);
           const snowy = Math.abs(cross.y) > (highSnow ? .46 : .53 + exposure * .22);
           const color = new THREE.Color(snowy ? '#c9d5e3' : '#566475');
-          // Broad tonal changes let the actual fracture planes describe the
-          // mountain, with only a little variation between adjacent facets so
-          // each stratum riser reads as one dark plane.
+          // Keep per-facet variation small so each rock riser reads as one plane.
           color.multiplyScalar(snowy ? .94 + exposure * .09 + facet * .045 : .9 + exposure * .1 + facet * .07);
           triangle(vertices, colors, ...tri, color, this.start);
         });
@@ -212,7 +207,6 @@ export class SnowChunk {
         beam(a, b, .3, .2);
         solidSpan(this, { x: a[0], z: a[2] }, { x: b[0], z: b[2] }, .15);
       }
-      // Slim red snow stakes mark the inner shoulder without enclosing the view.
       if (s % 16 === 0 && !onDeck(s - .5, s + .5)) trunks.push({ p: point(s, 7.4, y + .9), scale: [.12, 1.9, .12] });
     }
     for (let i = Math.ceil((this.start - 60) / LAMP_SPACING); i * LAMP_SPACING - 24 < this.start + CHUNK_LENGTH; i++) {
@@ -223,8 +217,7 @@ export class SnowChunk {
       beam(point(lamp.s, lamp.u, ground + 7.5), point(lamp.s, 6.2, ground + 7.5), .14);
       lamps.push({ p: point(lamp.s, 6.2, ground + 7.38), scale: [.62, .18, .95] });
     }
-    // Firs gather in small groves on the flat strata shelves, as in the
-    // reference, with lone trees between them; steep risers stay bare rock.
+    // Small fir groves on flat shelves with some lone trees. Steep ground stays bare.
     for (let i = 0; i < 38; i++) {
       const s = this.start + random() * CHUNK_LENGTH;
       const u = (random() > .48 ? 1 : -1) * (12 + random() ** 1.5 * 190);
@@ -237,7 +230,7 @@ export class SnowChunk {
         pine(t, v, snowGroundHeight(t, v), size * (.8 + random() * .5), random() * Math.PI);
       }
     }
-    // Fir groves follow coves on both shores, framing open stretches of water.
+    // Lakeshore groves, mostly on the near shore.
     for (let i = 0; i < 13; i++) {
       const s = this.start + random() * CHUNK_LENGTH, lake = alpineLake(s);
       const u = i % 4 === 0 ? lake.far - 9 - random() * 20 : lake.near + 5 + random() * 13;
@@ -258,7 +251,7 @@ export class SnowChunk {
         }
       }
     }
-    // Loose angular debris gathers below the face and around the roadside toe.
+    // Scree along the lakeshore and beside the road.
     for (let i = 0; i < 105; i++) {
       const s = this.start + random() * CHUNK_LENGTH;
       const u = i % 3 ? alpineLake(s).near + 3 + random() * 14 : 12 + random() * 10;
@@ -270,7 +263,6 @@ export class SnowChunk {
       if (Math.abs(snowGroundHeight(s, u + 1) - snowGroundHeight(s, u - 1)) > 2.8) continue;
       const size = .8 + random() ** 2 * 4.6;
       stone(s, u, size, true, i % 5 === 0);
-      // A few fragments around larger stones read as natural rockfall groups.
       if (size > 3) for (let chip = 0; chip < 2; chip++) {
         const ds = (random() - .5) * size * 3, du = (random() - .5) * size * 3;
         if (s + ds >= this.start && s + ds < this.start + CHUNK_LENGTH && Math.abs(u + du) > 10)
@@ -291,8 +283,7 @@ export class SnowChunk {
     instances(this.group, boxGeometry, glowMaterial, lamps, 'amber-lanterns');
   }
   buildBridge(point, random, stone) {
-    // A timber trestle carries the road over each stream gully. Planks, bents
-    // and railings are instanced boxes like the guardrails, tinted per plank.
+    // Trestle parts are all instanced boxes, tinted per plank.
     const bridge = snowBridgeAt(this.start + CHUNK_LENGTH / 2), { start, end } = bridge;
     if (end + 40 < this.start || start - 40 >= this.start + CHUNK_LENGTH) return;
     const inChunk = s => s >= this.start && s < this.start + CHUNK_LENGTH;
@@ -320,8 +311,8 @@ export class SnowChunk {
         bar(caps, point(s, u, road(s) + 1.3), point(e, u, road(e) + 1.3), .3, .12);
       }
     }
-    // Timber cribbing at each abutment meets the dipping terrain, so the road
-    // ribbon never floats above the gully rim; a sill plank covers the joint.
+    // Cribbing at each abutment fills down to the terrain so the road never floats
+    // over the gully rim. A sill plank covers the joint.
     for (const s of [start, end]) {
       if (inChunk(s)) {
         timber.push({ p: point(s, 0, road(s) + .05), scale: [15.4, .22, 1.3], angle: across(s), color: '#c9bcb0' });
@@ -346,7 +337,7 @@ export class SnowChunk {
         bar(timber, point(s, -6, cap - .4), point(s, feet[6.2] * .95, base[feet[6.2]] + .6), .3, .16);
         bar(timber, point(s, 6, cap - .4), point(s, feet[-6.2] * .95, base[feet[-6.2]] + .6), .3, .16);
       }
-      // Longitudinal ties and alternating diagonals brace neighbouring bents.
+      // Bracing between tall neighbouring bents.
       const next = s + 8, nextCap = road(next) - 1, nextDrop = nextCap - floor(next, 0);
       if (next >= end || drop < 5 || nextDrop < 5) continue;
       const nextSplay = Math.min(2.4, nextDrop * .14), lean = ((s - start) / 8) % 2 ? [.15, .85] : [.85, .15];
@@ -355,7 +346,6 @@ export class SnowChunk {
         bar(timber, point(s, side * (6.2 + splay * lean[0]), cap - drop * lean[0]), point(next, side * (6.2 + nextSplay * lean[1]), nextCap - nextDrop * lean[1]), .26, .16);
       }
     }
-    // Loose stones gather along the stream bed on both sides of the crossing.
     for (let i = 0; i < 9; i++) {
       const u = (i % 2 ? 1 : -1) * (11 + random() * 16), s = bridge.center + u * .2 + (random() - .5) * 18;
       if (inChunk(s)) stone(s, u, .7 + random() * 1.8, i % 3 === 0);
@@ -373,7 +363,7 @@ export class SnowWorld {
   constructor(scene, chunkSource = null) {
     this.scene = scene; this.chunkSource = chunkSource; this.chunks = new Map(); this.origin = 0; this.center = null;
     this.effects = new THREE.Group(); this.effects.name = 'snow-night-effects'; scene.add(this.effects);
-    // A fixed pool lights only nearby lamps, with no additional shadow maps.
+    // Fixed pool of lights moved to the nearest lamps. No shadows.
     this.lights = Array.from({ length: 7 }, () => { const light = new THREE.PointLight('#ffb76b', 340, 40, 2); this.effects.add(light); return light; });
     this.cabinLights = Array.from({ length: 2 }, () => { const light = new THREE.PointLight('#ffc080', 110, 23, 2); this.effects.add(light); return light; });
     this.glowGeometry = new THREE.BufferGeometry();
@@ -408,8 +398,7 @@ export class SnowWorld {
     updateResidentChunks(this, center, SnowChunk);
     positionResidentChunks(this);
     const lampIndex = Math.round((s - 16) / LAMP_SPACING);
-    // Fixed fixtures only move when the light pool advances or the world rebases.
-    // Their fades still follow the car every frame.
+    // Reposition only when the pool advances or the origin rebases. Fades update every frame.
     if (lampIndex !== this.lampIndex || this.origin !== this.lightOrigin) {
       this.lamps = this.lights.map((light, i) => {
         const lamp = lampAt(lampIndex + i - 3), p = snowPosition(lamp.s, 6.2, lamp.y - .35);

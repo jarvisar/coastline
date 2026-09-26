@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import { chromium } from '@playwright/test';
 import { mkdir, writeFile } from 'node:fs/promises';
 
-// Phone-sized drawing buffers on the host GPU. Timings are diagnostic, not a
-// claim about phone hardware; deterministic assertions guard the work budget.
+// Phone-sized drawing buffers on the host GPU. Timings are diagnostic only.
+// The deterministic assertions guard the work budget.
 const browser = await chromium.launch({ executablePath: 'C:/Program Files/Google/Chrome/Application/chrome.exe', headless: true,
   args: ['--enable-webgl', '--ignore-gpu-blocklist'] });
 try {
@@ -30,8 +30,8 @@ try {
         else if (profile === 'off') ao.enabled = false;
         else ao.setQuality(profile);
         const pixel = new Uint8Array(4);
-        // A readback waits for actual GPU completion; gl.finish alone can leave
-        // Chrome's GPU-process command queue outstanding.
+        // A readback waits for the GPU to finish. gl.finish alone can leave
+        // Chrome's GPU-process queue pending.
         const sync = () => gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
         for (let i = 0; i < 4; i++) { ao.render(r.camera); sync(); }
         const samples = [];
@@ -54,8 +54,7 @@ try {
         buffer: [gl.canvas.width, gl.canvas.height], profiles: ['off', 'high', 'low', ...(Baseline ? ['baseline'] : [])].map(measure) };
     }, process.env.AO_BASELINE_MODULE || null);
     const [off, high, low] = result.profiles;
-    // A 390 x 844 phone: depth stops at 1.5 and 1 device pixels per CSS pixel,
-    // and N8AO shades at exactly half of that.
+    // 390 x 844 phone: depth at 1.5 and 1 device pixels per CSS pixel, N8AO at half that.
     assert.deepEqual(high.depthSize, [584, 1266]);
     assert.deepEqual(low.depthSize, [390, 844]);
     for (const profile of [high, low]) assert.deepEqual(profile.aoSize, profile.depthSize.map(size => size / 2), 'AO is exactly half its depth');

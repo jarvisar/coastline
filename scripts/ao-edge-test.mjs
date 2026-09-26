@@ -22,17 +22,16 @@ try {
     camera.position.set(-8, 12, 10); camera.lookAt(0, 0, 0); camera.updateMatrixWorld();
     const origin = camera.position.clone(), right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
     const up = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
-    // A floating foreground card crosses the box's contact shadow in the image,
-    // but sits five meters closer to the camera, beyond the AO radius.
+    // The card overlaps the box's contact shadow on screen but sits 5 m nearer
+    // the camera, beyond the AO radius.
     const cardMaterial = new THREE.MeshBasicMaterial({ color: '#40ffff' });
     const card = new THREE.Mesh(new THREE.PlaneGeometry(1, 4), cardMaterial); card.quaternion.copy(camera.quaternion);
     card.position.set(.75, 0, -.4).addScaledVector(origin.clone().normalize(), 5).addScaledVector(right, -.5); scene.add(card);
     const ao = new AmbientOcclusion(renderer, scene, camera), gl = renderer.getContext(), results = [];
     for (const quality of ['high', 'low']) for (const ratio of [1, 3]) {
       ao.setQuality(quality); renderer.setPixelRatio(ratio);
-      // At one device pixel per CSS pixel the silhouette is exact. A denser
-      // screen filters the finished mask up, which may reach one CSS pixel (a
-      // sixtieth of a metre here) into the card and no further.
+      // Exact at pixel ratio 1. Denser screens upscale the mask, which may reach
+      // one CSS pixel (1/60 m here) into the card.
       const inset = ratio === 1 ? .01 : 1.05 / 60, points = [];
       for (let y = -.8; y < .8; y += .01) points.push(card.position.clone().addScaledVector(right, .5 - inset).addScaledVector(up, y));
       const width = 960 * ratio, height = 600 * ratio;

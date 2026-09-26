@@ -2,15 +2,11 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { stableShadowDepth } from './world/shadow-depth.js';
 
-// The garage's oddballs: machines that share no bodywork with the road fleet
-// and are not meant to drive like it either. Like the coupe and the racer they
-// are chooser-only, so the roads keep their ordinary-looking traffic.
+// Chooser-only cars with their own bodywork and wheels. They never appear in traffic.
 //
-// Each shape carries its own wheels, because none of them wears the road cars'
-// set: `x` is the wheel's centre from the middle of the car, and the collision
-// width is measured to the outside of the widest tyre. `eye` is where the
-// first-person camera sits, `chaseLift` raises the chase camera over a tall roof,
-// and `open` marks a car with no cabin to muffle it.
+// Wheel `x` is the centre from the car's middle. `width` reaches the outside of
+// the widest tyre. `eye` places the first-person camera, `chaseLift` raises the
+// chase camera over a tall roof and `open` marks a car with no cabin to muffle it.
 export const SPECIAL_SHAPES = {
   buggy: {
     name: 'buggy', width: 1.96, length: 3.4, eye: [0, 1.38, -.55], open: true,
@@ -37,9 +33,7 @@ export const SPECIAL_SHAPES = {
 const DARK = '#2b3434', CHROME = '#bfc4b9', GLASS = '#344e55', ENGINE = '#59625f', SEAT = '#3a4441', BED = '#414c4b';
 const SHOCK = '#d9a441', AMBER = '#e0a23a', CANVAS = '#e9e2cb', LEATHER = '#8a5a3a';
 
-// The same faceted kit the road cars and the racer are cut from: boxes, a box
-// with one end pulled in, sloped glass, and the odd tube. Paint takes the
-// garage colour; everything in `details` carries its own.
+// Paint parts take the garage colour. Parts in `details` carry their own.
 function partsKit() {
   const parts = { paint: [], details: [], headlights: [], taillights: [] };
   function add(geometry, location, category = 'paint', color) {
@@ -67,7 +61,6 @@ function partsKit() {
       }
       geometry.computeVertexNormals(); add(geometry, location, category, color);
     },
-    // Glass slopes the way the road cars' does, so the oddballs still belong.
     glass(size, location, rake = .24) {
       const geometry = new THREE.BoxGeometry(...size), position = geometry.attributes.position;
       for (let i = 0; i < position.count; i++) if (position.getY(i) > 0) {
@@ -85,7 +78,6 @@ function partsKit() {
 }
 
 const BUILDERS = {
-  // A bare tub in a roll cage, with the engine hung out behind the seats.
   buggy({ box, tapered, tube }) {
     box([1.16, .34, 2.2], [0, .66, .1]);
     tapered([1.1, .34, .75], [0, .66, -1.3], { at: -1, x: .55, y: .45, lift: -.06 });
@@ -94,12 +86,12 @@ const BUILDERS = {
     for (const side of [-1, 1]) {
       box([.42, .14, .5], [side * .28, .88, .2], 'details', SEAT);
       box([.42, .56, .13], [side * .28, 1.16, .5], 'details', SEAT);
-      // Cage: a rear hoop, a raked front one, roof rails, and stays down to the engine.
+      // Roll cage: rear hoop, raked front hoop, roof rails and engine stays.
       box([.07, .95, .07], [side * .56, 1.3, .68], 'details', DARK);
       box([.07, .9, .07], [side * .56, 1.33, -.78], 'details', DARK, .272);
       box([.07, .07, 1.41], [side * .56, 1.76, .01], 'details', DARK);
       box([.07, 1.02, .07], [side * .56, 1.38, 1.015], 'details', DARK, -.723);
-      // Wishbones out to the wheels, lamp pods on the cowl, and lamps on the hoop.
+      // Wishbones, cowl lamp pods and hoop lamps.
       box([.5, .05, .08], [side * .6, .5, -1.15], 'details', DARK);
       box([.4, .07, .1], [side * .56, .56, 1.05], 'details', DARK);
       box([.2, .2, .1], [side * .5, .98, -.98], 'headlights');
@@ -109,19 +101,18 @@ const BUILDERS = {
     for (const z of [-.66, .68]) box([1.19, .07, .07], [0, 1.76, z], 'details', DARK);
     box([1.12, .05, 1.2], [0, 1.82, 0]);
     tube(.16, .04, [-.28, 1.12, -.5], 'z', DARK);
-    // A roof light bar, because every buggy has one.
+    // Roof light bar.
     for (const x of [-.33, -.11, .11, .33]) box([.17, .13, .06], [x, 1.91, -.68], 'headlights');
     box([.78, .42, .62], [0, .95, 1.38], 'details', ENGINE);
     tube(.13, .26, [0, 1.29, 1.38], 'y', CHROME);
   },
 
-  // A pickup body lifted clear of four tyres that come up to its door handles.
   monster({ box, glass }) {
     box([.9, .24, 4.1], [0, 1.1, 0], 'details', DARK);
     for (const z of [-1.55, 1.55]) {
       box([2, .18, .18], [0, .85, z], 'details', DARK);
       box([.4, .36, .4], [0, .85, z], 'details', ENGINE);
-      // Long-travel shocks in a V over each axle.
+      // Shocks in a V over each axle.
       for (const side of [-1, 1]) for (const lean of [-1, 1]) box([.09, .74, .09], [side * .62, 1.18, z + lean * .17], 'details', SHOCK, -lean * .42);
     }
     box([2.05, .66, 4.5], [0, 1.78, 0]);
@@ -138,20 +129,18 @@ const BUILDERS = {
       box([.42, .24, .05], [side * .68, 1.86, -2.275], 'headlights');
       box([.22, .3, .05], [side * .85, 1.8, 2.275], 'taillights');
     }
-    // Roll bar across the bed with a row of spots on it.
+    // Bed roll bar with spotlights.
     box([1.69, .09, .09], [0, 2.95, .75], 'details', DARK);
     for (const x of [-.5, -.17, .17, .5]) box([.24, .18, .08], [x, 3.08, .73], 'headlights');
     box([.8, .3, .05], [0, 1.84, -2.275], 'details', DARK);
     for (const z of [-2.3, 2.3]) box([2.1, .24, .22], [0, 1.4, z], 'details', CHROME);
   },
 
-  // A chopped coupe on bare rails: skinny fronts, fat rears, and a blower
-  // standing out of the bonnet.
   hotrod({ box, tapered, glass, tube }) {
     for (const side of [-1, 1]) {
       box([.12, .14, 3.9], [side * .4, .52, 0], 'details', DARK);
       box([.08, .36, .1], [side * .58, 1.38, .55]);
-      // Four header stubs into a side pipe, and a lamp on a stalk.
+      // Header stubs, side pipe and stalk-mounted lamp.
       for (let i = 0; i < 4; i++) tube(.045, .3, [side * .56, .84, -1.45 + i * .28], 'x', CHROME);
       tube(.07, 2, [side * .72, .62, -.35], 'z', CHROME);
       box([.22, .22, .14], [side * .58, .98, -1.78], 'headlights');
@@ -171,11 +160,8 @@ const BUILDERS = {
     tapered([1.34, .6, .85], [0, .9, 1.55], { at: 1, x: .8, y: .55, lift: -.05 });
   },
 
-  // A long-nose tractor unit running bobtail: a sleeper, twin stacks and
-  // a fifth wheel with nothing on it.
   rig({ box, tapered, glass, tube }) {
-    // Original hood and cab proportions, with the extra length behind the
-    // sleeper. The cab sits .6 m farther forward within the same footprint.
+    // Hood and cab keep their proportions. The added length goes behind the sleeper.
     box([1, .3, 7.1], [0, .75, .05], 'details', DARK);
     tapered([1.7, .95, 1.9], [0, 1.5, -2.6], { at: -1, x: .88, y: .88, lift: -.055 });
     box([1.3, .85, .08], [0, 1.5, -3.58], 'details', CHROME);
@@ -187,7 +173,7 @@ const BUILDERS = {
     box([2.2, .95, 1.6], [0, 1.5, -.9]);
     glass([2.05, .75, 1.5], [0, 2.35, -.9]);
     box([2, .12, 1.25], [0, 2.78, -.84]);
-    // A split windscreen and short sun visor give the cab a classic truck face.
+    // Split windscreen and sun visor.
     box([.07, .79, .075], [0, 2.35, -1.53], 'details', CHROME, .31);
     box([2.08, .1, .35], [0, 2.77, -1.44]);
     box([2.1, 1.85, 1.3], [0, 1.95, .55]);
@@ -218,7 +204,6 @@ const BUILDERS = {
     for (const x of [-.7, -.35, 0, .35, .7]) box([.12, .07, .1], [x, 2.87, -1.38], 'details', AMBER);
   },
 
-  // A bubble of glass on a roller skate, with the weekend's luggage on top.
   micro({ box, tapered, glass }) {
     tapered([1.3, .6, 1.3], [0, .64, -.5], { at: -1, x: .78, y: .7 });
     tapered([1.3, .6, 1.3], [0, .64, .5], { at: 1, x: .84, y: .8 });
@@ -263,7 +248,7 @@ export function createSpecialCar(entry) {
       const pivot = new THREE.Group(); pivot.position.set(side * x, radius, z); car.add(pivot);
       const wheel = new THREE.Mesh(tire, tireMaterial); wheel.rotation.z = Math.PI / 2; wheel.castShadow = true; pivot.add(wheel);
       const hub = new THREE.Mesh(hubGeometry, hubMaterial); hub.rotation.z = Math.PI / 2; pivot.add(hub);
-      // The controller spins wheels for the wagon's tyre; these turn at their own size.
+      // The controller spins wheels for the wagon's tyre, so scale to this radius.
       wheels.push({ pivot, wheel, hub, front: axle === 'front', spinRatio: .48 / radius });
     }
   }
@@ -271,7 +256,7 @@ export function createSpecialCar(entry) {
   return {
     car, body, wheels,
     nightLights: [{ material: front, day: .24, night: 2.2 }, { material: rear, day: .1, night: 2.5 }],
-    // A chosen car keeps its own paint and kit on every route.
+    // Special cars keep their own kit on every route.
     applyTrim() {},
     paintCar(color) { paint.color.set(color || entry.paint); },
     disposeModel() {

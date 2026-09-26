@@ -5,7 +5,7 @@ export function volcanicDiscoveryAngle(site) {
     + (site.turn ?? 0) + (site.roadSpanning ? 0 : (randomAt(site.index,81207)-.5)*.3);
 }
 
-// Invert the road's softened lateral coordinates for a rigid model footprint.
+// World x/z back to road s/u by fixed-point iteration.
 function coordinates(x, z) {
   let s = -z, u = x - roadFrame(s).x;
   for (let i = 0; i < 10; i++) {
@@ -23,14 +23,12 @@ export function volcanicPlatformLayout(site, naturalHeight) {
     const p = coordinates(origin.x+x*cos+z*sin,origin.z+z*cos-x*sin);
     return naturalHeight(p.s,p.u);
   };
-  // Leave a level apron beyond the wheels, steps and pipe saddles; starting
-  // the bank at a model's outline makes it read as a raised pedestal.
+  // Pads extend past the model outline so the bank doesn't look like a pedestal.
   const footprints = site.kind === 'geothermal-station' ? [[0,0,10,14]]
     : site.kind === 'research-camp' ? [[0,0,11,14]] : [[-2,0,13,15]];
   const pads = footprints.map(([x,z,halfX,halfZ]) => {
     const samples = [-.65,0,.65].flatMap(dx => [-.65,0,.65].map(dz => ground(x+dx*halfX,z+dz*halfZ))).sort((a,b)=>a-b);
-    // Balance excavation and fill instead of lifting everything to the crest.
-    // Mine floors meet the open face of the scarp, with rock behind the adit.
+    // Median sample balances cut and fill. Mines use the ground at the scarp face.
     const height = site.kind === 'abandoned-mine' ? ground(-3,0) : samples[4];
     return {x,z,halfX,halfZ,height};
   });
@@ -45,8 +43,7 @@ export function volcanicPlatformHeight(s,u,natural,sites,protection=1) {
     for(const pad of f.pads) {
       const qx=Math.abs(x-pad.x)-pad.halfX,qz=Math.abs(z-pad.z)-pad.halfZ;
       const distance=Math.hypot(Math.max(0,qx),Math.max(0,qz));
-      // Broken cut faces on the uphill edge, gentler ash fill below. Varying
-      // the edge width avoids a perfectly rectangular ring around the pad.
+      // Steeper cut uphill, gentler fill below. Width varies so the edge isn't a clean rectangle.
       const width=(natural>pad.height?4:6)+Math.sin(x*.43+site.index)*.8+Math.sin(z*.31)*.7;
       const weight=(1-smoothstep(0,width,distance))*protection;
       natural=lerp(natural,pad.height,weight);

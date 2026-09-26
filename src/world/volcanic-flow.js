@@ -1,8 +1,6 @@
-// Intersect surface ribbons with the actual terrain facets in route coordinates.
-// Every new point inherits its triangle's plane, including cliff transitions.
-// This avoids floating ribbons, buried cascades and gaps at chunk boundaries.
-// The optional lateral bound also lets ash deposits use the same projection
-// on both road shoulders without extending the lava builder's search area.
+// Clips ribbon outlines against the terrain facets in route coordinates, so
+// every point lies on its triangle's plane and ribbons can't float or sink.
+// minU skips faces nearer the road than the builder needs.
 export class FlowSurface {
   constructor(step, minU = 18) { this.step = step; this.minU = minU; this.rows = new Map(); }
   add(a, b, c) {
@@ -16,9 +14,7 @@ export class FlowSurface {
   }
   project(outline, lift = .075) {
     outline = cleanPolygon(outline);
-    // Tapered streams end at zero width. A degenerate clipping polygon has
-    // no interior; treating its winding as zero would accept entire terrain
-    // facets and paint large, unrelated orange sheets around the tip.
+    // Tapered tips can be degenerate. A zero winding would accept whole facets.
     const signedArea = area(outline);
     if (!Number.isFinite(signedArea) || Math.abs(signedArea) < 1e-8) return [];
     const first = Math.floor(Math.min(...outline.map(p => p.s)) / this.step), last = Math.floor(Math.max(...outline.map(p => p.s)) / this.step);
@@ -50,9 +46,8 @@ export class FlowSurface {
   }
 }
 
-// Boolean clipping can return a closing vertex a few floating-point ulps from
-// the first. Its microscopic edge must not become another clipping plane:
-// that plane can cut a visible triangular hole from a perfectly valid flow.
+// Drops near-duplicate vertices. A tiny closing edge left by clipping would
+// act as an extra clipping plane and cut holes in valid flows.
 function cleanPolygon(polygon) {
   const result = [], same = (a, b) => Math.abs(a.s - b.s) < 1e-8 && Math.abs(a.u - b.u) < 1e-8;
   for (const p of polygon) if (!result.length || !same(p, result.at(-1))) result.push(p);
@@ -84,9 +79,8 @@ function halfPlane(polygon, a, b, sign) {
   return cleanPolygon(result);
 }
 
-// A union of ribbon footprints, indexed along the route. Subtracting already
-// covered areas produces disjoint faces, so tributaries cannot z-fight and
-// their edge glow cannot run across the middle of another molten surface.
+// Union of ribbon footprints, indexed along the route. Subtracting covered
+// areas keeps faces disjoint so tributaries don't z-fight or overlap edge glow.
 export class FlowCoverage {
   constructor(step = 8) { this.step = step; this.rows = new Map(); }
   add(polygon) {

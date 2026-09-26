@@ -1,8 +1,6 @@
-// Combustion textures, rather than a pitched musical oscillator. Each firing
-// excites a short pressure pulse and a damped exhaust resonance; cylinder
-// imbalance, breath and cycle variation break up the perfectly periodic buzz.
-// Three RPM bands have separate coast/load takes so revs and pedal effort
-// change the texture as well as its pitch. All samples are generated here.
+// Synthesised engine loop. Each firing drives a pressure pulse into a damped
+// exhaust resonance. Cylinder imbalance and cycle variation avoid a periodic buzz.
+// Three RPM bands each have a coast and a load take.
 export function createEngineBuffer(ctx, profile, rpm, loaded, seed = 0xeca17) {
   const rate = ctx.sampleRate, cycles = Math.max(8, Math.round(rpm / 120 * 2));
   const length = Math.round(cycles * 120 / rpm * rate), overlap = Math.round(rate * .045);
@@ -35,8 +33,7 @@ export function createEngineBuffer(ctx, profile, rpm, loaded, seed = 0xeca17) {
     }
     fast *= fastDecay; slow *= slowDecay;
     const pulse = slow - fast;
-    // A differentiated pressure wave rings through the exhaust, with a little
-    // turbulent breath shaped by each combustion, not constant white hiss.
+    // Noise is scaled by the pulse so the breath follows each firing.
     const resonated = (pulse - previousPulse) + resonance * r1 - resonanceDecay * r2;
     previousPulse = pulse; r2 = r1; r1 = resonated;
     air = airDecay * air + (1 - airDecay) * (random() * 2 - 1);
@@ -46,8 +43,8 @@ export function createEngineBuffer(ctx, profile, rpm, loaded, seed = 0xeca17) {
     if (i >= 0 && i < length) data[i] = sample;
     else if (i >= length) tail[i - length] = sample;
   }
-  // A short equal-power join hides the stochastic seam. Band gains are
-  // normalized to RMS, so crossfading cannot create a loud mid-RPM island.
+  // Equal-power join hides the loop seam. RMS normalising keeps band
+  // crossfades from getting louder mid-RPM.
   for (let i = 0; i < overlap; i++) {
     const angle = i / (overlap - 1) * Math.PI / 2;
     data[i] = tail[i] * Math.cos(angle) + data[i] * Math.sin(angle);
@@ -56,9 +53,7 @@ export function createEngineBuffer(ctx, profile, rpm, loaded, seed = 0xeca17) {
   for (const sample of data) energy += sample * sample;
   const normalize = .2 / Math.max(.001, Math.sqrt(energy / length));
   for (let i = 0; i < length; i++) data[i] *= normalize;
-  // Align the firing fundamental between all takes. Equal-power fades alone
-  // cannot prevent two exhaust recordings from cancelling when their phases
-  // oppose; align once here instead of compensating with extra volume.
+  // Phase-align the firing fundamental across takes so crossfades don't cancel.
   const omega = 2 * Math.PI * cycles * cylinders / length;
   let real = 0, imaginary = 0;
   for (let i = 0; i < length; i++) { real += data[i] * Math.cos(omega * i); imaginary += data[i] * Math.sin(omega * i); }
@@ -113,9 +108,8 @@ export function createEngineBank(ctx, destination) {
       const coast = Math.cos(load * Math.PI / 2), power = Math.sin(load * Math.PI / 2);
       for (let i = 0; i < voices.length; i++) {
         const band = Math.floor(i / 2), voice = voices[i];
-        // Start every band at the same crank phase and effective RPM. Ramping
-        // from playbackRate=1 would permanently offset the layers and produce
-        // hollow cancellation during a blend.
+        // Jump straight to the right rate on the first update. Ramping from 1
+        // offsets the layers' phase for good and they cancel when blended.
         if (firstUpdate) voice.source.playbackRate.setValueAtTime(rpm / references[band], ctx.currentTime);
         target(voice.source.playbackRate, rpm / references[band], .065);
         target(voice.gain.gain, weights[band] * (i % 2 ? power : coast), .075);

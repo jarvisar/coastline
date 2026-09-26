@@ -34,15 +34,13 @@ test('every car builds a solid, steerable model', () => {
       assert.ok([...position.array].every(Number.isFinite), `${id} has a broken mesh`);
     });
     assert.ok(meshes >= 8, `${id} is missing bodywork`);
-    // Wheels rest on the ground the car is placed on.
     const box = new THREE.Box3().setFromObject(model.car);
     assert.ok(Math.abs(box.min.y) < .05, `${id} floats or sinks: ${box.min.y}`);
     model.disposeModel();
   }
 });
 
-// The chooser-only cars are the ones allowed to break the tourer's mould: the
-// two racers by being quicker at everything, the specials by being lopsided.
+// Chooser-only cars may break the tourer's balance: racers are faster, specials lopsided.
 const RACERS = ['sports', 'formula'];
 const SPECIALS = ['buggy', 'monster', 'hotrod', 'rig', 'micro'];
 const CHOOSER_ONLY = [...RACERS, ...SPECIALS];
@@ -52,7 +50,7 @@ test('every car can reverse from rest and after braking off road', () => {
     const car = new DrivingController(straightRoute, {}, id);
     car.u = 8; car.speed = startingSpeed;
     for (let i = 0; i < fps * 8; i++) {
-      car.u = 8; // Keep the whole trial off road, even with lane assistance.
+      car.u = 8; // Stay off road despite lane assistance.
       car.update(1 / fps, { brake: 1 });
     }
     assert.ok(car.speed < -3, `${id} could not reverse off road at ${fps} fps after starting at ${startingSpeed}`);
@@ -71,7 +69,6 @@ test('the coastal wagon keeps the original handling and every car stays close to
     assert.ok(Math.abs(stats.acceleration / base.acceleration - 1) < .15, `${id} acceleration is too far from the original`);
     assert.ok(Math.abs(stats.grip - 1) < .12, `${id} handling is too far from the original`);
   }
-  // The coupe is allowed to feel quick, and the racer quicker again.
   const sports = carStats('sports'), formula = carStats('formula');
   assert.ok(sports.topSpeed > base.topSpeed * 1.13 && sports.topSpeed < base.topSpeed * 1.25);
   assert.ok(sports.acceleration > base.acceleration * 1.15);
@@ -79,9 +76,8 @@ test('the coastal wagon keeps the original handling and every car stays close to
   assert.ok(formula.acceleration > sports.acceleration * 1.25 && formula.braking > sports.braking);
   assert.ok(formula.grip > sports.grip, 'slicks should turn in harder than the coupe');
   assert.ok(Math.abs(flatOut('formula', 30).speed - formula.topSpeed) < .01, 'the Formula car must actually reach its top speed under throttle');
-  // Leaving the tarmac costs every car a third of its top end, give or take,
-  // and the order is the character: off-roaders keep most, racers least.
-  // The specials sit outside that band on purpose, in both directions.
+  // Off road costs roughly a third of top speed. Off-roaders keep the most and
+  // racers the least. Specials sit outside that band on purpose.
   const share = id => carStats(id).offRoad / carStats(id).topSpeed;
   const looseShare = { formula: [.35, .45], hotrod: [.5, .6], buggy: [.88, .95], monster: [.88, .95] };
   for (const id of CAR_IDS) {
@@ -101,20 +97,20 @@ test('each special is the best in the garage at one thing and pays for it', () =
   // The buggy is the quickest thing across open ground, racers included.
   assert.ok(buggy.offRoad > best('offRoad', CAR_IDS.filter(id => id !== 'buggy')));
   assert.ok(buggy.acceleration > best('acceleration') && buggy.topSpeed < worst('topSpeed'));
-  // The monster truck gives up the least when the road ends, and is clumsy on it.
+  // The monster truck loses the least off road and is clumsy on it.
   assert.ok(monster.offRoad > best('offRoad', [...road, ...RACERS]) && monster.topSpeed - monster.offRoad <= 2);
   assert.ok(monster.grip < worst('grip') && monster.braking < worst('braking'));
   // The hot rod beats the coupe in a straight line and nothing at a corner.
   const sports = carStats('sports');
   assert.ok(hotrod.topSpeed > sports.topSpeed && hotrod.acceleration > sports.acceleration && hotrod.topSpeed < carStats('formula').topSpeed);
   assert.ok(hotrod.grip < worst('grip') && hotrod.braking < worst('braking'));
-  // The rig keeps up once it is rolling, and is last away and last to stop.
+  // The rig matches the default top speed but is slowest to accelerate and brake.
   assert.ok(Math.abs(rig.topSpeed / carStats(DEFAULT_CAR).topSpeed - 1) < .1);
   assert.ok(CAR_IDS.every(id => id === 'rig' || (carStats(id).acceleration > rig.acceleration && carStats(id).braking > rig.braking)));
   // The microcar is the slowest car here and the nimblest with number plates.
   assert.ok(CAR_IDS.every(id => id === 'micro' || carStats(id).topSpeed > micro.topSpeed));
   assert.ok(micro.grip > best('grip', [...road, 'sports']) && micro.grip < carStats('formula').grip && micro.braking > best('braking'));
-  // Every one of them can still hold the top speed on its card against the air.
+  // Each can actually reach its listed top speed.
   for (const id of SPECIALS) assert.ok(Math.abs(flatOut(id, 60).speed - carStats(id).topSpeed) < .01, `${id} cannot reach its top speed`);
 });
 
@@ -122,12 +118,11 @@ test('the specials are their own shapes, on their own wheels', () => {
   const bounds = id => { const model = createCar(id), box = new THREE.Box3().setFromObject(model.car); model.disposeModel(); return box; };
   for (const id of SPECIALS) {
     const box = bounds(id), { width, length, wheels, eye } = CARS[id].shape;
-    // The collision box is the footprint the model actually has.
+    // Shape width and length are the collision box, so they must match the model.
     assert.ok(Math.abs(box.max.x - box.min.x - width) < .12, `${id} is ${(box.max.x - box.min.x).toFixed(2)} m wide, not ${width}`);
     assert.ok(Math.abs(box.max.z - box.min.z - length) < .12, `${id} is ${(box.max.z - box.min.z).toFixed(2)} m long, not ${length}`);
     assert.ok(Math.abs(box.max.x + box.min.x) < .01, `${id} is not symmetrical`);
     assert.ok(wheels.front.z < 0 && wheels.rear.z > 0);
-    // First person looks out from inside the model, above the wheels.
     assert.ok(eye[1] > wheels.front.radius * 2 - .3 && eye[1] < box.max.y && Math.abs(eye[2]) < length / 2, `${id} has its driver outside the car`);
     const car = new DrivingController(straightRoute, {}, id);
     assert.deepEqual(car.car.userData.driverEye.toArray(), eye);
@@ -145,7 +140,7 @@ test('the specials are their own shapes, on their own wheels', () => {
 });
 
 test('loose ground takes the speed instead of the game capping it', () => {
-  // Open ground is past the ramp; anything nearer the tarmac costs less.
+  // u = 7 is past the verge ramp, on fully open ground.
   const shoulder = (id, seconds, { at = 7, input = { forward: true } } = {}) => {
     const car = new DrivingController(straightRoute, {}, id);
     for (let i = 0; i < 60 * 90; i++) car.update(1 / 60, { forward: true });
@@ -156,25 +151,18 @@ test('loose ground takes the speed instead of the game capping it', () => {
   for (const id of CAR_IDS) {
     const { car, entry, trace } = shoulder(id, 12);
     const stats = carStats(id);
-    // Full throttle balances on the off-road figure: the number on the card is
-    // where the physics settles, not a limit clamped on top of it.
     assert.ok(Math.abs(trace.at(-1) - stats.offRoad) < .35, `${id} settled at ${trace.at(-1)}, not ${stats.offRoad}`);
-    // It gets there over seconds, not in the frame that crosses the line.
     assert.ok(trace[0] > entry - .6, `${id} lost ${(entry - trace[0]).toFixed(1)} m/s in one frame`);
     assert.ok(trace[60] > stats.offRoad + .5 && trace[60] < trace[10], `${id} does not ease down`);
-    // And never pulls harder than the car's own brakes while it is doing it.
     for (let i = 1; i < trace.length; i++) {
       assert.ok((trace[i - 1] - trace[i]) * 60 < stats.braking, `${id} decelerates harder than it brakes`);
     }
-    // Back on the road, the full top speed is available again.
     car.u = 2.4;
     for (let i = 0; i < 60 * 30; i++) car.update(1 / 60, { forward: true });
     assert.ok(Math.abs(car.speed - stats.topSpeed) < .35, `${id} could not recover its road speed`);
   }
-  // The throttle is worth holding: a closed one keeps bleeding speed well past
-  // the off-road top, where a held one stops there.
+  // With the throttle closed, speed bleeds well below the off-road top.
   assert.ok(shoulder('auto', 3, { input: {} }).trace.at(-1) < carStats('auto').offRoad * .75);
-  // A brief excursion is a glance, not a penalty.
   const { entry, trace } = shoulder('formula', .2);
   assert.ok(entry - trace.at(-1) < (entry - carStats('formula').offRoad) * .25,
     `a fifth of a second off the road cost ${(entry - trace.at(-1)).toFixed(1)} m/s`);
@@ -182,7 +170,6 @@ test('loose ground takes the speed instead of the game capping it', () => {
 
 test('the edge of the road is a ramp, not a line', () => {
   const stats = carStats('auto');
-  // Two wheels on the verge costs real speed, but nothing like leaving.
   const settled = at => {
     const car = new DrivingController(straightRoute, {}, 'auto');
     for (let i = 0; i < 60 * 102; i++) { if (i > 60 * 90) car.u = at; car.update(1 / 60, { forward: true }); }
@@ -192,13 +179,12 @@ test('the edge of the road is a ramp, not a line', () => {
   assert.ok(Math.abs(settled(4.6) - stats.topSpeed) < .35, 'the shoulder itself is still road');
   assert.ok(verge < stats.topSpeed - 1 && verge > open + 3, `the verge (${verge}) should sit between road and open ground`);
   assert.ok(Math.abs(open - stats.offRoad) < .35);
-  // Riding the line is steady rather than flickering between two surfaces.
   const car = new DrivingController(straightRoute, {}, 'auto');
   for (let i = 0; i < 60 * 90; i++) car.update(1 / 60, { forward: true });
   const speeds = [];
   for (let i = 0; i < 120; i++) { car.u = 5.1 + Math.sin(i / 4) * .35; car.update(1 / 60, { forward: true }); speeds.push(car.speed); }
   assert.ok(Math.max(...speeds) - Math.min(...speeds) < .6, 'skimming the edge should not jitter the car');
-  // What the surface does and what it sounds like come from the same number.
+  // Surface physics and audio read the same value.
   car.u = 7; car.update(1 / 60, { forward: true });
   assert.equal(car.audioTelemetry.offRoad, 1);
   car.u = 4.8; car.update(1 / 60, { forward: true });
@@ -206,7 +192,6 @@ test('the edge of the road is a ramp, not a line', () => {
 });
 
 test('loose ground costs grip as well as speed', () => {
-  // Same car, same speed, same lock: the only difference is the surface.
   const turnIn = at => {
     const car = new DrivingController(straightRoute, {}, 'auto');
     car.u = at; car.speed = 20; car.update(0, {});
@@ -216,7 +201,6 @@ test('loose ground costs grip as well as speed', () => {
   };
   const road = turnIn(2.4), verge = turnIn(5.35), open = turnIn(7);
   assert.ok(verge < road && open < verge, 'turn-in should fall away with the surface');
-  // A quarter of it, so the car still answers the wheel out there.
   assert.ok(open > road * .7 && open < road * .8, `open ground turns in at ${(open / road * 100).toFixed(0)}% of the road`);
 });
 
@@ -266,9 +250,8 @@ test('the racers and specials stay in the chooser, and traffic keeps its own fiv
     assert.equal(carMeters(id).length, 4);
     for (const { level } of carMeters(id)) assert.ok(level >= 6 && level <= 100, `${id} meter out of range`);
   }
-  // The meters are scaled for cars with number plates, so the racer pegs the
-  // first three and shows what its slicks cost on the fourth. The coupe leads
-  // everything that is still an ordinary tourer, and no bar sits at either stop.
+  // Meters are scaled for road cars, so the racer pegs the first three.
+  // The coupe tops every ordinary car and no other bar sits at either end.
   const [, , , looseMeter] = carMeters('formula');
   assert.ok(carMeters('formula').slice(0, 3).every(({ level }) => level === 100));
   assert.ok(looseMeter.label === 'Off road' && looseMeter.level < 80);
@@ -297,23 +280,21 @@ test('one colour dresses the whole garage and follows the car swap', () => {
   const blue = '#2f4a6d', wears = (car, color) => palette(car).includes(color.slice(1));
   const car = new DrivingController(straightRoute, {}, 'sports', blue);
   assert.ok(wears(car, blue), 'the chosen colour should reach the model');
-  // It is the garage's colour, not the car's: every car picked up wears it.
   for (const id of CAR_IDS) {
     car.setCar(id, { paint: blue });
     assert.ok(wears(car, blue), `${id} ignored the garage colour`);
     assert.equal(car.paintColor, blue);
   }
-  // And it stays on through a route change, kit and all.
   for (const journey of Object.keys(JOURNEYS)) { car.setAppearance(journey); assert.ok(wears(car, blue)); }
-  // Clearing it hands every car the finish it arrived in back. The default
-  // car's own finish is the route's, so put it back on the coast road first.
+  // Clearing it restores each car's own paint. The default car's paint is the
+  // route's, so reset to the coast first.
   car.setAppearance('coast');
   for (const id of CAR_IDS) {
     car.setCar(id); car.setPaint(null);
     assert.equal(car.paintColor, null);
     assert.ok(wears(car, CARS[id].paint), `${id} did not get its own colour back`);
   }
-  // The default car goes back to dressing for the scenery, not to one colour.
+  // The default car goes back to route paint.
   car.setCar('auto');
   const scenic = new Set();
   for (const journey of Object.keys(JOURNEYS)) { car.setAppearance(journey); scenic.add(palette(car)); }
@@ -330,8 +311,7 @@ test('the paint counter offers usable colours, and one swatch that is not one', 
   }
   assert.equal(new Set(PAINTS.map(paint => paint.color)).size, PAINTS.length, 'no two swatches may share a colour');
   assert.equal(paintName('#010203'), null, 'a mixed colour has no catalogue name');
-  // Default clears the garage rather than naming a colour, so it must never
-  // read as one or collide with a swatch.
+  // Default clears the garage colour, so it can't be a valid paint or match a swatch.
   assert.equal(isPaint(DEFAULT_PAINT), false);
   assert.ok(!PAINTS.some(paint => paint.color === DEFAULT_PAINT));
   for (const value of ['red', '#fff', '#12345g', '', null, 42]) assert.equal(isPaint(value), false);

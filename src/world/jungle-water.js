@@ -2,8 +2,7 @@ import * as THREE from 'three';
 import { registerChunkResources } from './chunk-resources.js';
 import { waterClock } from './water.js';
 
-// Value noise wrapped at 64 units, shared by the river and cascades,
-// so patterns never jump when the floating origin rebases.
+// Wraps at 64 units so patterns don't jump when the floating origin rebases.
 const noise = /* glsl */`
   float jungleHash(vec2 p) { p = mod(p, 64.0); return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
   float jungleNoise(vec2 p) {
@@ -14,8 +13,7 @@ const noise = /* glsl */`
   }
 `;
 
-// Turquoise water with streaks drifting downstream, bank-edge foam, and white
-// churn wherever the mesh marks turbulence. Coordinates are route (s, across).
+// riverCoord is (s, across -1..1, turbulence).
 export function createRiverMaterial() {
   const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .38, metalness: .05 });
   material.onBeforeCompile = shader => {
@@ -40,8 +38,7 @@ export function createRiverMaterial() {
   return material;
 }
 
-// Foam sheets and spray. foamCoord is (flow, across, feather): streaks move
-// along the flow coordinate, and feather fades the sheet out at its edges.
+// foamCoord is (flow, across, feather). Feather fades the sheet at its edges.
 export function createFoamMaterial(mist = false) {
   const material = new THREE.MeshBasicMaterial({ color: mist ? '#e4f1ea' : '#f4fcf7', transparent: true, opacity: mist ? .3 : .88,
     depthWrite: false, side: THREE.DoubleSide, forceSinglePass: true });
@@ -65,9 +62,7 @@ export function createFoamMaterial(mist = false) {
   return material;
 }
 
-// Falling water. fallCoord is (distance down the fall, across -1..1, foam,
-// seed): streaks stretched along the fall race downward, gaps split wide
-// sheets into strands, the edges fray, and foam builds toward the foot.
+// fallCoord is (distance down the fall, across -1..1, foam, seed).
 export function createFallMaterial() {
   const material = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, side: THREE.DoubleSide, forceSinglePass: true });
   material.onBeforeCompile = shader => {
@@ -96,7 +91,6 @@ export const riverMaterial = createRiverMaterial();
 export const fallMaterial = createFallMaterial();
 export const foamMaterial = createFoamMaterial();
 export const mistMaterial = createFoamMaterial(true);
-// The valley mist shares the spray shader but hangs thicker across the far hills.
 export const valleyMistMaterial = createFoamMaterial(true);
 valleyMistMaterial.opacity = .5;
 registerChunkResources('jungle-water', { riverMaterial, fallMaterial, foamMaterial, mistMaterial, valleyMistMaterial });

@@ -4,7 +4,7 @@ export const JUNGLE_STEP = 8;
 export const RIVER_STEP = 2;
 export const POOL_SPAN = 88;
 
-// Smooth two-dimensional value noise for cohesive groves, litter and moss patches.
+// Smooth 2D value noise.
 export function jungleNoise(s, u, span, salt) {
   const cs = Math.floor(s / span), cu = Math.floor(u / span);
   const ts = smoothstep(0, 1, s / span - cs), tu = smoothstep(0, 1, u / span - cu);
@@ -16,8 +16,8 @@ export function ribbonNoise(s, span, salt) {
   return lerp(randomAt(cell, salt), randomAt(cell + 1, salt), t);
 }
 
-// A river runs below the road on the camera side, wandering closer and
-// farther and widening into pools. Its banks are exact terrain columns.
+// River on the camera side, below the road, widening in each pool.
+// Its banks line up with terrain columns (see jungleColumns).
 export function riverCenter(s) { return -49 - 9 * Math.sin(s / 171 + .4) - 3 * Math.sin(s / 73) - 2.8 * Math.sin(s / 43 + .9); }
 export function riverHalfWidth(s) {
   const pool = poolAt(s), t = (s - pool.start) / (pool.end - pool.start);
@@ -25,16 +25,15 @@ export function riverHalfWidth(s) {
     + .28 * Math.sin(s / 4.3) + .22 * Math.sin(s / 9.1 + 2);
 }
 
-// Generate the watershed first. A positive grade and bounded level variation
-// make EVERY pool lower downstream, including negative indices and arbitrarily
-// distant chunks. There are no anchor resets or dams concealing uphill water.
+// POOL_RISE per pool outweighs the bounded jitter, so every pool is lower than
+// the one upstream at any index, negative included.
 const POOL_RISE = 3.7;
 const valleyPhase = randomAt(0, 2202) * Math.PI * 2;
 function poolBoundary(index) { return Math.round((index * POOL_SPAN + 22 + randomAt(index, 2201) * 36) / RIVER_STEP) * RIVER_STEP; }
 function poolLevel(index) {
   return 12 + index * POOL_RISE + 1.3 * Math.sin(index * 1.83 + valleyPhase) + .25 * randomAt(index, 2203);
 }
-// The road climbs the same valley smoothly, independent of the coastal hills.
+// Road climbs at the same average grade as the pools.
 export function jungleRoadHeight(s) {
   return 24 + (s - 40) * POOL_RISE / POOL_SPAN + 1.8 * Math.sin(s / 193 + valleyPhase) + .6 * Math.sin(s / 79);
 }
@@ -43,7 +42,7 @@ export function poolAt(s) {
   if (s < poolBoundary(index)) index--;
   return { index, start: poolBoundary(index), end: poolBoundary(index + 1), level: poolLevel(index), before: poolLevel(index - 1), after: poolLevel(index + 1) };
 }
-// Broken, shallow chevrons keep the sill from reading as a straight weir.
+// Uneven sill line so falls don't look like a straight weir.
 export function riverLipOffset(index, across) {
   return .85 * (Math.sin(across * 3.7 + index * 2.3) - Math.sin(index * 2.3)) + .45 * across;
 }
@@ -66,17 +65,16 @@ export function riverLips(from, to) {
   }
   return found;
 }
-// Foam strength: strong below each fall, a light drawing-in above it.
+// Foam strength: strong below each fall, light just above it.
 export function riverTurbulence(s) {
   const pool = poolAt(s);
   return Math.max(1 - smoothstep(1.5, 11 + Math.min(8, pool.after - pool.level), pool.end - s),
     .4 * (1 - smoothstep(0, 4, s - pool.start)));
 }
-// The bed anticipates each drop so the rock never rises through the falling water.
+// Bed drops early so it never pokes through the falling water.
 export function riverBedLevel(s) { return Math.min(riverLevel(s - 6), riverLevel(s), riverLevel(s + 6)); }
 
-// A few partly submerged stones split the current. Shared placement lets foam
-// wakes and instanced rock use the same position, including at chunk borders.
+// Shared by foam wakes and rock instances so both agree, including across chunks.
 export function riverRocks(from, to) {
   const rocks = [];
   for (let cell = Math.floor(from / 23) - 1; cell <= Math.floor(to / 23); cell++) {
@@ -88,8 +86,7 @@ export function riverRocks(from, to) {
   return rocks;
 }
 
-// Resolve the sill and the plunge basin in the ground mesh. Use a short band
-// of fine rows around each fall and retain coarse rows between falls.
+// Coarse rows, plus fine rows within 8 m of each fall.
 export function jungleRows(from, to) {
   const rows = new Set([from, to]);
   for (let s = Math.ceil(from / JUNGLE_STEP) * JUNGLE_STEP; s < to; s += JUNGLE_STEP) rows.add(s);
@@ -99,8 +96,7 @@ export function jungleRows(from, to) {
   }
   return [...rows].sort((a, b) => a - b);
 }
-// A sheer rock wall drops from a mossy terrace into the river along parts of
-// the gorge, opening out into lower banks between the taller falls.
+// 0 to 1 weight for a sheer gorge wall. Always 1 near tall falls.
 export function gorgeWall(s) {
   const pool = poolAt(s);
   let wall = smoothstep(.52, .82, ribbonNoise(s, 87, 2217));
@@ -110,16 +106,14 @@ export function gorgeWall(s) {
   return wall;
 }
 
-// Only protect exposed road edges: a tall gorge across a broad planted
-// terrace does not require a roadside rail.
+// Rail only where a tall wall comes close to the road.
 export function jungleGuardrail(s) {
   const rim = riverCenter(s) + riverHalfWidth(s) + 7;
   return rim > -25 && gorgeWall(s) > .65 && jungleHeight(s, rim) - riverLevel(s) > 6;
 }
 
-// Side streams come down the far hillside, pass under the road through a
-// culvert, cross the terrace and pour down the gorge wall, where it is sheer and
-// tall, clear of the river's own lips, at most one per cell.
+// Side streams cross under the road and pour down the gorge wall. At most one
+// per cell, only where the wall is sheer and tall and away from river lips.
 export const SIDE_FALL_CELL = 240;
 export function sideFalls(from, to) {
   const falls = [];
@@ -137,9 +131,8 @@ export function sideFalls(from, to) {
   return falls;
 }
 
-// Stretches of the route lean toward one character or another: palm groves,
-// bamboo thickets and tunnels of giant trees. Each weight
-// eases in and out over a few hundred metres and most of the route has none.
+// Vegetation zone weights. Each eases in over a few hundred metres and most of
+// the route has none.
 export function jungleZones(s) {
   const zone = (span, salt, from, to) => smoothstep(from, to, ribbonNoise(s, span, salt));
   return { palms: zone(173, 2601, .6, .76), bamboo: zone(149, 2602, .64, .8), giants: zone(211, 2603, .6, .76) };
@@ -147,7 +140,6 @@ export function jungleZones(s) {
 
 export function cutHeight(s) { return .5 + 4 * smoothstep(.35, .8, ribbonNoise(s, 97, 2222)); }
 
-// Mossy crags break through the undergrowth on both sides of the valley.
 export function jungleCrags(s, u) {
   const side = u < 0 ? -1 : 1, cross = Math.abs(u);
   if (cross < 24 || cross > 150) return 0;
@@ -166,7 +158,7 @@ export function jungleCrags(s, u) {
   return relief * smoothstep(24, 34, cross) * (1 - smoothstep(135, 150, cross));
 }
 
-// Two staggered ranges of forested peaks stand in the haze beyond the hills.
+// Two ranges of distant peaks on the far side.
 export function jungleMountains(s, u) {
   if (u <= 150) return 0;
   let peaks = 0;
@@ -188,7 +180,7 @@ export function jungleMountains(s, u) {
 }
 
 function bankProfile(distance, level, bed) {
-  // Water edge below the surface, a mossy rim just above it, then the bank top.
+  // Below the surface at the edge, a rim just above it, then the bank top.
   if (distance < 1.3) return lerp(bed - .7, level + .5, distance / 1.3);
   return lerp(level + .5, level + 1.1, (distance - 1.3) / 2.7);
 }
@@ -212,13 +204,13 @@ export function jungleHeight(s, u) {
   if (u >= bankTop) {
     const verge = h - .12 * smoothstep(7, 9.5, -u);
     if (u >= -9.5) return verge;
-    // A mossy slope from the verge down to the river terrace, with bumps that
-    // fade out at both ends so the verge and bank top stay exact.
+    // Slope down to the river terrace. Bumps fade out at both ends so the verge
+    // and bank top heights stay exact.
     const t = (u + 9.5) / (bankTop + 9.5), noise = jungleNoise(s, u, 13, 2212) - .5;
     const slope = lerp(verge, level + 1.1, smoothstep(0, 1, t)) + noise * 2.2 * Math.sin(t * Math.PI);
     const wall = gorgeWall(s);
     if (wall <= 0) return slope;
-    // Under a wall the face runs down past the water line, so the river laps the cliff foot.
+    // A wall runs below the water line so the river meets the cliff foot.
     const rim = bankTop + 3, top = lerp(verge, level + 1.1, .26 + .22 * ribbonNoise(s, 29, 2218));
     const cliff = u >= rim
       ? lerp(verge, top, smoothstep(0, 1, (u + 9.5) / (rim + 9.5))) + noise * 1.2 * Math.sin((u + 9.5) / (rim + 9.5) * Math.PI)
@@ -237,7 +229,7 @@ export function jungleHeight(s, u) {
   return rise + nearHills(s, u);
 }
 export const junglePosition = (s, u, y = jungleHeight(s, u)) => positionAt(s, u, y);
-// Water covers the channel, and under a gorge wall it reaches the cliff foot.
+// Under a gorge wall the water extends to the cliff foot.
 export function onRiver(s, u, margin = 0) {
   const rc = riverCenter(s), hw = riverHalfWidth(s);
   return u > rc - hw - margin && u < rc + hw + margin + 3.2 * gorgeWall(s);
@@ -247,8 +239,7 @@ export function jungleColumns(s) {
   const rc = riverCenter(s), hw = riverHalfWidth(s), bankTop = rc + hw + 4, farTop = rc - hw - 4;
   const near = [-9.5, -12.5, lerp(-12.5, bankTop + 3, .4), lerp(-12.5, bankTop + 3, .75), bankTop + 3, bankTop, rc + hw + 1.3, rc + hw, rc + hw * .5, rc, rc - hw * .5, rc - hw, rc - hw - 1.3, farTop,
     lerp(farTop, -95, .33), lerp(farTop, -95, .66), -95];
-  // The foreground is close to the camera even far from the road. Keep its
-  // facets compact instead of stretching them across ever-wider columns.
+  // Camera-side columns stay 12 m apart because that ground is close to the camera.
   for (let u = -107; u > -436; u -= 12) near.push(u);
   near.push(-436);
   const far = [9.5, 12.5, 15, 17.5, 21, 26, 32, 39, 47, 56, 66, 78, 92, 108, 126, 146, 168, 192, 218, 246, 276, 308, 342, 378, 416, 456, 500];
@@ -259,20 +250,19 @@ export function jungleVertex(row, column) {
   const baseS = row * JUNGLE_STEP, base = jungleColumns(baseS)[column];
   const road = Math.abs(base) <= 7;
   const river = base > riverCenter(baseS) - riverHalfWidth(baseS) - 4.5 && base < riverCenter(baseS) + riverHalfWidth(baseS) + 4.5;
-  // Aligned longitudinal stations also allow fine rows around a waterfall
-  // without folding the neighboring terrain; crosswise jitter keeps facets irregular.
+  // No jitter along s so fine waterfall rows don't fold the terrain.
+  // Jitter across keeps facets irregular.
   const s = baseS;
   const columns = jungleColumns(s);
   const gap = Math.min(columns[column] - (columns[column - 1] ?? columns[column] - 40), (columns[column + 1] ?? columns[column] + 40) - columns[column]);
   const u = columns[column] + (road || river ? 0 : (randomAt(row, column + 2262) - .5) * Math.min(7, gap * .42));
   const p = junglePosition(s, u);
   const cross = Math.abs(u);
-  // Softer ground relief on the camera side; the distant hills retain larger
-  // bumps that read as treetops.
+  // Smaller bumps on the camera side. Larger ones on far hills read as treetops.
   if (!river) p.y += (randomAt(row, column + 2263) - .5) * (.9 * smoothstep(12, 30, cross) * (1 - smoothstep(100, 130, cross)) + (u < 0 ? 1.8 : 4.6) * smoothstep(100, 140, cross));
   return { ...p, s, u, column };
 }
 
-// Keep the car on the narrow river-side verge, including unguarded stretches.
+// Bounds keep the car on the river-side verge even where there is no rail.
 export const jungleDrivingRoute = { frame: s => ({ ...roadFrame(s), y: jungleRoadHeight(s) }), position: junglePosition, height: jungleHeight, bounds: () => [-6.9, 8.8],
   water: (s, u) => onRiver(s, u, 1) };

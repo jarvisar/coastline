@@ -54,7 +54,6 @@ function batch(group, source, material, items, name) {
   computeInstanceBounds(mesh); group.add(mesh);
 }
 
-// Flat triangular leaves form the spiky silhouettes of yuccas and Joshua trees.
 const leafPositions = [];
 for (let i = 0; i < 31; i++) {
   const angle = i * 2.399963;
@@ -65,7 +64,6 @@ for (let i = 0; i < 31; i++) {
 }
 const leafGeometry = geometry(leafPositions);
 
-// Broad, folded leaves give the agaves a different silhouette from fine yuccas.
 const agavePositions = [];
 for (let i = 0; i < 13; i++) {
   const angle = i * 2.399963, x = Math.cos(angle), z = Math.sin(angle);
@@ -78,7 +76,6 @@ for (let i = 0; i < 13; i++) {
 }
 const agaveGeometry = geometry(agavePositions);
 
-// Bent, narrow blades catch the light around the reference's scrub pockets.
 const grassPositions = [];
 for (let i = 0; i < 17; i++) {
   const angle = i * 2.399963, x = Math.cos(angle), z = Math.sin(angle);
@@ -89,7 +86,6 @@ for (let i = 0; i < 17; i++) {
 }
 const grassGeometry = geometry(grassPositions);
 
-// Uneven rings make broad broken slabs with sloping fracture faces.
 const slabPositions = [];
 const slabRings = [[-.35, .93], [.08, 1.08], [.48, .68]].map(([y, radius], layer) =>
   Array.from({ length: 7 }, (_, i) => {
@@ -101,7 +97,7 @@ for (let i = 0; i < 7; i++) {
   const next = (i + 1) % 7;
   for (let layer = 0; layer < 2; layer++) {
     const a = slabRings[layer][i], b = slabRings[layer][next], c = slabRings[layer + 1][i], d = slabRings[layer + 1][next];
-    // Counterclockwise rings viewed from above; wall winding faces outward.
+    // Rings run counterclockwise from above, so this winding faces outward.
     triangle(slabPositions, null, a, c, b, null, 0, false);
     triangle(slabPositions, null, b, c, d, null, 0, false);
   }
@@ -117,8 +113,7 @@ export class DesertChunk {
     this.index = index; this.start = index * CHUNK_LENGTH; this.group = new THREE.Group(); this.owned = []; this.vertices = new Map();
     this.group.name = `desert-chunk-${index}`;
     this.discoveries = desertDiscoveries(this.start - 40, this.start + CHUNK_LENGTH + 40);
-    // A row uses only two column profiles (road and jittered terrain), shared
-    // by all its vertices. Keep this cache local to the chunk's construction.
+    // Each row needs only two column profiles. Cache them for construction only.
     const columns = new Map();
     this.sampleColumns = s => {
       if (!columns.has(s)) columns.set(s, desertColumns(s));
@@ -139,8 +134,8 @@ export class DesertChunk {
   }
   clearDiscoveryFootprints() {
     if (!this.discoveries.length) return;
-    // Filter existing instances after generation so unrelated scenery retains
-    // exactly the same seeded sequence. Neighboring chunks clear the same site.
+    // Filter after generation so the seeded sequence for other scenery is unchanged.
+    // Neighbouring chunks clear the same site.
     const position = new THREE.Vector3(), scale = new THREE.Vector3(), rotation = new THREE.Quaternion();
     const matrix = new THREE.Matrix4(), color = new THREE.Color();
     const footprints = this.discoveries.map(site => {
@@ -154,7 +149,7 @@ export class DesertChunk {
       const s=site.s+(dx*nz-dz*nx)/scale,u=dx*nx+dz*nz;
       return !desertDiscoveryClears(s,u,[site],radius+2);
     });
-    // A tree cleared from a site takes its footprint with it.
+    // Drop colliders for cleared trees too.
     if (this.features?.colliders) this.features.colliders = this.features.colliders.filter(solid => !cleared(solid.x,solid.z+this.start,solid.reach*1.3));
     this.group.traverse(object => {
       if (!object.isInstancedMesh) return;
@@ -179,7 +174,7 @@ export class DesertChunk {
     return this.vertices.get(key);
   }
   groundPosition(s, u) {
-    // Plant on the rendered triangles, including broken shelves and chunk edges.
+    // Height from the rendered triangles, not the analytic surface.
     const columns = desertColumns(s);
     const column = Math.max(0, columns.findIndex(value => value > u) - 1);
     const row = Math.floor(s / DESERT_STEP);
@@ -230,7 +225,7 @@ export class DesertChunk {
           if (bank < 3.4) {
             color = new THREE.Color(bank < .4 ? '#a59470' : bank < 1.8 ? '#c4a579' : '#d4ad78').multiplyScalar(.95 + facet * .1);
           } else if (distance > -4 && steepness > .24) {
-            // Give an entire vertical face a related color instead of noisy strata.
+            // One colour per 24 m of wall so faces don't look noisy.
             const block = Math.floor(randomAt(Math.floor(s / 24), Math.sign(u) + 393) * stone.length);
             color = new THREE.Color(stone[block]).multiplyScalar(.97 + facet * .06);
           } else if (Math.abs(u - dryWashCenter(s)) < dryWashWidth(s)) {
@@ -264,14 +259,12 @@ export class DesertChunk {
       const rings = layers.map(([height, radius], layer) => Array.from({ length: sides }, (_, i) => {
         const angle = i / sides * Math.PI * 2;
         const erosion = layer === 0 ? 1 : 1 + (randomAt(mesa.seed + layer, i + 572) - .5) * .11;
-        // Squared shoulders and wide caps give the buttes a broken mesa silhouette.
         const sin = Math.sin(angle), cos = Math.cos(angle);
         const along = broad ? Math.sign(sin) * Math.abs(sin) ** .58 : sin;
         const across = broad ? Math.sign(cos) * Math.abs(cos) ** .58 : cos;
         const s = mesa.s + along * mesa.rs * radius * shape[i] * erosion;
         const u = mesa.u + across * mesa.ru * radius * shape[i] * erosion;
-        // The same height variation at every level keeps thin ledges from
-        // crossing each other while still breaking up their horizontal edges.
+        // Same per-vertex height jitter on every layer so thin ledges never cross.
         const y = layer === 0 ? Math.min(base, desertHeight(s, u) - 1) : base + height * mesa.height * (1 + (randomAt(mesa.seed, i + 16) - .5) * .03);
         return desertPosition(s, u, y);
       }));
@@ -329,8 +322,7 @@ export class DesertChunk {
       const p = this.groundPosition(s, u); const size = .35 + random() ** 2 * 3.5;
       stones.push({ p: [p.x, p.y + size * .35, p.z + this.start], scale: [size, size * (.6 + random() * .8), size * .82], r: [random() * .25, random() * 6, random() * .4], color: stoneColors[Math.floor(random() * stoneColors.length)] });
     }
-    // Continuous rockfall aprons and fractured blocks tie both canyon walls
-    // into the valley floor, with occasional larger pieces on the ledges.
+    // Rockfall along the foot of both canyon walls, some pieces on the ledges.
     for (let s = this.start; s < this.start + CHUNK_LENGTH; s += 6) {
       for (const side of [-1, 1]) {
         const t = s + random() * 3;
@@ -422,7 +414,7 @@ export class DesertChunk {
     instances(this.group, agaveGeometry, plantMaterial, agaves);
   }
   buildReferenceDetails() {
-    // Independent seed keeps the established scenery in exactly the same places.
+    // Own seed so adding these doesn't move the other scenery.
     const random = seededRandom(this.index + 98173);
     const trunks = [], foliage = [], scrub = [], grasses = [], slabs = [], gravel = [];
     const greens = ['#7e8645', '#8e934d', '#a0a35a', '#727d47'];
@@ -442,7 +434,6 @@ export class DesertChunk {
       const direction = b.clone().sub(a);
       trunks.push({ p: a.clone().add(b).multiplyScalar(.5).toArray(), scale: [radius, direction.length(), radius], q: new THREE.Quaternion().setFromUnitVectors(up, direction.normalize()) });
     };
-    // Small, twisting leafy trees complement the existing spiky Joshua trees.
     for (let i = 0; i < 9; i++) {
       const s = this.start + 6 + random() * (CHUNK_LENGTH - 12);
       const side = i % 2 ? -1 : 1;
@@ -464,7 +455,6 @@ export class DesertChunk {
         }
       }
     }
-    // Broad slabs sit in little groups, with chips spilling into nearby sand.
     for (let i = 0; i < 12; i++) {
       const s = this.start + 8 + random() * (CHUNK_LENGTH - 16), side = i % 2 ? -1 : 1;
       const u = side * (i < 8 ? 19 + random() * 25 : canyonProfile(s, side).foot + 43 + random() * 12);
@@ -483,7 +473,6 @@ export class DesertChunk {
         gravel.push({ p: p.toArray(), scale: [size, size * .6, size * .8], r: [.15, random() * 6, .2], color: stoneColors[j % stoneColors.length] });
       }
     }
-    // Vegetation grows in scattered pockets, leaving open sand between them.
     for (let i = 0; i < 42; i++) {
       const s = this.start + 5 + random() * (CHUNK_LENGTH - 10), side = i % 2 ? -1 : 1;
       const u = side * (i % 4 ? 12 + random() * 31 : canyonProfile(s, side).foot + 43 + random() * 20);
@@ -524,8 +513,7 @@ export class DesertChunk {
       const direction = b.clone().sub(a);
       branches.push({ p: a.clone().add(b).multiplyScalar(.5).toArray(), scale: [radius, direction.length(), radius], q: new THREE.Quaternion().setFromUnitVectors(up, direction.normalize()) });
     };
-    // Each pocket reads as a little composition: a fractured outcrop, smaller
-    // fallen pieces, one sculptural tree, then low plants fading back into sand.
+    // Each pocket: an outcrop, loose chips, one large tree, then low plants.
     for (let garden = 0; garden < 6; garden++) {
       let s, u, found = false;
       for (let attempt = 0; attempt < 9; attempt++) {
@@ -552,7 +540,6 @@ export class DesertChunk {
         p.y += size * .25;
         chips.push({ p: p.toArray(), scale: [size, size * .8, size * .7], r: [.2, angle, .1], color: stone[i % stone.length] });
       }
-      // Larger, uneven Joshua silhouettes make the near side feel like foreground.
       const treeS = s - 5 - random() * 3, treeU = u - 5 - random() * 3;
       if (garden !== 3 && suitable(treeS, treeU, 2.8)) {
         const root = at(treeS, treeU); root.y -= .2;

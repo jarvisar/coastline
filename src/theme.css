@@ -1,6 +1,5 @@
-/* Shared surface colors belong to the route, including sticky headers and
-   nested settings. Keep these together so a dark route never inherits a light
-   panel behind its light text. Component files own shape and layout. */
+/* All route surface colours live here so a dark route never gets a light
+   panel behind light text. Component files own shape and layout. */
 body {
   color-scheme: light;
   --surface: #f6f5ea;
@@ -11,9 +10,8 @@ body {
   --line: #a0afa3;
   --ui-line: var(--line);
   --surface-glass: color-mix(in srgb, var(--surface) 96%, transparent);
-  /* Driving overlays let the scenery show through, as they did before the
-     shared theme, while their text keeps 4.5:1 over black or white scenery.
-     Menus and the stick caption's muted line keep the near-solid glass. */
+  /* Driving overlays are more see-through but keep 4.5:1 text contrast over
+     black or white scenery. Menus and the stick caption use --surface-glass. */
   --surface-hud: color-mix(in srgb, var(--surface) 82%, transparent);
 }
 body[data-journey=desert] {
@@ -71,8 +69,7 @@ body[data-journey] :is(.graphics-settings, .audio-mixer) { background: var(--sur
 body[data-journey] .panel-switch { border-color: var(--muted); }
 body[data-journey] .panel-toggle[aria-pressed=true] .panel-switch { border-color: var(--ink); }
 body[data-journey] .start-button:hover { background: var(--action-hover); }
-/* The title screen has a light primary action in every route. Give the
-   gradient a solid base, too, for consistent contrast and forced colors. */
+/* Light on every route. Solid base under the gradient for forced colours. */
 #welcome .start-button { background-color: #f4f0e4; }
 
 body[data-journey] :is(.drive-actions, .controls, #stick-help, #toast, #vr-error) {
@@ -92,8 +89,7 @@ body[data-journey] #stick-help .dismiss-control-help { background: var(--surface
 body[data-journey] #stick-help .dismiss-control-help:hover { background: var(--surface-hover); }
 body[data-journey] :is(.error, #journey-transition) { color: var(--ink); background: var(--surface); }
 
-/* Muted copy uses an explicit contrasting color, not opacity multiplied
-   through translucent panels and the scenery behind them. */
+/* Muted text uses an explicit colour. Opacity compounds through translucent panels. */
 body[data-journey] :is(.chooser-intro, .chooser-card-description, .chooser-note,
   .paint-current, .paint-note, .paint-shop h3, .garage-subheading, .car-meter,
   .panel-button-value, .audio-mixer-toggle small, .graphics-toggle small,

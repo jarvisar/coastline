@@ -1,6 +1,5 @@
-// Longer, independent stereo textures. Road noise has contact grains and
-// irregular density, wind has slow pressure movement, and rain has many small
-// overlapping droplets. They no longer share the same pink-noise fingerprint.
+// 8 second stereo loops, each kind seeded separately so they don't share a noise pattern.
+// The last .12 s is crossfaded into the start for a seamless loop.
 export function createTextureBuffer(ctx, kind) {
   const rate = ctx.sampleRate, length = Math.round(rate * 8), overlap = Math.round(rate * .12);
   const buffer = ctx.createBuffer(2, length, rate);

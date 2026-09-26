@@ -11,8 +11,7 @@ const steel = '#8b9caf', wood = '#8b725c', snow = '#d3dfeb';
 export function alpineRelay(index) {
   if ((index % 3 + 3) % 3 !== 0) return null;
   const summit = summitForCell(index), start = Math.floor(summit.s / CHUNK_LENGTH) * CHUNK_LENGTH;
-  // Keep the entire compound on its owning terrain mesh, including when the
-  // summit happens to fall right on a streaming boundary.
+  // Keep the compound on its own chunk's terrain, even when the summit sits on a boundary.
   return { ...summit, s: Math.max(start + 14, Math.min(start + CHUNK_LENGTH - 14, summit.s)) };
 }
 
@@ -25,8 +24,8 @@ export function nearAlpineRelay(s, u, radius = 0) {
   return false;
 }
 
-// Most cabins keep a quiet, undeveloped shore. A few have an old fishing
-// landing, in the same seeded world positions on either direction of travel.
+// A few cabins get a fishing landing, seeded by world position so both travel
+// directions agree.
 export function alpineLanding(index) {
   if ((index % 3 + 3) % 3 !== 0 || randomAt(index, 954) < .18) return null;
   const cabin = alpineCabin(index);
@@ -53,7 +52,6 @@ function buildRelay(chunk, site) {
   const heightAt = (x, z) => { const p = at(x, 0, z); return ground(p.x, p.z) ?? snowGroundHeight(site.s - z, site.u + x); };
   const hutTop = Math.max(...[-2.8, 2.8].flatMap(x => [-2.7, 2.7].map(z => heightAt(x, z)))) + .35;
   const box = (x, y, z, size, color, glow = 0) => parts.box(at(x, y, z), size, color, rotation, glow);
-  // A snow-loaded stone service hut anchors the delicate steel silhouette.
   const foundation = Math.min(...[-2.9, 2.9].flatMap(x => [-2.8, 2.8].map(z => heightAt(x, z)))) - .6;
   box(0, (foundation + hutTop) / 2, 0, [5.8, hutTop - foundation, 5.6], '#526071');
   box(0, hutTop + 1.9, 0, [5.4, 3.8, 5.2], '#687486');
@@ -90,8 +88,7 @@ function buildRelay(chunk, site) {
       parts.beam(a[next], b[side], .06, steel);
     }
   }
-  // Two pale microwave dishes, antenna panels and a small red obstruction
-  // lamp read from the road without adding a shadow-casting point light.
+  // The red obstruction lamp is emissive so it needs no shadow-casting point light.
   for (const [h, z, radius] of [[height - 5, 1.25, 1.2], [height - 11, -1.6, .9]]) {
     parts.beam(at(towerX, base + h, 0), at(towerX - 1.35, base + h, z), .09, steel);
     parts.add(new THREE.CylinderGeometry(radius, radius * .78, .38, 10), at(towerX - 1.45, base + h, z), '#b2c2d2', [0, yaw, Math.PI / 2]);
@@ -116,7 +113,6 @@ function buildLanding(chunk, site) {
     const x = -(i + .5) * pitch;
     const width = i >= boards - 5 ? 5.2 : 3.1;
     box(x, deck, 0, [pitch - .035, .19, width], i % 4 ? wood : '#a08a70');
-    // Broken edge drifts leave the warm timber visible through the snow.
     if (i % 5 < 3) box(x, deck + .13, width / 2 - .26, [pitch, .08, .48], snow);
   }
   for (let x = -.3; x > -length; x -= 4.4) for (const z of [-1.35, 1.35]) {
@@ -127,7 +123,6 @@ function buildLanding(chunk, site) {
     box(x, deck + .69, z, [.31, .1, .31], snow);
     footings.push({ x: p.x, z: p.z, ground: y, bottom, top: deck + .64 });
   }
-  // A bench, tackle box, two resting rods, and one lantern at the landing head.
   box(-length + 1.6, deck + .64, 1.75, [2.3, .18, .62], '#9b8267');
   for (const x of [-length + .75, -length + 2.45]) box(x, deck + .31, 1.75, [.16, .6, .5], '#675b50');
   box(-length + 2.8, deck + .33, -.85, [.7, .5, .55], '#935d47');

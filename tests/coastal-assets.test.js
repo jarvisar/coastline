@@ -59,12 +59,11 @@ test('sculpted cliff faces do not fold over their neighbors on either side of th
 
 test('reshaping the coastline preserves the original driving limits', () => {
   for (let s = -2000; s < 12000; s += 23) {
-    // Headlands changed how the coast looks, never how far the car may go: the
-    // open limit still comes from the original curve, not the reshaped one.
+    // Headlands reshape the coast, but the open limit still follows the original curve.
     const originalCoast = -28 - 8 * Math.sin(s / 107 + .8) - 4 * Math.sin(s / 43) - 3 * Math.sin(s / 23 + 2);
     const bridge = Math.abs(s - bridgeAt(s).center) < 49;
     const open = Math.max(originalCoast + 6, -COAST_VERGE.ocean);
-    // A guardrail is the one thing that stops the car sooner than the open shoulder.
+    // Only a guardrail stops the car before the open shoulder.
     const expected = bridge ? [-4.65, 4.65] : [coastalGuardrail(s) ? Math.max(open, GUARDRAIL_STOP) : open, COAST_VERGE.inland];
     assert.deepEqual(coastalDrivingRoute.bounds(s), expected);
   }
@@ -74,7 +73,7 @@ test('the wider verges stay on drivable ground, clear of the cliffs and the pond
   const { bounds, height } = coastalDrivingRoute;
   for (let s = -8000; s < 12000; s += 5) {
     const [ocean, inland] = bounds(s);
-    // Everything past the old limits, out to wherever the car may now stand.
+    // Sample from the old limits out to the new verge edge.
     for (let u = ocean; u < -15; u += .5) assert.ok(Math.abs(height(s, u + .5) - height(s, u)) < .4, `cliff inside the ocean verge at ${s}, ${u}`);
     for (let u = 17; u <= inland; u += .5) {
       assert.ok(Math.abs(height(s, u + .5) - height(s, u)) < .5, `steep ground inside the inland verge at ${s}, ${u}`);
@@ -121,8 +120,7 @@ test('paved overlooks sit above the rendered terrain through entrances and strea
           const center = new THREE.Vector3();
           for (let j = 0; j < 3; j++) center.add(new THREE.Vector3().fromBufferAttribute(p, i + j));
           center.multiplyScalar(1 / 3);
-          // The terrain boundary is intentionally jittered; a road triangle
-          // near that seam can sit over the neighboring streamed chunk.
+          // The chunk seam is jittered, so a triangle near it can sit over the neighbour.
           const ground = neighbors.map(c => c.sampleGround(center.x, center.z - chunk.start + c.start)).find(y => y !== null);
           assert.notEqual(ground, undefined);
           assert.ok(center.y > ground + .01, `terrain covers pavement at ${chunkIndex}`);

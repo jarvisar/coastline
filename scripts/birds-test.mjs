@@ -11,7 +11,7 @@ try {
   await page.goto(process.env.TEST_URL ?? 'http://127.0.0.1:5173/?seed=4817');
   await page.waitForFunction(() => window.__coastline && document.querySelector('#loading').classList.contains('loaded'));
   await page.click('#start');
-  // Compile each actual material in its scene, including instancing and normals.
+  // Load each flock in its scene so the real materials compile.
   for (const [journey, s, name] of [['coast', 64, 'coastal-gulls'], ['plains', 176, 'plains-crows'], ['jungle', 64, 'jungle-parrots']]) {
     await page.evaluate(async ({ journey, s }) => {
       const app = window.__coastline;
@@ -22,8 +22,7 @@ try {
     await page.waitForFunction(name => !!window.__coastline.rendering.scene.getObjectByName(name), name);
     await page.waitForTimeout(500);
   }
-  // Read the shared flight functions from the GPU. This catches incorrect
-  // matrix conventions as well as synchronized beats that a still image misses.
+  // Run the flight GLSL through transform feedback to check orientation and flap timing.
   const result = await page.evaluate(async () => {
     const { birdFlightGLSL } = await import('/src/world/bird-flight.js');
     const gl = document.createElement('canvas').getContext('webgl2');

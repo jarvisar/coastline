@@ -4,12 +4,11 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { registerChunkResources } from './chunk-resources.js';
 import { waterClock } from './water.js';
 
-// Bake the small details and muted colours into shared, flat-shaded meshes.
+// Merges vertex-coloured parts into one shared flat-shaded geometry.
 class Parts {
   constructor() { this.parts = []; }
   add(source, position, color, rotation = [0, 0, 0]) {
-    // A colour in the segment-count slot yields a geometry with no vertices,
-    // which merges away silently and leaves a part missing from the scene.
+    // A colour passed as a segment count gives an empty geometry that merges away silently.
     if (typeof color !== 'string') throw new Error(`Part colour must be a string, got ${typeof color}`);
     if (!source.attributes.position.count) throw new Error('Part geometry has no vertices');
     let g = source;
@@ -30,18 +29,14 @@ class Parts {
     g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.normalize()));
     this.add(g, from.add(to).multiplyScalar(.5).toArray(), color);
   }
-  // A closed pitched roof with a shared ridge and two gable triangles.
-  // Turned, the ridge runs along x rather than z, which is how a dormer faces
-  // out of the roof it stands in.
+  // Closed pitched roof with two gable ends. `turned` runs the ridge along x, for dormers.
   gable(p, width, length, wallHeight, ridgeHeight, wall, roof, overhang = .35, turned = false) {
     const [x, y, z] = p, rise = ridgeHeight - wallHeight, half = width / 2;
     const eave = wallHeight - rise * overhang / half + .22;
     const shell = roofShell([[-half - overhang, eave], [0, ridgeHeight + .22], [half + overhang, eave]], length + overhang * 2);
     if (turned) shell.rotateY(Math.PI / 2);
     this.add(shell, p, roof);
-    // Each end is wound to face out of the building. Wound both the same way
-    // round, one of them is a back face and is culled, and the roof then
-    // stands over a gable you can see the far wall through.
+    // Wind each end to face outward, or one of them is back-face culled.
     const ends = [];
     for (const end of [-1, 1]) {
       const corner = (height, across) => turned ? [x + end * length / 2, height, z + across] : [x + across, height, z + end * length / 2];
@@ -52,14 +47,13 @@ class Parts {
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(ends, 3));
     g.computeVertexNormals(); this.add(g, [0, 0, 0], wall);
   }
-  // A gambrel: the barn roof that breaks halfway up, steep at the eaves and
-  // shallow over the ridge. The pitches meet along shared edges.
+  // Gambrel barn roof: steep at the eaves, shallow over the ridge.
   gambrel(p, width, length, wallHeight, kneeHeight, ridgeHeight, wall, roof, overhang = .35) {
     const [x, y, z] = p, half = width / 2, knee = half * .62;
     const eave = wallHeight - overhang * (kneeHeight - wallHeight) / (half - knee);
     this.add(roofShell([[-half - overhang, eave + .24], [-knee, kneeHeight + .24], [0, ridgeHeight + .24],
       [knee, kneeHeight + .24], [half + overhang, eave + .24]], length + overhang * 2, .24), p, roof);
-    // As with the gable, each end is wound to face out of the barn.
+    // Ends wound outward, as in gable().
     const ends = [];
     for (const end of [-1, 1]) {
       const zEnd = z + end * length / 2;
@@ -79,21 +73,17 @@ class Parts {
 }
 const barnRed = '#a6412f', trim = '#e8e0cc', shingle = '#5e4d45', tin = '#8f9594', galvanised = '#c3c7c2', iron = '#5a5e5a';
 
-// A gambrel barn with a sliding door, a hayloft door and a ridge vent. Local
-// z runs along the ridge; the door faces -x, toward the yard.
+// Local z runs along the ridge. The door faces -x, toward the yard.
 function barn() {
   const p = new Parts();
   p.box([0, 2.2, 0], [7.4, 4.4, 12], barnRed);
   p.gambrel([0, 0, 0], 7.4, 12, 4.4, 6.6, 8.1, barnRed, shingle);
-  // White corner boards and a sill band, as the reference barns carry.
   for (const z of [-6, 6]) for (const x of [-3.72, 3.72]) p.box([x, 2.2, z], [.2, 4.4, .2], trim);
   for (const x of [-3.74, 3.74]) p.box([x, .18, 0], [.16, .36, 12], trim);
-  // Board-and-batten siding catches the light on the long walls.
   for (const x of [-3.73, 3.73]) for (let z = -5.5; z < 6; z += .75) {
     if (x < 0 && z > -.6 && z < 3.4) continue;
     p.box([x, 2.3, z], [.08, 4.1, .07], '#bd5940');
   }
-  // A big sliding door on the yard side, with its track and a hayloft door.
   p.box([-3.76, 1.75, 1.4], [.14, 3.5, 3.6], '#38291f');
   for (const z of [-.45, 3.25]) p.box([-3.84, 1.75, z], [.07, 3.5, .2], trim);
   p.box([-3.84, 3.55, 1.4], [.07, .22, 3.9], trim);
@@ -102,18 +92,15 @@ function barn() {
     p.beam([-3.88, .16, z - .8], [-3.88, 3.3, z + .8], .045, trim);
     p.beam([-3.88, .16, z + .8], [-3.88, 3.3, z - .8], .045, trim);
   }
-  // The hayloft door belongs high on the gable end, under the ridge. On the
-  // side wall it stood above the eaves, hanging in the air outside the roof.
+  // Hayloft door goes on the gable end. The side walls stop below its height.
   p.box([0, 5.6, -6.05], [1.5, 1.6, .07], '#38291f');
   p.box([0, 6.52, -6.18], [1.8, .18, .32], '#6b5a4a');
-  // Ridge cupola with a little vent roof.
   p.box([0, 8.45, -1], [1.3, .9, 1.7], barnRed);
   p.box([0, 8.98, -1], [1.7, .2, 2.1], shingle);
   p.box([0, 9.3, -1], [.16, .5, .16], '#5d5348');
   for (const z of [-3.6, 4.6]) p.box([3.76, 2.9, z], [.08, 1.1, 1.3], '#4b3b33');
   return p.finish();
 }
-// A tower silo beside the barn, with hoops, a domed cap and a ladder.
 function silo() {
   const p = new Parts();
   p.cylinder([0, 5.5, 0], 2.3, 2.3, 11, galvanised, 12);
@@ -124,21 +111,13 @@ function silo() {
   for (let y = .6; y < 11; y += .55) p.box([0, y, 2.42], [.66, .05, .05], iron);
   return p.finish();
 }
-// A modest clapboard farmhouse with a porch and a chimney.
 function farmhouse() {
   const p = new Parts(), wall = '#eee7d4', roofShade = '#5c5a58';
   p.box([0, 1.7, 0], [6.2, 3.4, 8], wall);
   p.gable([0, 0, 0], 6.2, 8, 3.4, 6.1, wall, roofShade);
-  // Two dormers face the yard, which is what makes it read as a farmhouse
-  // rather than another shed. A dormer has to clear the roof over its whole
-  // footprint: set too far up the pitch, the roof closes over its inner half
-  // and what is left reads as a hole punched in the slates.
-  // The roof it stands in is a slab a quarter of a unit thick, lifted clear
-  // of the rafter line it follows, so a dormer has to clear that surface and
-  // not merely the pitch beneath it.
-  // Its ridge runs out of the roof rather than along it, and it reaches far
-  // enough back that the ridge dies into the pitch instead of standing a
-  // second gable up out of the slates behind the window.
+  // Dormers must clear the roof slab (0.25 thick, lifted above the rafter line)
+  // over their whole footprint, or the roof cuts through them. Their ridges
+  // reach back far enough to die into the pitch.
   for (const z of [-2.2, 2.2]) {
     p.box([-1.7, 4.45, z], [2.26, 1.6, 1.5], wall);
     p.gable([-1.7, 0, z], 1.5, 2.26, 5.25, 5.85, wall, roofShade, .12, true);
@@ -146,13 +125,11 @@ function farmhouse() {
   }
   p.box([1.7, 5.9, -2.4], [.72, 2.4, .72], '#96604a');
   p.box([1.7, 7.15, -2.4], [.86, .22, .86], '#7d5040');
-  // A deep porch along the front, with posts and a rail. Its roof reaches
-  // back to the wall and falls away from it: cut short it hung in the air
-  // beside the house, and pitched the other way it climbed as it went out.
+  // Porch roof meets the wall and slopes down away from it.
   p.box([-4.05, 1.36, 0], [2, .2, 8], '#cdc2a8'); p.box([-4.05, .78, 0], [2, .92, 8], '#b9ad92');
   p.box([-4.25, 2.84, 0], [2.54, .14, 8.2], roofShade, [0, 0, .166]);
   for (const z of [-3.6, -1.2, 1.2, 3.6]) p.box([-4.9, 2.1, z], [.14, 1.28, .14], wall);
-  // Leave a real opening in the porch rail above the front steps.
+  // Gap in the porch rail above the front steps.
   for (const [z, length] of [[-3.65, .7], [.65, 5.5]]) {
     p.box([-4.9, 1.95, z], [.1, .1, length], wall);
     for (let at = z - length / 2; at <= z + length / 2; at += .45) p.box([-4.9, 1.7, at], [.065, .5, .065], wall);
@@ -170,8 +147,7 @@ function farmhouse() {
   for (const z of [-4.02, 4.02]) for (const x of [-3.08, 3.08]) p.box([x, 1.7, z], [.16, 3.4, .14], trim);
   return p.finish();
 }
-// A farm windmill: a braced tower with a platform and tail vane. The rotor
-// is a separate mesh that spins in its own material.
+// The rotor is a separate mesh that spins in its own material.
 function windmillTower() {
   const p = new Parts(), corners = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
   for (let i = 0; i < 4; i++) {
@@ -200,7 +176,6 @@ function windmillRotor() {
   p.cylinder([0, 0, .02], .2, .2, .2, '#8a4a38', 8, [Math.PI / 2, 0, 0]);
   return p.finish();
 }
-// A red tractor parked in the yard, big rear wheels and a chimney stack.
 function tractor() {
   const p = new Parts(), red = '#c04532', tyre = '#33393a';
   p.box([0, .95, .2], [1.05, .7, 2.4], red);
@@ -214,8 +189,6 @@ function tractor() {
   for (const x of [-.55, .55]) p.cylinder([x, .42, -1.3], .42, .42, .3, tyre, 8, [0, 0, Math.PI / 2]);
   return p.finish();
 }
-// A timber field shed under a rusting tin roof: the outbuilding that stands
-// in a corner of a field, well short of a farmstead.
 function fieldShed() {
   const p = new Parts(), board = '#8f816b', roof = '#7f6b5b';
   p.box([0, 1.6, 0], [5.2, 3.2, 7.4], board);
@@ -224,8 +197,6 @@ function fieldShed() {
   for (const z of [-3.7, 3.7]) for (const x of [-2.6, 2.6]) p.box([x, 1.6, z], [.16, 3.2, .16], '#a99b81');
   return p.finish();
 }
-// A country grain elevator: a tin-clad shed with a tall wood elevator tower
-// and headhouse, a leg up its side, and two steel bins with cone roofs.
 function grainElevator() {
   const p = new Parts(), clad = '#d5cfbf', wood = '#c4b9a3';
   p.box([0, 2.7, 0], [7, 5.4, 12], clad);
@@ -247,7 +218,6 @@ function grainElevator() {
   p.box([3.2, 1.4, 8.6], [4.2, 2.8, 3.4], clad); p.box([3.2, 2.9, 8.6], [4.6, .2, 3.8], tin);
   return p.finish();
 }
-// A wind turbine: a tapered tower with its nacelle; the rotor spins separately.
 function turbineTower() {
   const p = new Parts(), white = '#e7e9e4';
   p.cylinder([0, 19, 0], .78, 1.35, 38, white, 10);
@@ -278,8 +248,8 @@ export const plainsDiscoveryAssets = { barn: barn(), silo: silo(), farmhouse: fa
   tractor: tractor(), grainElevator: grainElevator(), turbineTower: turbineTower(), turbineRotor: turbineRotor(), shed: fieldShed(), box: new THREE.BoxGeometry(1, 1, 1) };
 export const plainsDiscoveryMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 1 });
 export const plainsFoundationMaterial = new THREE.MeshStandardMaterial({ color: '#b1a892', roughness: 1, flatShading: true });
-// Rotors turn about their own local z in the vertex shader, off the shared
-// water clock, so the whole row of turbines animates in one draw call.
+// Rotors spin about local z in the vertex shader, off the shared water clock,
+// so a whole row animates in one draw call.
 function rotorMaterial(rate, key) {
   const result = plainsDiscoveryMaterial.clone();
   result.onBeforeCompile = shader => {

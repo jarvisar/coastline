@@ -16,8 +16,7 @@ try {
   async function checkLayout(name) {
     const issues = await page.evaluate(() => {
       const failures = [];
-      // Subpixel layout reports a 44 px control as 43.999… often enough to
-      // flake, so compare against the target size with a hair of tolerance.
+      // Subpixel layout can report 44 px as 43.999, so allow a little slack.
       const TARGET = 44 - .05;
       const selectors = document.querySelector('#welcome').classList.contains('hidden') ? ['#pause', '#change-journey', '#view', '#reset'] : ['#change-journey', '#start'];
       const rects = selectors.map(selector => ({ selector, rect: document.querySelector(selector).getBoundingClientRect() }));
@@ -54,12 +53,10 @@ try {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.locator('#start').tap();
   await page.waitForTimeout(1000);
-  // Starting now hands over the welcome screen's moving car. The deadzone
-  // check below needs a stationary car; reset before testing joystick input.
+  // Start keeps the welcome screen's moving car. The deadzone check needs it stopped.
   await page.evaluate(() => window.__coastline.action('reset'));
   await page.waitForFunction(() => !window.__coastline.changingJourney);
-  // The joystick's caption is a caption: it hugs two lines, and its dismiss
-  // button stays a 44px target while looking like a small one.
+  // The caption stays about two lines tall and its dismiss button keeps a 44px hit area.
   const captionIssues = await page.evaluate(() => {
     const failures = [];
     const help = document.querySelector('#stick-help'), close = help.querySelector('.dismiss-control-help');
@@ -77,7 +74,6 @@ try {
   checks.push('joystick caption sizing and dismiss target');
   const client = await page.context().newCDPSession(page);
   const point = async selector => { const r = await page.locator(selector).boundingBox(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; };
-  // The stick is hidden until a thumb lands on the scene, then anchors exactly there.
   assert.ok(await page.locator('#touch-stick').isHidden(), 'the stick is hidden until touched');
   const center = { x: 270, y: 520, id: 1 };
   await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [center] });
@@ -102,7 +98,6 @@ try {
   async function frames() { await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))); }
   await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ ...center, y: center.y - 30 }] });
   await frames();
-  // A second finger can pause without taking over the joystick's pointer.
   const pausePoint = { ...await point('#pause'), id: 2 };
   await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ ...center, y: center.y - 30 }, pausePoint] });
   await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [pausePoint] });
@@ -115,7 +110,6 @@ try {
   await page.locator('#view').tap();
   assert.match(await page.locator('#view').getAttribute('aria-label'), /Extra close view/);
   const heldStick = { ...center, y: center.y - 30 };
-  // The stick appears centered under the thumb, so a drag gives it direction.
   await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [center] });
   await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [heldStick] });
   await page.waitForFunction(() => window.__coastline.vehicle.speed > 1);
@@ -134,7 +128,7 @@ try {
   assert.ok(Math.abs(turnRotation.reduce((dot, value, index) => dot + value * cameraRotation[index], 0)) < .999, 'camera follows while steering with the joystick held');
   const forwardSpeed = await page.evaluate(() => window.__coastline.vehicle.speed);
   const turnHeading = await page.evaluate(() => window.__coastline.vehicle.heading);
-  // A full reverse input also overcomes the extra drag if the turn leaves the road.
+  // Full reverse, which also overcomes off-road drag if the turn left the road.
   await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ ...center, y: center.y + stickRadius }] });
   await page.waitForFunction(speed => window.__coastline.vehicle.speed < speed, forwardSpeed);
   await page.waitForFunction(() => window.__coastline.vehicle.speed < -.5);

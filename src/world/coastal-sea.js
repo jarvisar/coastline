@@ -4,13 +4,10 @@ import { CHUNK_LENGTH, randomAt, positionAt, roadFrame, shorelineOffset } from '
 import { waterClock } from './water.js';
 import { Parts } from './coastal-discovery-assets.js';
 
-// A few sloops stand off the coast, placed from world-space seeds so
-// neighbouring chunks agree.
+// Sloops are placed from world-space seeds so neighbouring chunks agree.
 
-// A small cruising sloop, about 9 m overall, bow toward +z. The hull is lofted
-// through a few stations, so it has a real sheer, a fine bow and a transom,
-// with dark bottom paint showing below a boot stripe. Sails carry a slight
-// belly to leeward (+x); the boats heel the same way.
+// About 9 m overall, bow toward +z. Sails belly to leeward (+x) and the boats
+// heel the same way.
 const HULL = [
   // z, half-beam, sheer height, keel depth
   [4.7, 0, 1.05, .2], [3.5, .78, .92, -.28], [1.6, 1.24, .82, -.5], [-.6, 1.34, .78, -.56], [-2.8, 1.2, .8, -.46], [-4.1, .98, .86, -.2],
@@ -19,7 +16,7 @@ function sloop({ topsides, bottom, stripe, deck, sailColor, jibColor }) {
   const p = new Parts();
   const faces = new Map();
   const face = (color, ...points) => { if (!faces.has(color)) faces.set(color, []); faces.get(color).push(...points.flat()); };
-  // Each station's outline: sheer, chine (at the boot stripe) and keel, both sides.
+  // Station outline: sheer, chine (at the boot stripe), waterline and keel.
   const outline = ([z, b, top, keel]) => ({
     sheer: side => [side * b * 1.04, top, z], chine: side => [side * b * .9, .18, z], waterline: side => [side * b * .66, -.04, z], keel: [0, keel, z],
   });
@@ -30,10 +27,9 @@ function sloop({ topsides, bottom, stripe, deck, sailColor, jibColor }) {
       face(stripe, a.chine(side), c.chine(side), a.waterline(side), c.chine(side), c.waterline(side), a.waterline(side));
       face(bottom, a.waterline(side), c.waterline(side), a.keel, c.waterline(side), c.keel, a.keel);
     }
-    // A pale deck between the sheers keeps the boat bright from above.
+    // Pale deck so the boat reads from above.
     face(deck, a.sheer(-1), c.sheer(-1), a.sheer(1), c.sheer(-1), c.sheer(1), a.sheer(1));
   }
-  // The transom closes the stern.
   const stern = outline(HULL.at(-1));
   face(topsides, stern.sheer(-1), stern.sheer(1), stern.chine(1), stern.sheer(-1), stern.chine(1), stern.chine(-1));
   face(stripe, stern.chine(-1), stern.chine(1), stern.waterline(1), stern.chine(-1), stern.waterline(1), stern.waterline(-1));
@@ -43,25 +39,21 @@ function sloop({ topsides, bottom, stripe, deck, sailColor, jibColor }) {
     g.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
     g.computeVertexNormals(); p.add(g, [0, 0, 0], color);
   }
-  // A trunk cabin with a band of windows, a cockpit coaming and a tiller.
   p.box([0, 1.04, -.2], [1.5, .46, 2.6], topsides);
   p.box([0, 1.08, -.2], [1.53, .14, 2.2], '#324653');
   p.box([0, 1.3, -.1], [1.2, .08, 2.3], deck);
   p.box([0, .98, -2.6], [1.7, .22, 1.9], '#b89a6c');
   p.beam([0, 1.05, -3.3], [0, 1.2, -2.5], .04, '#6f5a43');
-  // Stainless pulpit at the bow and lifeline stanchions.
   p.beam([-.34, 1.32, 3.9], [.34, 1.32, 3.9], .025, '#d8dcdc');
   for (const z of [2.6, .8, -1.2, -3]) for (const side of [-1, 1]) {
     const beam = HULL.reduce((best, station) => Math.abs(station[0] - z) < Math.abs(best[0] - z) ? station : best)[1];
     p.beam([side * beam * .92, .85, z], [side * beam * .92, 1.4, z], .022, '#d8dcdc');
   }
-  // Mast, spreaders and boom.
   p.cylinder([0, 6.4, .7], .055, .09, 11.4, '#d9d6cd', 6);
   p.beam([-.75, 7.6, .7], [.75, 7.6, .7], .035, '#d9d6cd');
   p.beam([0, 1.72, .6], [0, 1.8, -3.5], .07, '#d9d6cd');
   p.beam([0, 11.9, .7], [0, 1.05, 4.5], .015, '#8f9496');
-  // Sails with a little belly: each panel is split so its middle stands off
-  // the straight line between its corners.
+  // Each sail is split into panels so its middle bows out between the corners.
   const sail = (tack, head, clew, belly, color) => {
     const mid = (a, b, k) => a.map((v, j) => v + (b[j] - v) * .5 + (j === 0 ? k : 0));
     const luff = mid(tack, head, 0), foot = mid(tack, clew, belly * .7), leech = mid(head, clew, belly);
@@ -71,13 +63,12 @@ function sloop({ topsides, bottom, stripe, deck, sailColor, jibColor }) {
   };
   sail([.02, 1.85, .55], [.02, 11.7, .6], [.02, 1.95, -3.45], .42, sailColor);
   sail([0, 1.2, 4.35], [0, 10.4, .8], [.05, 1.7, .1], .36, jibColor);
-  // Wake and bow wave lie flat, just clear of the swell.
+  // Wash lies flat, just above the swell.
   const foam = (...points) => {
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(points.flat(), 3));
     g.computeVertexNormals(); p.add(g, [0, 0, 0], '#d5eceb');
   };
-  // Short, broad wedges of wash: a stern wake and a curl at the bow.
   for (const side of [-1, 1]) {
     foam([side * .8, .3, -3.9], [side * 2.5, .3, -8], [side * 1.3, .3, -8.4]);
     foam([side * .45, .3, 4.2], [side * 1.5, .3, 2.6], [side * 1.05, .3, 1.9]);
@@ -96,8 +87,7 @@ sloopMaterial.onBeforeCompile = shader => {
   shader.vertexShader = 'uniform float coastTime;\n' + shader.vertexShader;
   shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>', `
     #include <begin_vertex>
-    // Each boat pitches, rolls and heels on its own phase, and eases a few
-    // metres back and forth on its mooring-slow course.
+    // Per-boat phase for pitch, roll and a slow drift on the mooring.
     float phase = instanceMatrix[3].x * 0.13 + instanceMatrix[3].z * 0.07;
     float roll = sin(coastTime * 0.61 + phase) * 0.05;
     transformed.y += sin(coastTime * 0.83 + phase) * 0.14 + transformed.x * roll - transformed.z * sin(coastTime * 0.47 + phase) * 0.012;
@@ -132,7 +122,7 @@ function buildSloops(chunk) {
     if (!clearOfSites(chunk, s, u, 30)) continue;
     const p = positionAt(s, u, .05), heading = -roadFrame(s).angle + (randomAt(seed, 3324) > .5 ? 0 : Math.PI) + (randomAt(seed, 3325) - .5) * .6;
     const size = .85 + randomAt(seed, 3326) * .3;
-    // Heeled to leeward, the side the sails belly toward.
+    // Heel to leeward, matching the sail belly.
     boats[randomAt(seed, 3327) > .6 ? 1 : 0].push({ p: [p.x, p.y, p.z + chunk.start], r: [0, heading, -.12], scale: [size, size, size] });
   }
   sloopGeometries.forEach((geometry, i) => {

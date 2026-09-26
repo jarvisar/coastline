@@ -7,8 +7,8 @@ const buttonValue = (pad, index) => {
   return button ? Math.min(1, Math.max(0, button.value ?? Number(button.pressed))) : 0;
 };
 
-// Use the browser's standard Xbox / PlayStation layout, with the same indices
-// as a best-effort fallback for handhelds exposing an unmapped gamepad.
+// Standard gamepad layout. Unmapped handheld pads use the same indices as a
+// best-effort fallback.
 export class GamepadInput {
   constructor(onAction, onConnection, getGamepads = () => navigator.getGamepads?.() ?? [], onKonami = () => {}) {
     this.onAction = onAction; this.onConnection = onConnection; this.getGamepads = getGamepads;
@@ -25,12 +25,12 @@ export class GamepadInput {
   update({ blocked = false, paused = false, menu = false } = {}) {
     let pads;
     try { pads = Array.from(this.getGamepads()).filter(pad => pad?.connected); }
-    catch { pads = []; } // Unsupported or restricted Gamepad API: keep other inputs available.
+    catch { pads = []; } // Gamepad API missing or blocked; other inputs still work.
     const pad = pads.find(pad => pad.index === this.index) ?? pads.find(pad => pad.mapping === 'standard') ?? pads[0];
     if ((pad?.index ?? null) !== this.index) {
       this.index = pad?.index ?? null; this.state = {}; this.previousButtons = [];
       this.konami.reset();
-      // A replacement controller must start at rest; the first can start with Gas.
+      // A replacement pad must start at rest; the first may start with Gas held.
       this.requireNeutral = this.connected;
     }
     if (Boolean(pad) !== this.connected) {
@@ -38,8 +38,8 @@ export class GamepadInput {
     }
     if (!pad) { this.state = {}; return; }
     const buttons = pad.buttons.map((_, index) => buttonValue(pad, index) > .5);
-    // Treat stick directions as menu buttons so they fire once per tilt. The two
-    // axes stay apart so a grid of cards can be crossed by row as well as along.
+    // Stick directions act as buttons 17-20 so they fire once per tilt. Axes stay
+    // separate so card grids can move by row or column.
     buttons[17] = (pad.axes[0] ?? 0) < -.5;
     buttons[18] = (pad.axes[0] ?? 0) > .5;
     buttons[19] = (pad.axes[1] ?? 0) < -.5;
@@ -59,8 +59,7 @@ export class GamepadInput {
       this.requireNeutral = blocked || active;
       return;
     }
-    // D-pad directions, then the east and south face buttons (B/A or Circle/Cross).
-    // Menus keep their normal navigation; held buttons count only once.
+    // Konami code on the D-pad plus B/A. Off in menus; held buttons count once.
     if (paused || menu) this.konami.reset();
     else {
       const presses = buttons.flatMap((down, index) => down && pressed(index) && index < 17 ? [index] : []);
@@ -70,8 +69,7 @@ export class GamepadInput {
         return;
       }
     }
-    // Sample once per display frame, including while paused, so held shortcuts
-    // fire once and Start can resume the game without a keyboard or touchscreen.
+    // Sampled every frame, even while paused, so Start can resume the game.
     this.state = paused ? {} : state;
     const pause = pressed(9), view = pressed(2), reset = pressed(3), nextJourney = pressed(5);
     const journey = pressed(8), fullscreen = pressed(4), fps = pressed(11), car = pressed(10);
@@ -81,8 +79,8 @@ export class GamepadInput {
     this.previousButtons = buttons;
     if (fps) this.onAction('fps');
     if (fullscreen) { this.onAction('fullscreen'); return; }
-    // A chooser takes the whole pad. The pause screen only borrows the
-    // directions and A, so the shortcuts below still work from it.
+    // Choosers take the whole pad. The pause screen only borrows directions and
+    // A, so the shortcuts below still work from it.
     if (menu && menu !== 'pause') {
       this.state = {};
       if (journey || car || back) this.onAction('menuClose');
@@ -98,9 +96,7 @@ export class GamepadInput {
     if (pause) { this.onAction('pause'); return; }
     if (nextJourney) { this.onAction('nextJourney'); return; }
     if (paused) {
-      // Paused, the D-pad and sticks move the pause screen's focus ring rather
-      // than the car, so resume, the garage and the graphics settings are all
-      // reachable without a keyboard or a touchscreen.
+      // While paused, directions move the pause screen's focus.
       if (menu !== 'pause') return;
       if (previous) this.onAction('menuPrevious');
       else if (next) this.onAction('menuNext');

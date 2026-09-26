@@ -11,7 +11,7 @@ try {
   await page.goto(process.env.TEST_URL || 'http://127.0.0.1:5173');
   await page.waitForFunction(() => window.__coastline);
   assert.equal(await page.evaluate(() => window.__coastline.audio.context), null);
-  // Sound is a pause-screen setting now; M still reaches it from the drive.
+  // Sound lives on the pause screen, but M still toggles it while driving.
   await page.keyboard.press('KeyM');
   await page.waitForFunction(() => window.__coastline.audio.context?.state === 'running');
   const graphSize = await page.evaluate(() => {
@@ -20,7 +20,7 @@ try {
     return [a.graph.nodeCount, a.graph.sourceCount];
   });
   await page.keyboard.down('KeyW');
-  // The menu already cruises above 8 m/s; wait for pedal response as well.
+  // The menu already cruises above 8 m/s, so also wait for throttle load.
   await page.waitForFunction(() => window.__coastline.vehicle.speed > 8 && window.__coastline.audio.state.load > .5);
   assert.ok(await page.evaluate(() => window.__coastline.audio.state.load > .5));
   await page.keyboard.up('KeyW');
@@ -52,8 +52,8 @@ try {
   }
   await page.keyboard.press('KeyP');
 
-  // Mixer is reachable while paused, supports native keyboard sliders, and
-  // persists without constructing an AudioContext on the following visit.
+  // The mixer works while paused, takes keyboard input and persists without
+  // creating an AudioContext on the next visit.
   await page.locator('#audio-mixer-toggle').click();
   await page.locator('[data-audio-preset="scenic"]').click();
   assert.equal(await page.evaluate(() => window.__coastline.audio.preset), 'scenic');
@@ -67,8 +67,8 @@ try {
   await page.locator('#audio-mixer').screenshot({ path: '.artifacts/audio/mixer-desktop.png' });
   await page.locator('[data-audio-preset="balanced"]').click();
 
-  // Render the real Web Audio graph, not mocks, to measure levels and retain
-  // short WAV previews for listening. All presets use the same deterministic noise.
+  // Render the real graph offline to measure levels and save WAV previews.
+  // All presets share the same deterministic noise.
   const renders = await page.evaluate(async () => {
     const { DriveAudio } = await import('/src/audio.js');
     const { createSoundGraph } = await import('/src/audio/synthesis.js');
@@ -83,8 +83,7 @@ try {
         return { speed, throttle: time >= 2 && time < 8 ? 1 : 0, brake: time >= 10 ? 1 : 0, offRoad: time >= 8 && time < 10 ? 1 : 0, steer: time > 9 ? .8 : 0 };
       };
       audio.update(drive(0), 1 / 30, true);
-      // Suspend offline rendering every 33 ms to schedule exactly the parameters
-      // that the live update loop would produce at that audio-clock position.
+      // Suspend every 33 ms to set the parameters the live loop would at that time.
       const steps = [];
       for (let time = 1 / 30; time < seconds - .1; time += 1 / 30) {
         steps.push(ctx.suspend(time).then(() => {
@@ -178,8 +177,8 @@ try {
   mobile.on('pageerror', error => errors.push(error.message));
   await mobile.goto(process.env.TEST_URL || 'http://127.0.0.1:5173');
   await mobile.waitForFunction(() => window.__coastline && document.querySelector('#loading').classList.contains('loaded'));
-  // A touchscreen reaches sound through the pause screen, which is also the
-  // one place it can be switched on without the drive running.
+  // Touch devices reach sound through the pause screen, the only place to
+  // enable it without the drive running.
   await mobile.locator('#start').tap();
   await mobile.locator('#pause').tap();
   await mobile.locator('#audio-mixer-toggle').tap();

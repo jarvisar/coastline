@@ -6,14 +6,12 @@ import { waterClock } from './water.js';
 
 const up = new THREE.Vector3(0, 1, 0);
 
-// Farm-country trees, one unit tall, built like the coast's cypresses: a few
-// open bark cylinders for the trunk and limbs, and lobed crowns whose shading
-// is baked into vertex colours so a per-instance tint still reads as foliage.
+// Unit-height trees. Crown shading is baked into vertex colours so a
+// per-instance tint still reads as foliage.
 function plainsTree(seed, kind) {
   const bark = [], leaves = [];
-  // Limbs are closed, tapered cylinders that overrun their joint by a radius,
-  // so two segments always overlap. Open-ended tubes with mismatched radii
-  // left a visible hole at every fork, which read as a broken trunk.
+  // Closed cylinders that overrun the joint so segments overlap and forks
+  // show no holes.
   const branch = (from, to, bottom, top = bottom * .66) => {
     const a = new THREE.Vector3(...from), b = new THREE.Vector3(...to), direction = b.clone().sub(a);
     const g = new THREE.CylinderGeometry(top, bottom, direction.length() + bottom * 1.6, 6);
@@ -33,8 +31,6 @@ function plainsTree(seed, kind) {
     g.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
     leaves.push(g);
   };
-  // Every limb leaves the trunk at a point on the trunk itself, so none of
-  // them floats beside it.
   const onTrunk = (line, height) => {
     for (let i = 0; i < line.length - 1; i++) {
       const [a, b] = [line[i], line[i + 1]];
@@ -45,12 +41,10 @@ function plainsTree(seed, kind) {
     return line.at(-1);
   };
   if (kind === 'poplar') {
-    // Tall and narrow: one straight trunk with crowns stacked up it.
     const line = [[0, -.1, 0], [.01, .46, 0], [.02, .88, 0]];
     branch(line[0], line[1], .05, .038); branch(line[1], line[2], .038, .022);
     lobe([0, .38, 0], [.2, .24], 0, 1); lobe([.01, .6, 0], [.18, .22], 1.1, 2); lobe([.02, .82, 0], [.13, .19], 2.3, 3);
   } else if (kind === 'willow') {
-    // A short leaning trunk under a wide, drooping crown along the creek.
     const line = [[0, -.1, 0], [.12, .3, .04], [.22, .54, .02]];
     branch(line[0], line[1], .075, .055); branch(line[1], line[2], .055, .035);
     for (let i = 0; i < 5; i++) {
@@ -62,7 +56,6 @@ function plainsTree(seed, kind) {
     }
     lobe([.2, .66, 0], [.3, .16], .7, 20);
   } else {
-    // A broad oak: a forked trunk carrying five crowns around a taller one.
     const lean = .16, line = [[0, -.1, 0], [lean * .3, .32, .02], [lean, .6, -.02]];
     branch(line[0], line[1], .085, .062); branch(line[1], line[2], .062, .04);
     for (let i = 0; i < 5; i++) {
@@ -78,8 +71,7 @@ function plainsTree(seed, kind) {
   result.bark.computeBoundingSphere(); result.leaves.computeBoundingSphere();
   return result;
 }
-// A cheap two-lobe tree for the boundary lines, where a belt of a hundred
-// trees has to cost what a hedge did. The feature oaks keep their six lobes.
+// Two lobes only: boundary belts hold about a hundred of these.
 function hedgeTree(seed) {
   const bark = [], leaves = [];
   const branch = (from, to, bottom, top) => {
@@ -111,8 +103,6 @@ function hedgeTree(seed) {
   return result;
 }
 
-// A spruce: a bare stem under stacked skirts, for the farm yards and for
-// contrast against all the round broadleaf crowns.
 function conifer(seed) {
   const bark = [], leaves = [];
   const stem = new THREE.CylinderGeometry(.022, .05, 1.06, 5);
@@ -122,9 +112,8 @@ function conifer(seed) {
     const t = i / (tiers - 1);
     const radius = (.30 - t * .19) * (.9 + randomAt(i, seed + 981) * .2);
     const height = .3 - t * .12;
-    // Triangle soup, like the lobes: the bake below shades each face from its
-    // three vertices, and on an indexed cone that walked past the last
-    // vertex and left the faces sharing it with no colour, which drew black.
+    // Non-indexed so the per-face bake below gets three vertices per face.
+    // Indexed cones leave some faces uncoloured, which draw black.
     const g = new THREE.ConeGeometry(radius, height, 7, 1).toNonIndexed();
     g.deleteAttribute('uv');
     g.rotateY(randomAt(i, seed + 982) * 6.28);
@@ -144,8 +133,6 @@ function conifer(seed) {
   return result;
 }
 
-// A cypress: a tall, narrow column of dark foliage on a short stem, the
-// vertical stroke that stands among the round crowns along a farm road.
 function cypress(seed) {
   const bark = [], leaves = [];
   const stem = new THREE.CylinderGeometry(.02, .045, .42, 5);
@@ -173,8 +160,7 @@ function cypress(seed) {
 export const plainsTrees = { oak: [plainsTree(1, 'oak'), plainsTree(2, 'oak')], poplar: [plainsTree(3, 'poplar'), plainsTree(4, 'poplar')], willow: [plainsTree(5, 'willow')],
   hedge: [hedgeTree(6), hedgeTree(7), hedgeTree(8)], conifer: [conifer(9), conifer(10)], cypress: [cypress(11)] };
 
-// A round bale lying on its side, axis across x. The wrapped side is lighter
-// than the cut ends, with a faint band every few segments.
+// Round bale on its side, axis along x.
 function bale() {
   const g = new THREE.CylinderGeometry(.75, .75, 1.3, 10, 1).toNonIndexed();
   g.deleteAttribute('uv'); g.rotateZ(Math.PI / 2);
@@ -191,8 +177,6 @@ function bale() {
   return g;
 }
 export const baleGeometry = bale();
-// A square bale: a block with its cut ends darker than the strung sides and
-// a lighter top, stacked in twos and threes on the stubble.
 function squareBale() {
   const g = new THREE.BoxGeometry(1.6, .8, 1.1).toNonIndexed();
   g.deleteAttribute('uv');
@@ -208,8 +192,8 @@ function squareBale() {
 }
 export const squareBaleGeometry = squareBale();
 
-// Cattle for the pastures: a few boxes with the head and legs a shade darker
-// than the flank, so a per-instance coat colour still reads as an animal.
+// Head and legs are darker than the flank so a per-instance coat tint still
+// reads as a cow.
 function cow() {
   const parts = [];
   const box = (size, position, shade) => {
@@ -222,12 +206,8 @@ function cow() {
   box([.62, .12, .12], [0, 1.48, -1.02], .55);
   for (const x of [-.3, .3]) for (const z of [-.62, .62]) box([.19, .66, .19], [x, .33, z], .78);
   box([.08, .5, .08], [0, .95, .9], .6);
-  // Dark patches over the flanks and shoulder. A pale instance colour then
-  // reads as a Holstein and a brown one as a brown cow, from one mesh.
-  // Every patch stands a little proud of the hide it lies on, and no two of
-  // them share a face plane: the back patch used to end exactly level with
-  // the cow's back, and two faces on one plane flicker against each other
-  // as the camera moves, which read as a black stripe blinking on and off.
+  // Dark patches let one mesh read as a Holstein or a brown cow by tint.
+  // Each patch sits slightly proud and off every other face plane to avoid z-fighting.
   box([.99, .38, .52], [0, 1.24, -.34], .3);
   box([.982, .3, .4], [0, .86, .5], .34);
   box([.56, .32, .3], [0, 1.285, .74], .32);
@@ -236,7 +216,6 @@ function cow() {
 }
 export const cowGeometry = cow();
 
-// A clump of rushes at the water's edge: bent blades, like the desert grass.
 function rushes() {
   const positions = [];
   for (let i = 0; i < 11; i++) {
@@ -250,12 +229,9 @@ function rushes() {
 }
 export const rushGeometry = rushes();
 
-// A blade of grass or a stalk of wheat is one flat face standing on end.
-// Drawing such a face double-sided flips its normal on the far side, which
-// points it at the ground and leaves half of every tuft near-black under a
-// low sun. So each face is emitted twice, wound both ways, and both copies
-// are lit from above with a little of the face's own tilt kept for shape:
-// whichever side the camera is on, the face it sees takes the sky.
+// Emits each face twice, wound both ways, with a mostly upward normal.
+// DoubleSide would flip the back normal toward the ground and turn half of
+// every tuft near-black under a low sun.
 function standingFoliage(positions, colors) {
   const points = [], shades = [], normals = [];
   for (let face = 0; face < positions.length / 9; face++) {
@@ -268,7 +244,6 @@ function standingFoliage(positions, colors) {
     const scale = Math.hypot(...tilted), normal = tilted.map(value => value / scale);
     for (const point of [a, b, c, a, c, b]) points.push(...point);
     for (let k = 0; k < 6; k++) normals.push(...normal);
-    // Every face carries one shade, so both windings take the same colours.
     if (colors) shades.push(...colors.slice(face * 9, face * 9 + 9), ...colors.slice(face * 9, face * 9 + 9));
   }
   const g = new THREE.BufferGeometry();
@@ -278,8 +253,6 @@ function standingFoliage(positions, colors) {
   g.computeBoundingSphere(); return g;
 }
 
-// A tuft of long grass for the fringe of a green field: a few bent blades,
-// darker at the root than at the tip, spread over a little ground.
 function stalks() {
   const positions = [], colors = [];
   const face = (a, b, c, shades) => { positions.push(...a, ...b, ...c); for (const shade of shades) colors.push(shade, shade, shade * .96); };
@@ -295,21 +268,18 @@ function stalks() {
 }
 export const stalkGeometry = stalks();
 
-// Standing wheat for the fringe of a grain field: straighter, taller stalks
-// that bend over as they rise, each carrying a pale ear that tapers to a
-// point. The ear is baked into the vertex colours, so a per-instance gold
-// still reads as grain over straw rather than one flat tone.
+// The ear is baked into vertex colours so a per-instance gold still reads as
+// grain over straw.
 function wheatStalks() {
   const positions = [], colors = [];
-  // Kept bright: a stalk is a hair's width of geometry standing on end, and
-  // a dark bake turned a field's edge into a line of near-black specks.
+  // Kept bright. Stalks are hair-thin and a dark bake reads as black specks.
   const straw = [.9, .88, .74], grain = [1, .98, .87];
   const face = (a, b, c, shade) => { positions.push(...a, ...b, ...c); for (let k = 0; k < 3; k++) colors.push(...shade); };
   for (let i = 0; i < 5; i++) {
     const angle = i * 2.399963 + .4, x = Math.cos(angle), z = Math.sin(angle);
     const height = 1.05 + randomAt(i, 976) * .45, lean = .06 + randomAt(i, 977) * .13, spread = .08 + randomAt(i, 978) * .18;
     const bx = x * spread, bz = z * spread, px = -z, pz = x;
-    // A point up the stalk, as a pair of vertices half a width either side.
+    // Vertex pair at height fraction t, w either side of the stalk.
     const at = (t, w) => {
       const y = t * height, along = lean * t * t;
       return [[bx + x * along - px * w, y, bz + z * along - pz * w], [bx + x * along + px * w, y, bz + z * along + pz * w]];
@@ -317,7 +287,7 @@ function wheatStalks() {
     const shoulder = .6;
     const [b0, b1] = at(0, .032), [s0, s1] = at(shoulder, .026);
     face(b0, b1, s0, straw); face(b1, s1, s0, straw);
-    // The ear tapers to its tip in one quad, so a stalk stays four faces.
+    // Ear is one tapered quad so each stalk stays four faces.
     const [e0, e1] = at(shoulder, .058), [t0, t1] = at(1, .013);
     face(e0, e1, t0, grain); face(e1, t1, t0, grain);
   }
@@ -325,9 +295,8 @@ function wheatStalks() {
 }
 export const wheatGeometry = wheatStalks();
 
-// Crows: the gull's silhouette, smaller and dark. The flock circles a field
-// in the vertex shader off the shared water clock, so it costs one draw call
-// and nothing per frame, and it pauses with the scene like the parrots.
+// Crows fly in the vertex shader off the shared water clock: one draw call,
+// no per-frame CPU work, and they pause with the scene.
 export const crowGeometry = new THREE.BufferGeometry();
 crowGeometry.setAttribute('position', new THREE.Float32BufferAttribute([
   0, 0, -.38, -.65, .08, 0, -.1, 0, .3, -.65, .08, 0, -1.5, -.12, .45, -.1, 0, .3,

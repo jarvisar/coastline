@@ -4,10 +4,8 @@ import { WeatherMotion } from './weather-motion.js';
 
 const WIDTH = 300, HEIGHT = 200, DEPTH = 360, COUNT = 1900;
 
-// Rain in a world-anchored volume, built like the alpine snowfall: one draw
-// call of points, wrapped around the car. Each point is masked to a thin
-// vertical streak instead of a soft disc and falls straight down. Nearer
-// drops draw longer; the distant ones thin out into a grey veil.
+// One draw call of points wrapped around the car, like the alpine snowfall.
+// Each point is masked to a streak along the projected fall direction.
 export class Rainfall {
   constructor() {
     const sizes = [], opacity = [];
@@ -29,8 +27,8 @@ export class Rainfall {
         varying float vDropAlpha; varying vec2 vDropDirection;\n` + shader.vertexShader;
       shader.vertexShader = shader.vertexShader.replace('gl_PointSize = size;', `
         gl_PointSize = size * dropSize * 10.0 * clamp(430.0 / max(80.0, -mvPosition.z), 0.7, 1.5);
-        // Project world-down into the point sprite, including perspective
-        // and viewport aspect, so the streak follows the actual fall.
+        // Project world-down to screen space, with perspective and aspect, so the
+        // streak follows the actual fall.
         vec4 fallClip = projectionMatrix * viewMatrix * vec4(0.0, -1.0, 0.0, 0.0);
         vec2 fallScreen = fallClip.xy * gl_Position.w - gl_Position.xy * fallClip.w;
         fallScreen.x *= projectionMatrix[1][1] / projectionMatrix[0][0];
@@ -43,7 +41,7 @@ export class Rainfall {
       shader.fragmentShader = shader.fragmentShader.replace('#include <color_fragment>', `
         #include <color_fragment>
         vec2 d = gl_PointCoord - vec2(0.5);
-        // A soft, tapered streak with a finer tail above the falling drop.
+        // Tapered streak, thinner at the tail.
         float along = dot(d, vDropDirection);
         float across = abs(dot(d, vec2(-vDropDirection.y, vDropDirection.x)));
         if (across > 0.07) discard;

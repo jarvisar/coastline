@@ -1,4 +1,4 @@
-/* Build placeholders are filled by pwa-plugin.mjs. */
+/* Placeholders are filled in by pwa-plugin.mjs. */
 const VERSION = __BUILD_VERSION__;
 const FILES = __PRECACHE_FILES__;
 const SCOPE = self.registration.scope;
@@ -16,7 +16,7 @@ self.addEventListener('install', event => {
       throw error;
     }
   })());
-  // Let existing tabs finish on their current version; never force a reload.
+  // No skipWaiting, so open tabs stay on their current version.
 });
 
 self.addEventListener('activate', event => {

@@ -19,7 +19,7 @@ const controller = handedness => ({ handedness, gamepad: { mapping: 'xr-standard
 function inputFixture() {
   const left = controller('left'), right = controller('right'), actions = [];
   const input = new XRInput(action => actions.push(action));
-  const sources = [right, left]; // Handedness, not connection order.
+  const sources = [right, left]; // Right first so input must match by handedness.
   input.update(sources);
   return { left, right, actions, input, sources };
 }

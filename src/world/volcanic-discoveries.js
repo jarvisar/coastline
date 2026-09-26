@@ -3,7 +3,8 @@ import { creekSection, riftProfile, shelfSteps, shelfFault, volcanicNaturalTerra
 import { createDiscoverySchedule } from './discovery-schedule.js';
 import { volcanicPlatformLayout } from './volcanic-discovery-platforms.js';
 
-// Approximate miles between sightings of EACH kind. Together: ~2.5 miles.
+// Rough miles between sightings of each kind. Lower is more frequent.
+// Infinity disables a kind. About 2.5 miles combined.
 export const VOLCANIC_DISCOVERY_MILES = {
   'geothermal-station': 9,
   'abandoned-mine': 11.25,
@@ -23,8 +24,7 @@ function districtSite(kind, index, desired) {
   const center = Math.floor(desired / CHUNK_LENGTH) * CHUNK_LENGTH + 52 + randomAt(index, 81204) * 23;
   const preferredSide = randomAt(index, 81203) < .5 ? -1 : 1;
   if (kind === 'basalt-arch' && randomAt(index,81208) >= .3) {
-    // A natural bridge across the existing river on either bank of the road.
-    // Its span runs along the road, across the molten flow.
+    // Arch over the river beside the road; its span runs along the road.
     const crossing = volcanicCrossing(desired), u = preferredSide*(27 + randomAt(index,81209)*8);
     const s = crossingChannel(crossing,u).s;
     return {kind,index,s,u,side:preferredSide,halfS:27,halfU:10,turn:Math.PI/2};
@@ -33,8 +33,7 @@ function districtSite(kind, index, desired) {
     const s = center + offset;
     if (Math.abs(s - volcanicCrossing(s).centre) < 105) continue;
     if (kind === 'abandoned-mine') {
-      // Entrances sit in a shelf scarp, with their rear embedded in basalt
-      // and a small spoil terrace extending onto the open face of the hill.
+      // Entrance sits in a shelf scarp: rear in basalt, spoil terrace on the open face.
       const side = preferredSide;
       const near = Math.min(...Array.from({length:17},(_,i)=>riftProfile(s-16+i*2,-1).near));
       const toe = Math.min(...Array.from({length:15},(_,i)=>shelfSteps(s-14+i*2,1).toe));
@@ -58,8 +57,8 @@ function districtSite(kind, index, desired) {
     const firstSide = preferredSide;
     for (const side of [firstSide, -firstSide]) for (const distance of [22, 25, 28, 35, 43]) {
       const u = side * (distance + (randomAt(index,81206)-.5)*3);
-      // Check the interior too: corner-only samples can straddle a narrow
-      // scarp or miss a lava spillway running straight through the camp.
+      // Sample the interior too. Corners alone can straddle a narrow scarp or
+      // miss a lava spillway through the camp.
       const samples = [];
       for (let ds = -halfS; ds <= halfS; ds += 2) for (let du = -halfU; du <= halfU; du += 2) samples.push([s + ds, u + du]);
       if (samples.some(([t, v]) => Math.abs(v) < 11 || Math.abs(v) > riftProfile(t, side).near - 3

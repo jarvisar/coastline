@@ -38,7 +38,7 @@ test('jungle columns stay ordered, the road stays flat and the river sits in its
     const rc = riverCenter(s), hw = riverHalfWidth(s), level = riverLevel(s);
     assert.ok(level < roadHeight(s) - 5 && level > roadHeight(s) - 26, `river level ${level} at ${s}`);
     assert.ok(jungleHeight(s, rc) < level - 1.5, `river bed above the water at ${s}`);
-    // Under a gorge wall the water reaches the cliff foot; the camera-side bank always stands clear.
+    // Water may reach a gorge wall's foot; the camera-side bank must stay dry.
     assert.ok(jungleHeight(s, rc + hw + 4) > level - .7 && jungleHeight(s, rc - hw - 4) > level + 1, `submerged bank at ${s}`);
     assert.ok(jungleHeight(s, 100) > roadHeight(s) + 5);
     // Camera-side terrain must stay below the line of sight to the road.
@@ -159,7 +159,7 @@ test('jungle chunks keep scenery off the road, build the river and dispose clean
     assert.equal(names.has('cascade-foam'), chunk.lips.some(lip => lip.drop >= .6) || chunk.falls.length > 0);
     assert.ok(chunk.terrain.geometry.attributes.position.count > 3000);
     // Every interior edge must be shared, including where fine waterfall rows
-    // stitch into coarse hills. Also bound the size of foreground facets.
+    // meet coarse hills. Also caps foreground facet size.
     const terrain = chunk.terrain.geometry.attributes.position, edges = new Map(), boundary = new Set();
     const key = p => [p.x, p.y, p.z].map(Math.fround).join(',');
     const boundaryVertex = (s, col) => {

@@ -99,9 +99,8 @@ try {
       }
       return { journey: a.journey, calls, previousCalls, changedChannels, maxDifference };
     });
-    // Coincident double-sided fragments can resolve either way, so a handful of
-    // channels may land one quantization step apart. Anything the eye could see
-    // would be far larger, and far more widespread, than that.
+    // Coincident double-sided fragments can resolve either way, so a few channels
+    // may differ by one step. A visible change would be much larger.
     assert.ok(record.maxDifference <= 1,
       `${id}: flat effects must retain their appearance (${record.changedChannels} channels differ, by up to ${record.maxDifference})`);
     assert.ok(record.calls <= record.previousCalls);

@@ -1,5 +1,5 @@
-// Generation-only footprint checks. Polygons use rendered world coordinates,
-// so scaled landmarks and curved streets share the same clearance rule.
+// Generation-time footprint checks. Polygons are in world coordinates so scaled
+// landmarks and curved streets use the same clearance test.
 export class CityPlanting {
   constructor() { this.footprints = []; }
   reserve(points, margin = .35) {

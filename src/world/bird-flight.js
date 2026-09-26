@@ -1,5 +1,4 @@
-// Local forward is -Z for every bird. Use the path's derivative for both
-// heading and pitch, then bank around that forward axis without side-slipping.
+// Bird models face -Z. The frame follows the path tangent, then banks around it.
 export const birdFlightGLSL = /* glsl */`
   float birdHash(float seed) {
     return fract(sin(seed * 127.1 + 311.7) * 43758.5453);

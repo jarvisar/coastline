@@ -19,14 +19,12 @@ export class FirstPersonCamera {
     const pitch = THREE.MathUtils.clamp(car.rotation.x, -.5, .5);
     this.pitch = this.initialized ? THREE.MathUtils.damp(this.pitch, pitch, 7, dt) : pitch;
     this.initialized = true;
-    // Follow the interpolated heading directly so steering never swings the
-    // driver's view sideways. Ignore chassis roll and soften changes in slope.
+    // Heading is followed directly, roll is ignored and pitch is damped.
     this.orientation.set(this.pitch, car.rotation.y, 0);
     this.camera.quaternion.setFromEuler(this.orientation);
     if (car.userData.driverEye) this.eye.copy(car.userData.driverEye);
     else this.eye.set(0, 1.73, -1.01);
-    // Keep the eye fixed at the windshield as the chassis tilts; the viewing
-    // direction still softens pitch and keeps the horizon free of body roll.
+    // Eye position follows the full chassis tilt. Only the view direction is smoothed.
     this.camera.position.copy(this.eye.applyQuaternion(car.quaternion)).add(car.position);
     this.camera.updateMatrixWorld();
   }

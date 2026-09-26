@@ -71,7 +71,7 @@ assert.match(await page.locator('#view').getAttribute('aria-label'), /Scenic vie
 await page.keyboard.press('KeyV');
 await page.waitForFunction(() => Math.abs(window.__coastline.rendering.camera.top - 82.5) < .2);
 assert.match(await page.locator('#view').getAttribute('aria-label'), /Medium view/);
-// Advance through dozens of chunk boundaries, including floating-origin shifts.
+// Crosses dozens of chunk boundaries, including floating-origin shifts.
 const streaming = await page.evaluate(async () => {
   const a = window.__coastline; const records = [];
   for (const s of [400, 900, 1026, 2300, 5100, 10000, 20000, 19900, 240, -129]) {
@@ -83,13 +83,12 @@ const streaming = await page.evaluate(async () => {
   a.vehicle.s = 215; a.vehicle.reset(); a.rendering.snap();
   return records;
 });
-// Three scenery textures plus six fixed AO textures; streaming must remain bounded.
-// How much stays built is a quality setting now, so the invariant is that
-// streaming holds exactly the window this level asked for, and no more.
+// Streaming holds exactly the window the quality level asks for.
+// Textures: three for scenery plus six fixed AO textures.
 for (const record of streaming) { assert.equal(record.chunks, record.resident); assert.ok(record.geometries <= 185); assert.ok(record.textures <= 9); assert.ok(Math.abs(record.carZ) < 1030); }
 await page.waitForTimeout(700);
 await page.screenshot({ path: '.artifacts/coastline-driving.png' });
-// Input cannot remain held when the window loses focus.
+// Held input is released when the window loses focus.
 await page.keyboard.down('KeyW');
 await page.evaluate(() => window.dispatchEvent(new Event('blur')));
 assert.equal(await page.evaluate(() => window.__coastline.paused), true);

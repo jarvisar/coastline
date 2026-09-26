@@ -30,7 +30,7 @@ try {
         const t0 = performance.now(), restored = unpackChunk(data), t1 = performance.now();
         const built = new Builder(index), t2 = performance.now();
         times.push({ index, assembleMs: t1 - t0, synchronousMs: t2 - t1 });
-        // Compare actual rendered pixels, including shader clocks and shadows.
+        // Compare rendered pixels, including shader clocks and shadows.
         const originalS = a.vehicle.s, s = index * 128 + 24;
         a.vehicle.s = s; a.vehicle.reset(); a.vehicle.render(1, a.world.origin);
         a.rendering.snap(); a.rendering.update(a.vehicle.car, 1, a.world.origin);
@@ -70,8 +70,7 @@ try {
           sourceCount: a.chunkWorker.sources.size, origin: a.world.origin,
           local: [...a.world.chunks.values()].every(chunk => chunk.group.position.z === a.world.origin - chunk.start) };
       }, direction);
-      // How much stays built is a quality setting now, so the invariant is that
-      // streaming holds exactly the window this level asked for.
+      // The resident window depends on the quality setting, so check it matches exactly.
       assert.equal(record.count, record.resident); assert.equal(record.sourceCount, 1); assert.equal(record.fallback, 0);
       assert.ok(record.local); assert.ok(record.cache + record.pending <= 2);
       advances.push(record.updateMs);

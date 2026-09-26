@@ -1,13 +1,8 @@
-// How much of the route stays built around the car, and how far past it the
-// chunk worker keeps running.
+// How many chunks stay built around the car, and how far ahead the worker runs.
 //
-// The far chunk in each direction is off-screen at every camera height: hiding
-// chunk `center - 3` and chunk `center + 5` was measured pixel-for-pixel
-// identical on all four routes, in the widest view, while saving eight to
-// eleven per cent of the frame's draw calls. The top two quality levels keep
-// them anyway, as headroom for reversing; the cheaper levels spend that
-// headroom on frames, and the worker stops building scenery that would be
-// dropped before it was ever shown.
+// The far chunk each way (center - 3 and center + 5) is off-screen at every
+// camera height but costs 8-11% of draw calls. The top two quality levels keep
+// it as headroom for reversing. Cheaper levels drop it and the worker skips it.
 
 const DEFAULT = { behind: 3, ahead: 5 };
 let resident = DEFAULT, generation = 0;
@@ -17,13 +12,11 @@ export const residentWindow = () => resident;
 export function setResidentWindow({ behind, ahead } = DEFAULT) {
   if (behind === resident.behind && ahead === resident.ahead) return;
   resident = { behind, ahead };
-  // A world only reconsiders its chunks when the car crosses into a new one.
-  // Bumping this makes the next update reconsider them whatever the car did.
+  // Worlds only recheck chunks when the car enters a new one. Bumping this forces a recheck.
   generation++;
 }
 
-// Bring a world's resident chunks in line with the car, taking each one from
-// the worker when it is ready and building it here when it is not.
+// Take each chunk from the worker if it's ready, otherwise build it here.
 export function updateResidentChunks(world, center, Chunk) {
   if (center === world.center && world.windowAt === generation) return;
   const { behind, ahead } = resident;
@@ -35,9 +28,8 @@ export function updateResidentChunks(world, center, Chunk) {
   world.chunkSource?.prefetch(center, world.chunks);
 }
 
-// Chunk contents have fixed local transforms. Only a newly attached chunk or
-// a floating-origin shift invalidates its root; animated instance buffers and
-// shader clocks remain independent of these object transforms.
+// Chunk contents have fixed local transforms. Only a new chunk or an origin
+// shift needs its root matrix updated.
 export function positionResidentChunks(world) {
   for (const chunk of world.chunks.values()) {
     const group = chunk.group, z = world.origin - chunk.start;
@@ -49,8 +41,8 @@ export function positionResidentChunks(world) {
   }
 }
 
-// Resident chunks first, nearest the car outward and forward before back, then
-// the one chunk of lead on each side that covers a boundary crossing.
+// Resident chunks nearest first, ahead before behind, then one extra chunk
+// each side to cover a boundary crossing.
 export function prefetchOffsets(behind, ahead) {
   const offsets = [];
   for (let distance = 0; distance <= Math.max(behind, ahead); distance++) {

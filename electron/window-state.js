@@ -1,5 +1,5 @@
-// Remembers the window's size, position, and maximized state between launches.
-// Fullscreen is never persisted: it is a launch option, not window geometry.
+// Persists window size, position and maximized state between launches.
+// Fullscreen is a launch option, so it isn't saved.
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { screen } from 'electron';

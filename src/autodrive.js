@@ -40,9 +40,8 @@ export class Autodrive {
               (car.s - last.s) * frame.scale < (car.spec.length + last.spec.length) / 2 + CLEARANCE + MERGE_CLEARANCE) last = car;
           }
         }
-        // Time to draw level and pull back in, plus half the run-up to top
-        // speed -- the car covers ground while it accelerates, so charging the
-        // whole ramp on top of the overtake refuses passes that comfortably fit.
+        // Pass time plus half the run-up to top speed, since the car covers
+        // ground while accelerating. Counting the full ramp refuses passes that fit.
         const time = (ahead(last) + halfLength(last) + MERGE_CLEARANCE) / Math.max(1, topSpeed - last.speed)
           + Math.max(0, topSpeed - player.speed) / (2 * acceleration) + MARGIN;
         const clear = cars.every(car => car.u > 0 || ahead(car) < -halfLength(car) - CLEARANCE ||
@@ -54,10 +53,8 @@ export class Autodrive {
     const lane = this.passing ? -LANE : LANE;
     if (!this.path || this.path.lane !== lane) this.path = new LaneChange(player, lane, this.path, topSpeed);
     let speed = topSpeed;
-    // Brake only for cars we would still be sharing a lane with on arrival, not
-    // for ones the lane change clears first -- otherwise pulling out behind the
-    // car being passed brakes hard at the exact moment the pass needs the speed.
-    // Following uses relative stopping distance, allowing a steady matching speed.
+    // Brake only for cars still in our path on arrival, so pulling out to pass
+    // doesn't brake for the car being passed. Uses relative stopping distance.
     for (const car of cars) {
       const gap = ahead(car) - halfLength(car);
       if (gap < -halfLength(car) * 2) continue;
@@ -68,9 +65,7 @@ export class Autodrive {
       speed = Math.min(speed, Math.sqrt(moving * moving + 2 * touchBraking * Math.max(0, gap - CLEARANCE)));
       if (gap < CLEARANCE) speed = Math.min(speed, moving * Math.max(0, gap) / CLEARANCE);
     }
-    // Match assisted driving's next speed so each step lands on the curve.
-    // Heading follows that same displacement; no camera-only lag or sideways
-    // motion is added, and the curve pauses naturally when traffic stops us.
+    // Predict assisted driving's next speed so each step lands on the path.
     const looseness = clamp((Math.abs(player.u) - 4.8) / 1.1, 0, 1);
     const targetSpeed = speed * (1 + (player.stats.offRoad / player.stats.topSpeed - 1) * looseness);
     const nextSpeed = clamp(Math.abs(player.speed) + clamp(targetSpeed - Math.abs(player.speed), -touchBraking * dt, acceleration * dt), 0, player.stats.topSpeed);

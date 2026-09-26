@@ -4,7 +4,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { registerChunkResources } from './chunk-resources.js';
 import { desertWaterClock } from './desert-river.js';
 
-// Bake the small details and muted colors into shared, flat-shaded meshes.
+// Bakes small details into shared flat-shaded meshes.
 class Parts {
   constructor() { this.parts = []; }
   add(source, position, color, rotation = [0, 0, 0]) {
@@ -39,7 +39,6 @@ function fuelStop() {
   p.box([2, 4.06, -5], [6.5, .38, .28], plaster);
   p.box([2, 4.06, 5], [6.5, .38, .28], plaster);
   p.box([5.12, 4.06, 0], [.26, .38, 10], plaster);
-  // Deep porch shade, a faded fascia, and two old pumps carry the silhouette.
   p.box([-2.4, 3.38, 0], [3.3, .18, 10.5], '#98794e', [0, 0, -.045]);
   p.box([-4.03, 3.36, 0], [.16, .48, 10.5], '#738276');
   for (const z of [-4.5, 4.5]) p.box([-3.85, 1.62, z], [.17, 3.24, .17], timber);
@@ -57,12 +56,10 @@ function fuelStop() {
     p.box([-5.01, 2.04, z], [.025, .24, .65], '#3e4b46');
     p.box([-5.03, 2.04, z], [.027, .025, .4], '#c7b992');
     p.cylinder([-4.55, 2.51, z], .26, .26, .38, '#dbcfaa');
-    // A low-sided hose loop hangs on the pump's end.
     const g = new THREE.TorusGeometry(.43, .035, 4, 10, Math.PI * 1.55);
     p.add(g, [-4.55, 1.14, z + .51], '#494c41', [0, 0, .3]);
     p.box([-4.92, 1.65, z + .52], [.13, .33, .09], '#4c5148', [0, 0, -.25]);
   }
-  // One wall vent and a short bench keep the compound modest.
   p.box([2.8, 4.2, -2.6], [1.2, .55, 1.1], '#8b8771');
   p.box([-2.1, .66, 4], [.66, .14, 1.8], timber);
   for (const z of [3.3, 4.7]) p.box([-2.1, .29, z], [.12, .58, .12], timber);
@@ -91,7 +88,7 @@ function windTower() {
 }
 function windRotor() {
   const p = new Parts();
-  // Local XY rotor plane; the material rotates it around its own center.
+  // Rotor lies in local XY. The material spins it around its centre.
   for (let i = 0; i < 12; i++) {
     const angle = i * Math.PI / 6;
     const x = Math.cos(angle), y = Math.sin(angle);
@@ -117,7 +114,7 @@ function cattleSkull() {
   const outline = [[-.4,-.91],[-.61,-.65],[-.69,-.28],[-.51,.1],[-.31,.36],[-.24,1.02],[-.17,1.18],[0,1.08],
     [.17,1.18],[.24,1.02],[.31,.36],[.51,.1],[.69,-.28],[.61,-.65],[.4,-.91]];
   const shape = new THREE.Shape(outline.map(([x,z]) => new THREE.Vector2(x,z)));
-  // Actual openings and inset cavity floors give the bone a hollow silhouette.
+  // Real holes with inset floors so the eye and nose cavities look hollow.
   for (const side of [-1,1]) {
     const eye = [[.25,-.49],[.44,-.57],[.56,-.35],[.46,-.11],[.27,-.14]];
     const nose = [[.055,.49],[.17,.71],[.15,1.01],[.055,.93]];

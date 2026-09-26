@@ -2,7 +2,7 @@ import { ENGINES } from './profiles.js';
 import { createEngineBank } from './engine.js';
 import { createTextureBuffer } from './textures.js';
 
-// Longer stereo noise with a seamless join, shared by all the noise layers.
+// 12 s of looping stereo pink noise shared by all the noise layers.
 export function createNoiseBuffer(ctx, seed = 0x71ca9) {
   const length = Math.ceil(ctx.sampleRate * 12), overlap = Math.ceil(ctx.sampleRate * .15);
   const buffer = ctx.createBuffer(2, length, ctx.sampleRate);
@@ -19,7 +19,7 @@ export function createNoiseBuffer(ctx, seed = 0x71ca9) {
       const sample = (b0 + b1 + b2 + white * .1848) * .18;
       if (i < length) data[i] = sample; else tail[i - length] = sample;
     }
-    // The tail follows the last sample naturally, then blends into the start.
+    // Crossfade the overrun tail into the start so the loop is seamless.
     for (let i = 0; i < overlap; i++) {
       const phase = i / (overlap - 1) * Math.PI / 2;
       data[i] = tail[i] * Math.cos(phase) + data[i] * Math.sin(phase);
@@ -69,8 +69,7 @@ export function createSoundGraph(ctx) {
   const engineFilter = filter('lowpass', 420, engineLevel);
   const engineBank = createEngineBank(ctx, engineFilter);
   engineBank.setProfile(ENGINES.coast);
-  // Distant traffic uses a cheaper harmonic voice; the player's engine uses
-  // combustion textures with separate RPM and load blends.
+  // Cheap harmonic waves for traffic. The player's engine uses the engine bank.
   const waves = new Map(Object.values(ENGINES).map(profile => {
     const harmonics = new Float32Array([0, ...profile.harmonics]);
     return [profile, ctx.createPeriodicWave(new Float32Array(harmonics.length), harmonics)];
@@ -107,8 +106,8 @@ export function createSoundGraph(ctx) {
     return { level: level.gain, pan: pan.pan, tone: tone.frequency, wash: wash.frequency, rate: wash.rate };
   });
 
-  // Fixed voice pools: a long session never accumulates oscillators, buffers,
-  // onended callbacks or timers. Busy voices are skipped, never cut mid-note.
+  // Fixed voice pools so long sessions never accumulate oscillators, buffers,
+  // onended callbacks or timers. Busy voices are skipped, not cut mid-note.
   const pools = {};
   for (const [name, count, noisy] of [['ambience', 5, false], ['engine', 2, true], ['road', 2, true], ['weather', 2, true], ['music', 6, false]]) {
     pools[name] = Array.from({ length: count }, (_, index) => {

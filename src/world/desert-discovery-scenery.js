@@ -18,7 +18,7 @@ export function buildDesertDiscoveries(chunk, discoveries) {
     if (!batches.has(name)) batches.set(name, {geometry, paint, items: []});
     batches.get(name).items.push({p, rotation, scale});
   }
-  // A building or a fixture: drawn like the rest, and it stops the car.
+  // Adds the model with a collider.
   function solid(name, geometry, p, rotation) {
     add(name, geometry, material, p, rotation);
     solidModel(chunk, geometry, p, rotation[1]);
@@ -31,8 +31,8 @@ export function buildDesertDiscoveries(chunk, discoveries) {
   }
   function apron(site) {
     const vertices = [];
-    // Clip the existing terrain faces to the paved footprint. Sampling a new
-    // grid bridges ground creases and leaves small floating or buried patches.
+    // Clip the existing terrain triangles to the footprint. A fresh grid would not
+    // follow ground creases and leaves floating or buried patches.
     const first=Math.floor((site.s-DESERT_FUEL_APRON_HALF_LENGTH)/2)*2;
     const last=Math.ceil((site.s+DESERT_FUEL_APRON_HALF_LENGTH)/2)*2;
     function clip(polygon, distance) {
@@ -65,8 +65,7 @@ export function buildDesertDiscoveries(chunk, discoveries) {
             polygon=clip(polygon,p=>low+(high-low)*(p.s-s)/2-p.u*site.side);
             for (let i=1;i<polygon.length-1;i++) {
               for (const p of [polygon[0],polygon[i],polygon[i+1]]) {
-                // Match the highway's two-meter segments exactly at its edge,
-                // easing back onto the untouched terrain by the outer shoulder.
+                // Matches the road's 2 m segments at its edge and blends to terrain by u = 7.
                 const blend=1-smoothstep(5.5,7,Math.abs(p.u));
                 const a=desertPosition(s,p.u,roadHeight(s)+.075),b=desertPosition(s+2,p.u,roadHeight(s+2)+.075),t=(p.s-s)/2;
                 vertices.push(p.x+(a.x+(b.x-a.x)*t-p.x)*blend,
@@ -100,10 +99,8 @@ export function buildDesertDiscoveries(chunk, discoveries) {
       const troughGround = foundation(troughS,troughU,1.15,2.4,angle);
       solid('desert-ranch-trough',assets.trough,point(troughS,troughU,troughGround),[0,angle,0]);
     } else {
-      // A single sun-bleached skull, tucked into the sand beside the road.
       ground = point(s,u)[1]-.025;
-      // Face the fixed isometric camera, regardless of which roadside it uses.
-      // A bounded seeded variation keeps every muzzle visible from the front.
+      // Face the isometric camera on either roadside, with a small seeded yaw jitter.
       const yaw=Math.atan2(-220,260)+(randomAt(site.index,2317)-.5)*.56;
       const center=chunk.groundPosition(s,u),along=chunk.groundPosition(s+1,u),across=chunk.groundPosition(s,u+1);
       const normal=new THREE.Vector3().subVectors(across,center).cross(new THREE.Vector3().subVectors(along,center)).normalize();

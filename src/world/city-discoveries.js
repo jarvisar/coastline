@@ -1,8 +1,8 @@
 import { blockBoundary, blockAt, crossStreetAt, nearStreet, quayOffset, STREET_HALF_WIDTH, FAR_BANK_TOP, BANDS, BANK_BANDS } from './city-route.js';
 import { createDiscoverySchedule } from './discovery-schedule.js';
 
-// Approximate miles between sightings of EACH kind. Lower = more frequent.
-// Edit one number, then reload. Infinity disables a kind. Together: ~2.5 miles.
+// Rough miles between sightings of each kind. Lower is more frequent.
+// Infinity disables a kind. About 2.5 miles combined.
 export const CITY_DISCOVERY_MILES = {
   'river-bridge': 7.5, // Side street crossing the river.
   square: 7.5, // Park and fountain.
@@ -15,7 +15,7 @@ export const CITY_DISCOVERY_SPACING = schedule.spacing;
 function districtSite(kind, index, desired) {
   let site = null;
   if (kind === 'river-bridge') {
-    // The bridge continues a side street that already runs down to the quay.
+    // Continues a side street that already reaches the quay.
     const nearest = crossStreetAt(desired).index;
     for (const offset of [0, 1, -1, 2, -2, 3, -3]) {
       const street = nearest + offset;
@@ -25,7 +25,7 @@ function districtSite(kind, index, desired) {
       break;
     }
   } else if (kind === 'square') {
-    // A square needs a long block: two rows of buildings give way to lawn.
+    // Needs a long block. Two building rows give way to lawn.
     for (const offset of [0, 1, -1, 2, -2]) {
       const block = blockAt(desired) + offset, start = blockBoundary(block), end = blockBoundary(block + 1);
       if (end - start < 96) continue;
@@ -34,7 +34,7 @@ function districtSite(kind, index, desired) {
       break;
     }
   } else {
-    // The church takes the first lot of a block, on the corner by the side street.
+    // Church on the block's first lot, by the side street.
     const block = blockAt(desired), start = blockBoundary(block);
     const s = start + STREET_HALF_WIDTH + 3 + 14;
     site = { kind, index, block, s, u: BANDS[0].front + 13, side: 1, halfS: 10, u0: BANDS[0].front - 1, u1: BANDS[0].front + 27 };
@@ -44,7 +44,7 @@ function districtSite(kind, index, desired) {
 
 export const cityDiscoveries = schedule.discoveries;
 
-// Whether a point, or a lot, stays out of every site's rectangle.
+// True when the point or lot is outside every site's rectangle.
 export function cityDiscoveryClears(s, u, discoveries, radius = 0) {
   return discoveries.every(site => !(Math.abs(s - site.s) < site.halfS + radius && u > site.u0 - radius && u < site.u1 + radius));
 }
@@ -52,8 +52,8 @@ export function cityLotClears(s0, s1, u0, u1, discoveries) {
   return discoveries.every(site => s1 <= site.s - site.halfS || s0 >= site.s + site.halfS || u1 <= site.u0 || u0 >= site.u1);
 }
 
-// Divide the available frontage before laying out lots. Rejecting an entire
-// overlapping lot leaves unnecessary empty ground beside a small landmark.
+// Split the frontage around sites before laying out lots. Rejecting whole
+// overlapping lots leaves empty ground beside small landmarks.
 export function cityBuildingSpans(s0, s1, u0, u1, discoveries) {
   let spans = [{ s0, s1 }];
   for (const site of discoveries) {

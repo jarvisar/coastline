@@ -1,7 +1,5 @@
-/* Shared limits for the header, panels, HUD and touch controls. */
 .vr-entry[hidden], #welcome.hidden :is(.vr-entry, .update-entry) { display: none !important; }
 .vr-entry, .update-entry { pointer-events: auto; justify-content: center; }
-/* The pause screen's entry is a settings row, sized like the panels above it. */
 #enter-vr-pause { width: 340px; max-width: 100%; margin: 0 0 14px; }
 #vr-error { position: absolute; top: var(--header-clear); right: var(--ui-right); max-width: min(360px, 85vw); padding: 12px; background: var(--cream); color: var(--ink); border-radius: 6px; z-index: 5; }
 :root {
@@ -17,16 +15,14 @@
 body[data-controller=true] #app :is(.controls, #pause, #change-journey) { display: none !important; }
 .chooser > .controller-hint { margin: 0 0 12px; }
 .chooser-card:focus { outline: 3px solid #568d78; outline-offset: 3px; }
-/* A controller sends no keystroke, so :focus-visible cannot be counted on to
-   show where the ring is. While one is connected, the pause screen draws it
-   on plain focus. */
+/* Gamepad input doesn't trigger :focus-visible, so use plain :focus. */
 body[data-controller=true] .pause-overlay button:focus { outline: 2px solid var(--ink); outline-offset: 3px; }
 .journey-button { position: static; }
 .brand { min-width: 0; }
 #app:has(.welcome.hidden) .topbar .brand,
 #app:has(#pause-overlay:not([hidden])) .brand { visibility: hidden; }
 
-/* Menus reserve space for their primary action, not for the driving HUD. */
+/* Hide the driving HUD while a menu is up. */
 #app:has(.welcome.hidden, #pause-overlay:not([hidden]), dialog[open], #journey-transition.active) .vignette { display: none; }
 #app:has(.welcome:not(.hidden)) :is(.bottom-bar, .touch-controls, #pause),
 #app:has(#pause-overlay:not([hidden])) :is(.bottom-bar, .touch-controls, .welcome),
@@ -97,7 +93,7 @@ body[data-journey=city] .chooser-heading { background: #eef1f4; }
   .chooser-card { grid-template-columns: 88px minmax(0, 1fr); }
 }
 
-/* Short landscape screens trade secondary readouts for a clear driving area. */
+/* Short landscape screens drop secondary readouts. */
 @media (max-height: 560px) and (orientation: landscape) {
   :root { --edge: 6px; --header-clear: calc(var(--ui-top) + 60px); --stick-size: 125.84px; }
   .brand-caption, #stick-help { display: none; }
@@ -130,7 +126,6 @@ body[data-journey=city] .chooser-heading { background: #eef1f4; }
   .topbar { gap: 8px; }
 }
 
-/* The route and its mileage read as one card on the pause screen. */
 .bottom-bar { justify-content: flex-start; }
 .location { display: flex; align-items: center; gap: 11px; max-width: 100%; padding: 10px 12px; border: 1px solid #ffffff50; border-radius: 10px; background: #f9f8ee5e; backdrop-filter: blur(12px); }
 .location-copy { display: flex; flex-direction: column; gap: 3px; }
@@ -153,7 +148,6 @@ body[data-journey=jungle] .location { background: #1c3423d1; border-color: #9cbf
   .controls .control-label { display: none; }
 }
 
-/* Anchor dismiss icons to the help area's corner, away from the copy. */
 .dismiss-control-help, .touch-controls .dismiss-control-help, .controls .dismiss-control-help {
   position: absolute; top: 0; right: 0; width: 32px; height: 32px; min-width: 32px; min-height: 32px;
   padding: 0; transform: none; background: transparent; font-size: 17px;
@@ -169,7 +163,6 @@ body[data-journey=jungle] .location { background: #1c3423d1; border-color: #9cbf
   .dismiss-control-help, .touch-controls .dismiss-control-help { width: 44px; height: 44px; min-width: 44px; min-height: 44px; }
 }
 
-/* One row of driving actions, pause included, sits at the top right. */
 :root { --header-clear: calc(var(--ui-top) + 76px); }
 .drive-actions {
   position: relative; flex-shrink: 0;
@@ -217,14 +210,11 @@ body[data-journey=jungle] .drive-actions button:hover { background: #2f5136e0; }
 
 #fps-counter { position: absolute; top: var(--header-clear); left: var(--ui-left); z-index: 6; padding: 6px 9px; border-radius: 4px; background: #102019d9; color: #edffe9; font: 12px/1.4 monospace; font-variant-numeric: tabular-nums; pointer-events: none; }
 
-/* Four route cards: two columns on mid-width screens before the single mobile column. */
 @media (min-width: 761px) and (max-width: 960px) {
   .chooser-options { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
-/* The pause screen carries the readout the drive no longer shows: pinned to
-   its top-left corner where the header's brand would sit, and folded back
-   into the column when the screen is too small for a corner. */
+/* Route readout sits top left on the pause screen, inline on small screens. */
 .pause-overlay .location { position: absolute; top: var(--ui-top); left: var(--ui-left); width: max-content; max-width: calc(100% - var(--ui-left) - var(--ui-right)); }
 .pause-overlay .location-title { font-size: 10px; }
 .pause-overlay .location-sub { font-size: 12px; }
@@ -232,27 +222,22 @@ body[data-journey=jungle] .drive-actions button:hover { background: #2f5136e0; }
   .pause-overlay .location { position: static; display: flex; margin: clamp(0px, calc((100dvh - 620px) / 2), 180px) 0 14px; }
   .pause-overlay > h2 { margin-top: 0; }
 }
-/* The drive's own toasts have to clear the pause screen now that sound,
-   fullscreen and the graphics levels are all set from it. */
+/* Toasts show above the pause screen, where most settings are changed. */
 #toast { z-index: 4; }
 .drive-actions #pause .play-icon { display: none; }
 .drive-actions #pause[aria-pressed=true] .pause-icon { display: none; }
 .drive-actions #pause[aria-pressed=true] .play-icon { display: block; }
-/* Four actions in one row: on a narrow screen only the route keeps its word. */
+/* Narrow screens keep only the route button's label. */
 @media (max-width: 760px) {
   .drive-actions :is(#view, #reset, #pause) .control-label { display: none; }
 }
 
-/* The joystick's caption is a caption, not a dialog: the copy and its dismiss
-   button share one line instead of the button floating in a band of reserved
-   space above the text. The button keeps a 44px tap target through a halo, so
-   it can look like the small control it is. */
+/* Copy and dismiss button share one line. The ::after halo keeps a 44px tap target. */
 #stick-help {
   display: flex; align-items: center; gap: 8px;
   width: max-content; max-width: min(230px, 62vw);
   padding: 8px 8px 8px 13px; line-height: 1.45;
 }
-/* Both lines start together so the arrows line up as a legend. */
 .stick-help-copy { min-width: 0; text-align: left; }
 #stick-help .stick-help-line { display: inline-block; margin-top: 1px; opacity: .8; }
 #stick-help .dismiss-control-help {

@@ -1,27 +1,24 @@
 import * as THREE from 'three';
 
-// What the car cannot drive through. A chunk records the footprint of each
-// solid thing as it stands it up, in the global coordinates the car and the
-// traffic already collide in, so the list crosses from the chunk worker as
-// plain data and the driving step never has to read a mesh. Positions come in
-// as the chunk places them: x, and z measured from the chunk's own start.
+// Solid footprints for car and traffic collision. Kept as plain data so the list
+// crosses from the chunk worker and the driving step never reads a mesh.
+// Positions come in as the chunk places them.
 
-// A rectangle turned by the object's own yaw, in the shape trafficContact reads.
+// Rectangle turned by the object's yaw, in the shape trafficContact reads.
 export function solidBox(chunk, x, z, yaw, halfWidth, halfLength) {
   ((chunk.features ??= {}).colliders ??= []).push({ x, z: z - chunk.start, reach: Math.hypot(halfWidth, halfLength), heading: -yaw, halfWidth, halfLength });
 }
-// A wall or a block laid out between two points, this wide either side of the line.
+// Box from a to b, halfWidth either side of the line.
 export function solidSpan(chunk, a, b, halfWidth) {
   solidBox(chunk, (a.x + b.x) / 2, (a.z + b.z) / 2, Math.atan2(b.x - a.x, b.z - a.z), halfWidth, Math.hypot(b.x - a.x, b.z - a.z) / 2);
 }
-// A trunk, a silo, a tank: anything near enough round.
 export function solidPost(chunk, x, z, radius) {
   ((chunk.features ??= {}).colliders ??= []).push({ x, z: z - chunk.start, reach: radius });
 }
 
-// Run after scenery clearances, before chunk transforms are finalized. Rocks
-// use their whole outline: unlike a tree, their lowest vertices can be a point.
-// Only substantial stones (3 m across, 1.5 m deep and 1 m tall) obstruct the car.
+// Run after scenery clearances, before chunk transforms are finalized. Rocks use
+// their whole outline since their lowest vertices can be a single point.
+// Only stones at least 3 m across, 1.5 m deep and 1 m tall block the car.
 export function solidRocks(chunk, geometries) {
   const matrix = new THREE.Matrix4(), local = new THREE.Matrix4(), unturn = new THREE.Matrix4();
   const euler = new THREE.Euler(0, 0, 0, 'YXZ');
@@ -50,8 +47,7 @@ export function solidRocks(chunk, geometries) {
   }
 }
 
-// The outline of a model's lowest quarter is what a car can reach: the walls
-// and the trunk, not the eaves, a crown, or a turbine's nacelle overhead.
+// Outline of the model's lowest quarter, so eaves, crowns and nacelles don't count.
 const footprints = new WeakMap();
 function footprint(geometry) {
   if (!footprints.has(geometry)) {
@@ -69,7 +65,7 @@ function footprint(geometry) {
   }
   return footprints.get(geometry);
 }
-// Whatever is placed with this geometry, position, yaw and uniform scale.
+// Scale must be uniform.
 export function solidModel(chunk, geometry, p, yaw = 0, scale = 1, round = false) {
   const f = footprint(geometry), cos = Math.cos(yaw), sin = Math.sin(yaw);
   const x = p[0] + (f.x * cos + f.z * sin) * scale, z = p[2] + (f.z * cos - f.x * sin) * scale;

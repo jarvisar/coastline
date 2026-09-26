@@ -10,8 +10,7 @@ export class Input {
     this.konami = new KonamiCode();
     this.touchStick = new TouchStick(document.querySelector('#touch-stick'), () => onAction('drive'), document.querySelector('#scene'));
     this.codes = { forward: ['KeyW', 'ArrowUp', 'Numpad8'], brake: ['KeyS', 'ArrowDown', 'Numpad2'], left: ['KeyA', 'ArrowLeft', 'Numpad4'], right: ['KeyD', 'ArrowRight', 'Numpad6'], handbrake: ['Space'] };
-    // The driving simulation reads this up to six times per displayed frame, so
-    // it fills one reused record rather than building a fresh object each step.
+    // Read up to six times per frame, so one record is reused instead of allocated.
     this.actions = Object.keys(this.codes);
     this.driving = Object.fromEntries([...this.actions.map(action => [action, false]), ['touchStick', null], ['touchDrive', null]]);
     this.gamepad = new GamepadInput(onAction, connected => {
@@ -20,12 +19,10 @@ export class Input {
       onControllerConnection(connected);
     }, undefined, () => { this.clear(); onKonami(); });
     window.addEventListener('keydown', e => {
-      // Native mixer sliders own their arrow, Home and End keys. Editing a
-      // volume must not also accelerate the car or swallow keyboard access.
+      // Range sliders own their arrow, Home and End keys, so editing a volume doesn't drive.
       if (e.target.matches?.('input[type="range"]') && !['Escape', 'KeyP', 'KeyM'].includes(e.code)) return;
       // Let menu buttons keep their native keyboard activation.
       if (e.target.closest?.('button') && ['Space', 'Enter'].includes(e.code)) return;
-      // The keyboard and controller sequences share the same hidden toggle.
       if (this.konami.keydown(e)) {
         e.preventDefault(); this.clear(); onKonami();
         return;

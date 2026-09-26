@@ -38,32 +38,27 @@ setupPwaFullscreen();
 const $ = selector => document.querySelector(selector);
 const MENU_MOVES = ['menuNext', 'menuPrevious', 'menuUp', 'menuDown'];
 const MENU_CRUISE_SPEED = TRAFFIC_CRUISE_SPEED * 1.4;
-// A chooser's ring holds its cards and paint chips; the pause screen's holds
-// resume, the garage and every driving, sound and graphics setting.
+// Focus rings for gamepad navigation in the choosers and the pause screen.
 const MENU_CARDS = '[data-journey], [data-car], [data-paint]';
 const PAUSE_CONTROLS = '#resume, #change-car, #autodrive, #traffic, #sound, #audio-mixer-toggle, #audio-mixer button, #audio-mixer input, #fullscreen, #graphics-toggle, [data-quality], #pixel-density, #soft-shading, #enter-vr-pause, .update-entry, .pwa-install-button';
 const mileageFormat = new Intl.NumberFormat('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 let paused = false, started = false, time = 0, hudTime = 0;
 const frameClock = new FrameClock();
 let toastTimer; let sceneReady = false;
-// The chosen car and scene outlive the visit; positions and mileage do not.
+// Car and route persist. Position and mileage do not.
 const carStorageKey = 'coastline-car';
 const journeyStorageKey = 'coastline-journey';
 let carId = DEFAULT_CAR;
 try { const saved = localStorage.getItem(carStorageKey); if (saved && CARS[saved]) carId = saved; } catch { /* Storage is optional. */ }
-// One colour dresses the whole garage and follows the player from car to car.
-// It lasts the visit and is not stored: the fleet's own finishes are the thing
-// worth keeping, and Default hands them straight back.
+// Garage-wide paint override. Lasts the visit only and is not stored.
 let paint = null;
 const toast = message => { $('#toast').textContent = message; $('#toast').classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => $('#toast').classList.remove('show'), 2200); };
 
 async function boot() {
   let chunkWorker;
   try {
-    // `?ao=0` still forces the soft shading off, whatever the quality level is.
     const graphics = new Graphics({ ambientOcclusion: new URLSearchParams(window.location.search).get('ao') === '0' ? false : null });
-    // How much of the route stays built is a quality setting too, so it has to
-    // be in place before the first world is streamed.
+    // The resident window is a quality setting and must be set before the first world streams.
     setResidentWindow(graphics.settings.chunks);
     graphics.onChange(settings => setResidentWindow(settings.chunks));
     const rendering = createRendering($('#scene'), graphics);
@@ -98,16 +93,13 @@ async function boot() {
     const savedJourneys = Object.fromEntries(Object.entries(JOURNEYS).map(([id, data]) => [id, journeyStart(Number(data.routeNumber))]));
     const vehicle = new DrivingController(JOURNEYS[journey].route, savedJourneys[journey], DEFAULT_CAR); const audio = new DriveAudio();
     const refreshAudioMixer = setupAudioMixer(audio);
-    // Free driving starts on for now, while off-road collision is being tried
-    // out. The hidden code only changes the paint.
+    // Free driving is on by default while off-road collision is trialled.
     vehicle.toggleFreeDriving();
     vehicle.setAppearance(journey);
     vehicle.setLights(journey === 'snow' ? 1 : journey === 'volcanic' ? .65 : journey === 'city' ? .35 : 0);
     rendering.setJourney(journey); audio.setJourney(journey);
     const journeyDialog = $('#journey-dialog'), carDialog = $('#car-dialog'), pauseOverlay = $('#pause-overlay');
     const openChooser = () => [journeyDialog, carDialog].find(dialog => dialog.open) ?? null;
-    // The pause screen is a menu too: it is up whenever the drive is paused
-    // with no chooser over it, and the controller walks it the same way.
     const openPauseMenu = () => paused && !pauseOverlay.hidden ? pauseOverlay : null;
     scene.add(vehicle.car);
     const traffic = new Traffic(scene, vehicle.route, vehicle.s, journey);
@@ -128,7 +120,7 @@ async function boot() {
         }
       }, 3000);
     }
-    // Capture taps even when a menu or the joystick handles the event itself.
+    // Capture phase so taps count even when a menu or the joystick handles them.
     window.addEventListener('pointerdown', () => {
       if (autodrive.enabled) revealDrivingControls();
     }, { capture: true, passive: true });
@@ -146,7 +138,7 @@ async function boot() {
     });
     function primeMenuDrive() {
       if (started) return;
-      // Reveal the menu already cruising, at a speed that respects traffic.
+      // Start the menu drive already at cruise speed.
       vehicle.speed = MENU_CRUISE_SPEED;
       const state = autodrive.update(vehicle, traffic, MENU_CRUISE_SPEED, 0);
       vehicle.speed = state.touchDrive.amount * vehicle.stats.topSpeed;
@@ -187,14 +179,11 @@ async function boot() {
       const current = '<span class="chooser-current">CURRENT CAR</span>';
       $('.car-options').innerHTML = CAR_IDS.map(id => {
         const entry = CARS[id];
-        // The plain row stands for whichever car the road brings: no portrait
-        // and no meters, so it sits above the fleet as a single line.
+        // The route's default car gets a single-line row with no art or meters.
         if (entry.plain) return `<button type="button" class="chooser-card car-card car-card-plain" data-car="${id}" aria-current="false">`
           + `<span class="chooser-card-title">${entry.name}</span>${current}</button>`;
         const meters = carMeters(id).map(({ label, level }) =>
           `<span class="car-meter"><span>${label}</span><span class="car-meter-track"><span style="width:${level}%"></span></span></span>`).join('');
-        // The portrait is drawn in whatever the garage is wearing, so the grid
-        // doubles as the preview: one colour repaints the whole fleet at once.
         return `<button type="button" class="chooser-card car-card" data-car="${id}" aria-label="${entry.name}" aria-current="false" style="--car-paint:${cardPaint(id)}">`
           + carArt(id)
           + `<span class="chooser-card-copy"><span class="chooser-card-title">${entry.name}</span>`
@@ -208,16 +197,13 @@ async function boot() {
         ...PAINTS.map(({ name, color }) => `<button type="button" class="paint-swatch" role="radio" aria-checked="false" data-paint="${color}" style="--swatch:${color}" aria-label="${name}" title="${name}"><span class="paint-chip" aria-hidden="true"></span></button>`)].join('');
       for (const swatch of paintSwatches.querySelectorAll('[data-paint]')) {
         swatch.addEventListener('click', () => applyPaint(swatch.dataset.paint));
-        // A row of bare colours says nothing on its own, so the one under the
-        // pointer or the keyboard focus names itself beside the heading.
+        // Show the hovered or focused swatch's name beside the heading.
         for (const event of ['pointerenter', 'focus']) swatch.addEventListener(event, () => { $('#paint-current').textContent = swatch.getAttribute('aria-label'); });
         for (const event of ['pointerleave', 'blur']) swatch.addEventListener(event, showPaintName);
       }
       paintInput.addEventListener('input', () => applyPaint(paintInput.value));
     }
-    // With no garage colour set, every car shows the finish it arrived in. The
-    // default car has none of its own, so it shows whatever the road it is on
-    // would give it.
+    // The default car has no finish of its own, so it takes the route's paint.
     const ownPaint = id => (carEntry(id).plain ? ROUTE_PAINT[journey] ?? ROUTE_PAINT.coast : carEntry(id).paint);
     const cardPaint = id => paint ?? ownPaint(id);
     const paintCards = () => { for (const card of carDialog.querySelectorAll('[data-car]')) card.style.setProperty('--car-paint', cardPaint(card.dataset.car)); };
@@ -234,9 +220,6 @@ async function boot() {
       paintInput.value = paint ?? ownPaint(carId);
       showPaintName();
     }
-    // Repainting needs no new scenery either: the colour lands on the car where
-    // it stands and on every card at once, and the drive carries on. Default
-    // clears it, and the fleet goes back to its own finishes.
     function applyPaint(value) {
       const color = value === DEFAULT_PAINT ? null : readPaint(value);
       if (value !== DEFAULT_PAINT && !color) return;
@@ -251,7 +234,6 @@ async function boot() {
       $('#change-car').setAttribute('aria-label', `Open the garage. Currently driving the ${carEntry(carId).name}`);
       updatePaintUi();
     }
-    // Swapping cars needs no new scenery, so the drive simply carries on.
     function chooseCar(id) {
       carDialog.close();
       if (id === carId || !CARS[id]) return;
@@ -280,8 +262,7 @@ async function boot() {
       if (id === journey && !regenerate) { journeyDialog.close(); return; }
       if (!openChooser()) journeyWasPaused = paused;
       changingJourney = true; paused = true; input.clear(); frameClock.suspend();
-      // Building and compiling the next route says nothing about how it runs,
-      // and the new route may afford a level the last one could not.
+      // Load time isn't representative, and the new route may afford a higher level.
       graphics.relax();
       audio.setPaused(true);
       $('#journey-transition').classList.add('active'); journeyDialog.close(); carDialog.close();
@@ -306,9 +287,8 @@ async function boot() {
         rendering.setJourney(id); audio.setJourney(id); updateJourneyUi(); paintCards(); updatePaintUi();
         vehicle.render(1, world.origin);
         rendering.snap(); rendering.update(vehicle.car, 1, world.origin); world.animate(time, vehicle);
-        // Compile against the final route's lights, fog and traffic. Doing this
-        // before removing the old world produced unused lighting variants and
-        // left the real ones to compile synchronously on the first drive frame.
+        // Compile after the old world is removed, against the new route's lights and fog.
+        // Compiling earlier builds unused light variants and stalls the first frame.
         if (renderer.extensions.has('KHR_parallel_shader_compile')) await renderer.compileAsync(scene, rendering.camera);
         else renderer.compile(scene, rendering.camera);
         updateHud();
@@ -325,12 +305,9 @@ async function boot() {
         $('#journey-transition').classList.remove('active');
       }
     }
-    // Cards are laid out in a grid that changes with the viewport and holds one
-    // full-width row, so up and down follow the rendered geometry rather than a
-    // column count. A single row of cards steps along itself instead, and the
-    // pause screen's stack of settings is walked by the same rules.
+    // Up and down use on-screen positions because the grid's columns change
+    // with the viewport and one row is full width.
     function moveMenuFocus(menu, name) {
-      // Everything in the menu's ring that is laid out is reachable.
       const cards = [...menu.querySelectorAll(menu === pauseOverlay ? PAUSE_CONTROLS : MENU_CARDS)].filter(card => card.offsetParent);
       if (!cards.length) return;
       const index = cards.indexOf(document.activeElement);
@@ -391,9 +368,8 @@ async function boot() {
         if (name === 'menuConfirm' && chooser.contains(document.activeElement)) document.activeElement.click();
         return;
       }
-      // The pause screen is not modal, so it takes the menu actions and leaves
-      // the drive's own shortcuts — the garage, the routes, the next scene — to
-      // the handling below. B closes it the way it closes a chooser.
+      // The pause screen isn't modal. It takes only menu actions and lets other
+      // shortcuts fall through.
       const pauseMenu = openPauseMenu();
       if (pauseMenu && name.startsWith('menu')) {
         if (name === 'menuClose') setPaused(false);
@@ -478,8 +454,7 @@ async function boot() {
       },
     });
     $('#change-journey').addEventListener('click', openJourneys);
-    // The route button rides the title screen's stack and leads the toolbar
-    // for the drive, however the menu comes and goes.
+    // The route button moves between the title screen and the drive toolbar.
     function placeJourneyButton() {
       const button = $('#change-journey'), onMenu = !$('#welcome').classList.contains('hidden');
       for (const name of ['start-button', 'menu-secondary']) button.classList.toggle(name, onMenu);
@@ -529,7 +504,7 @@ async function boot() {
         const chooser = openChooser();
         if (chooser) chooser.close(); else action('pause');
       });
-      // Desktop builds that cannot update themselves get a download button on both menus.
+      // Desktop builds that can't self-update get a download button on both menus.
       let updateShown = false;
       const showUpdate = update => {
         if (!update || updateShown) return;
@@ -540,7 +515,7 @@ async function boot() {
           button.innerHTML = '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3v12m-4-4 4 4 4-4M5 15v5h14v-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg><span></span>';
           button.lastChild.textContent = `Get version ${update.version}`;
           button.title = 'Opens the download page';
-          button.addEventListener('click', () => window.open(update.url)); // the wrapper hands it to the system browser
+          button.addEventListener('click', () => window.open(update.url)); // the wrapper opens it in the system browser
           $(anchor).after(button);
         }
       };
@@ -609,12 +584,10 @@ async function boot() {
       pixelDensity.value = String(densityPercent);
       pixelDensityValue.textContent = `${densityPercent}%${densityPercent === 100 ? ' · Native' : ''}`;
       pixelDensity.setAttribute('aria-valuetext', `${densityPercent}% of native resolution`);
-      // The drawing buffer is the thing the quality level actually changes, so
-      // show it: it explains a softer picture without any further digging.
       graphicsStatus.textContent = `${graphics.auto ? 'Auto · ' : ''}${settings.label} · ${renderer.domElement.width} × ${renderer.domElement.height} · soft shading ${settings.ambientOcclusion ? 'on' : 'off'}`;
     }
     graphics.onChange((settings, reason) => {
-      // A frozen canvas keeps its old buffer until something asks for a frame.
+      // A paused canvas keeps its old buffer until asked for a frame.
       needsRender = true;
       updateGraphicsUi(settings);
       if (reason === 'auto') toast(`Graphics · ${settings.label}${settings.ambientOcclusion ? '' : ' · soft shading off'} · adjusted for this device`);
@@ -624,8 +597,6 @@ async function boot() {
     pixelDensity.addEventListener('input', () => graphics.setDensity(Number(pixelDensity.value) / 100));
     const hud = { distance: $('#distance') };
     function updateHud() {
-      // Physics uses meters; convert only the displayed measurement. The drive
-      // itself shows nothing, so this is read on the pause screen.
       const distance = mileageFormat.format(vehicle.distance / 1609.344);
       // Replacing unchanged text still invalidates layout, including while paused.
       if (hud.distance.textContent !== distance) hud.distance.textContent = distance;
@@ -670,8 +641,7 @@ async function boot() {
     const simulate = dt => {
       let state = started ? input.state : {};
       if (autodrive.enabled && (state.forward || state.brake || state.left || state.right || state.handbrake || state.touchStick)) action('autodrive');
-      // Cruise behind the welcome menu without toggling the player's setting
-      // or showing a notification. Starting hands control straight to input.
+      // Cruise behind the welcome menu without touching the player's autodrive setting.
       if (!started || autodrive.enabled) state = autodrive.update(vehicle, traffic, started ? vehicle.stats.topSpeed : MENU_CRUISE_SPEED, dt);
       if (state.touchStick) {
         if (rendering.camera.isPerspectiveCamera) Object.assign(state, thirdPersonDrivingInput(state.touchStick));
@@ -700,11 +670,9 @@ async function boot() {
       soundScene.heading = Math.atan2(cameraMatrix[2], cameraMatrix[0]);
       audio.update(vehicle.audioTelemetry, dt, false, soundScene);
       hudTime += dt; if (hudTime > .1) { updateHud(); hudTime = 0; }
-      // The regular quality sampler measures display cadence and resizes a canvas, whereas
-      // the headset owns its framebuffer and refresh rate.
+      // Not in VR: the headset owns its framebuffer and refresh rate.
       rendering.recordFrame(timestamp, !vr.active && !paused && !document.hidden && document.hasFocus() && !changingJourney);
-      // A paused desktop canvas only redraws when invalidated. In VR, keep
-      // drawing every headset frame so head tracking continues while stopped.
+      // Paused desktop redraws only when invalidated. VR draws every frame for head tracking.
       const rendered = vr.active ? Boolean(xrFrame) : !document.hidden && (!paused || needsRender);
       if (rendered) {
         vrStatus.update(vrMenuModel());
@@ -725,7 +693,7 @@ async function boot() {
     changingJourney = false;
     renderer.setAnimationLoop(frame);
     void vr.detect();
-    // Development-only inspection surface for automated driving and streaming checks.
+    // Dev-only hook for automated driving and streaming checks.
     if (import.meta.env.DEV) window.__coastline = { seed: SEED, chunkWorker, vehicle, traffic, audio, graphics, vr, get world() { return world; }, rendering, input, action, changeJourney, chooseCar, applyPaint, get carId() { return carId; }, get paint() { return paint; }, get journey() { return journey; }, get changingJourney() { return changingJourney; }, get paused() { return paused; }, get started() { return started; } };
   } catch (error) { chunkWorker?.dispose(); console.error('Could not start Coastline:', error); $('#loading').classList.add('loaded'); $('#error').hidden = false; }
 }

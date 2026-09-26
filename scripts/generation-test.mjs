@@ -33,7 +33,7 @@ try {
   function checkSpawn(state) {
     assert.equal(state.distance, 0); assert.equal(state.speed, 0); assert.equal(state.u, 2.4);
     assert.ok(Math.abs(state.y - state.ground) < .0001);
-    // One terrain mesh per resident chunk, however many this level keeps built.
+    // One terrain mesh per resident chunk at the current quality level.
     assert.ok(Math.abs(state.carZ) < 1030); assert.equal(state.terrain.length, state.resident);
   }
   for (let i = 0; i < 3; i++) {
@@ -67,7 +67,7 @@ try {
   }
   console.log('An explicit seed reproduces all four routes, including their actual terrain meshes.');
 
-  // Exercise streaming far enough to evict every starting chunk, then return.
+  // Stream far enough to evict every starting chunk, then return.
   await page.evaluate(() => window.__coastline.action('pause'));
   const placeCar = s => page.evaluate(s => {
     const a = window.__coastline;

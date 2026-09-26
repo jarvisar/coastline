@@ -18,14 +18,14 @@ try {
     await page.waitForFunction(() => window.__coastline && !window.__coastline.changingJourney && document.querySelector('#loading.loaded'));
     await page.click('#start');
     await page.evaluate(() => window.__coastline.action('pause'));
-    // Visit the actual routes, then inspect every surface against both light
-    // and dark backdrops so passing scenery cannot make the text disappear.
+    // Check text contrast against both black and white backdrops so no passing
+    // scenery can hide it.
     for (const route of routes) {
       await page.evaluate(route => window.__coastline.changeJourney(route), route);
       await page.waitForFunction(() => !window.__coastline.changingJourney);
       for (const state of ['garage', 'routes', 'pause', 'driving', 'menu']) {
-        // Native dialog close events restore the pause state asynchronously.
-        // Let that finish before opening the next state for inspection.
+        // Dialog close events restore the pause state asynchronously, so wait
+        // two frames before setting up the next state.
         await page.evaluate(() => { for (const dialog of document.querySelectorAll('dialog[open]')) dialog.close(); });
         await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
         await page.evaluate(({ route, state }) => {
@@ -59,7 +59,7 @@ try {
               if (!node.textContent.trim() || seen.has(element) || element.closest('svg,script,style,[hidden],#welcome .menu-brand,.loading,#scene')) continue;
               if (!element.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }) || element.closest('button:disabled')) continue;
               const rect = element.getBoundingClientRect(); if (!rect.width || !rect.height) continue;
-              // The driving root contains hidden panels; only audit actual HUD text.
+              // #app holds hidden panels too; only audit HUD text.
               if (state === 'driving' && !element.closest('.drive-actions,.controls,#stick-help,#toast,#fps-counter')) continue;
               seen.add(element);
               const chain = []; let parent = element, opacity = 1;

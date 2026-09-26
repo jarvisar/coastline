@@ -8,8 +8,8 @@ const boxData = box => box && [...box.min.toArray(), ...box.max.toArray()];
 const readSphere = data => data && new THREE.Sphere(new THREE.Vector3().fromArray(data), data[3]);
 const readBox = data => data && new THREE.Box3(new THREE.Vector3().fromArray(data), new THREE.Vector3().fromArray(data, 3));
 
-// Transfer only chunk-owned buffers, retaining native typed arrays and bounds.
-// Shared resources are resolved by name so custom shaders and GPU sharing survive.
+// Transfer only chunk-owned buffers. Shared resources go by name so the main
+// thread reuses its own copies, keeping custom shaders and GPU sharing intact.
 export function packChunk(chunk) {
   const buffers = new Set(), owned = new Set(chunk.owned), geometries = [], geometryIndices = new Map();
   function attribute(value) {
@@ -72,8 +72,8 @@ export function unpackChunk(data) {
       if (source.material) {
         const geometry = typeof source.geometry === 'string' ? chunkResource(source.geometry) : chunk.owned[source.geometry];
         const material = chunkResource(source.material);
-        // The worker already supplied the matrices. Avoid allocating and filling
-        // an identity buffer for every instance only to immediately replace it.
+        // Construct with count 0 so Three.js skips filling an identity buffer the
+        // worker's matrices would replace.
         result = source.count === undefined ? new THREE.Mesh(geometry, material) : new THREE.InstancedMesh(geometry, material, 0);
         if (result.isInstancedMesh) {
           result.count = source.count;

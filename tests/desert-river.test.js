@@ -42,7 +42,7 @@ test('the river stays in the valley, crosses beneath bridges, and preserves the 
     const bridge = desertBridgeAt(320 + index * DESERT_BRIDGE_SPACING);
     assert.equal(Math.abs(desertCreek(bridge.center).center), 0);
     assert.ok(desertGroundHeight(bridge.center, 0) < roadHeight(bridge.center) - 3.7);
-    // Both river banks and the level join at positive and negative stream edges.
+    // Continuous across bridge ends and the midpoint between bridges.
     for (const s of [bridge.center, bridge.start, bridge.end, bridge.center + DESERT_BRIDGE_SPACING / 2]) {
       const a = desertCreek(s - .0001), b = desertCreek(s + .0001);
       for (const key of ['center', 'width', 'level']) assert.ok(Math.abs(a[key] - b[key]) < .001);
@@ -71,8 +71,7 @@ test('river water fits the rendered channel and joins adjacent streaming chunks'
 });
 
 test('wide pools stay within their banks instead of flooding hollows behind mesas', () => {
-  // These chunks previously extended water 20–37 meters beyond the intended
-  // bank because one corner of a broad cliff triangle touched the channel.
+  // Chunks where a broad cliff triangle touches the channel.
   for (const index of [-16, -11, 0, 9, 15]) {
     const chunk = new DesertChunk(index);
     const water = chunk.group.getObjectByName('desert-creek-water').geometry;

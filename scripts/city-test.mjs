@@ -20,7 +20,7 @@ try {
   assert.equal(await page.evaluate(() => document.querySelector('meta[name="theme-color"]').content), '#b3bcc4');
   assert.equal(await page.evaluate(() => window.__coastline.vehicle.car.getObjectByName('city-bike').visible), true);
   assert.equal(await page.evaluate(() => window.__coastline.vehicle.car.getObjectByName('surfboard').visible), false);
-  // Lamps run part way up in the storm, on the player's car and on the traffic.
+  // The storm runs the lamps part way up.
   assert.ok(await page.evaluate(lamps => window.__coastline.vehicle.nightLights[0].material.emissiveIntensity > lamps + .5, initial.lamps));
   assert.equal(await page.evaluate(() => window.__coastline.traffic.vehicles.length), 9);
   await page.waitForTimeout(600);
@@ -53,7 +53,7 @@ try {
     records.push(result);
     if (s >= 0 && s < 1000) await page.screenshot({ path: `.artifacts/city-${s}.png` });
   }
-  // Rain falls with the drive and freezes while paused.
+  // Rain animates while driving and freezes when paused.
   const rainState = () => page.evaluate(() => Array.from(window.__coastline.world.dropGeometry.attributes.position.array.slice(0, 12)));
   const moving = await rainState(); await page.waitForTimeout(500); assert.notDeepEqual(await rainState(), moving);
   await page.keyboard.press('KeyP'); const stopped = await rainState(); await page.waitForTimeout(500); assert.deepEqual(await rainState(), stopped);

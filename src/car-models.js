@@ -2,8 +2,7 @@ import * as THREE from 'three';
 import { vehicleGeometry, WHEEL } from './traffic-models.js';
 import { stableShadowDepth } from './world/shadow-depth.js';
 
-// Drive one of the road-car shapes. The bodywork is the same merged geometry
-// traffic uses, with the wheels left loose so they can steer and spin.
+// Same merged bodywork as traffic, with separate wheels so they can steer and spin.
 export function createShapeCar(entry) {
   const { paint: paintGeometry, details: trimGeometry, headlights: frontGeometry, taillights: rearGeometry, wheels: placements } =
     vehicleGeometry(entry.shape, { separateWheels: true });
@@ -32,7 +31,7 @@ export function createShapeCar(entry) {
   return {
     car, body, wheels,
     nightLights: [{ material: front, day: .24, night: 2.2 }, { material: rear, day: .1, night: 2.5 }],
-    // A chosen car keeps its own paint and kit on every route.
+    // Keeps its own paint and kit on every route.
     applyTrim() {},
     paintCar(color) { paint.color.set(color || entry.paint); },
     disposeModel() {

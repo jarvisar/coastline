@@ -9,7 +9,7 @@ const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH 
 const errors = [], records = [];
 try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, deviceScaleFactor: 1 });
-  // Keep unrelated edits in the shared workspace from reloading a capture.
+  // Block the Vite HMR socket so file edits don't reload the page mid-capture.
   await page.routeWebSocket(/.*/, socket => {});
   page.on('pageerror', e => errors.push(e.message));
   page.on('console', e => { if (e.type() === 'error') errors.push(e.text()); });
@@ -49,7 +49,7 @@ try {
       camera.position.set(p.x-80,y+65,z+95);camera.lookAt(p.x,y,z);camera.updateProjectionMatrix();a.rendering.render();
     },site);
     await page.screenshot({path:`${directory}/${label}-detail.png`});
-    // Inspect rear faces as well as the normal ocean-side camera.
+    // View from opposite the game camera to check rear faces.
     await page.evaluate(async site=>{
       const a=window.__coastline,{volcanicPosition}=await import('/src/world/volcanic-route.js');
       const p=volcanicPosition(site.s,site.u),feature=[...a.world.chunks.values()].flatMap(c=>c.features?.discoveries||[]).find(s=>s.index===site.index);
@@ -101,8 +101,7 @@ try {
         for(const view of ['Scenic view','Medium view','Close view']) {
           while(a.rendering.viewLabel!==view)a.rendering.toggleView();
           let best={fraction:0,offset:0};
-          // Judge a passing encounter, allowing scenery to come into view
-          // naturally along the drive rather than pinning it beside the car.
+          // Take the best framing over a stretch of the drive past the site.
           for(let offset=-140;offset<=140;offset+=20) {
             a.vehicle.s=site.s+offset;a.vehicle.reset();a.vehicle.render(1,a.world.origin);
             a.rendering.snap();a.rendering.update(a.vehicle.car,10,a.world.origin);a.rendering.resize();a.rendering.camera.updateMatrixWorld(true);

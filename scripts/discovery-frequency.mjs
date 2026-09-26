@@ -8,8 +8,7 @@ if (!Number.isFinite(miles) || miles <= 0) throw new RangeError('Route miles mus
 const { METERS_PER_MILE } = await import('../src/world/discovery-schedule.js');
 const { roadFrame } = await import('../src/world/route.js');
 const length = miles * METERS_PER_MILE;
-// Match the odometer: the road's gentle bends make driving distance slightly
-// longer than the longitudinal coordinates used by the placement functions.
+// Measure driven distance like the odometer. Bends make it longer than s.
 let driven = 0;
 for (let s = -length / 2; s < length / 2; s += 32) {
   const step = Math.min(32, length / 2 - s);

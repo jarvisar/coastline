@@ -28,8 +28,7 @@ import { Rainfall } from './rainfall.js';
 
 const material = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: 1, flatShading: true, ...extra });
 const terrainMaterial = material('#ffffff', { vertexColors: true });
-// Wet asphalt: darker than the other routes' roads and glossy enough to take
-// a broad sheen from the weak sun.
+// Darker and glossier than other routes' roads so the asphalt reads as wet.
 const roadMaterial = material('#4d5155', { roughness: .5, flatShading: false });
 const kerbMaterial = material('#a4a7a9', { flatShading: false });
 const edgeMaterial = material('#c3c6c3', { flatShading: false });
@@ -38,7 +37,7 @@ const waterMaterial = createRiverMaterial();
 const blocksMaterial = material('#ffffff', { vertexColors: true, roughness: .92 });
 const streetsMaterial = material('#ffffff', { vertexColors: true, roughness: .5, flatShading: false });
 const skylineMaterial = material('#ffffff', { vertexColors: true });
-// Lit windows ignore the weather: an unlit material reads as light from inside.
+// Unlit so windows read as light from inside whatever the weather.
 const litMaterial = new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false });
 const furnitureMaterial = material('#ffffff', { vertexColors: true, roughness: .9 });
 const paintedMaterial = material('#ffffff');
@@ -48,8 +47,8 @@ const leavesMaterial = material('#ffffff', { vertexColors: true });
 const barkMaterial = material('#55483b');
 const boxGeometry = new THREE.BoxGeometry(1, 1, 1);
 const dummy = new THREE.Object3D(), up = new THREE.Vector3(0, 1, 0);
-// Street furniture a car cannot push over, and whether it stands on a round
-// base. Railings, manhole covers and rooftop tanks are out of a car's way.
+// Furniture that stops the car, mapped to whether its collider is round.
+// Railings, manholes and rooftop tanks never block the car.
 const SOLID_FURNITURE = { lamp: true, signal: true, bin: true, bench: false, shelter: false, kiosk: false };
 registerChunkResources('city', { terrainMaterial, roadMaterial, kerbMaterial, edgeMaterial, centerMaterial, waterMaterial, blocksMaterial, streetsMaterial, skylineMaterial, litMaterial,
   furnitureMaterial, paintedMaterial, parkedPaintMaterial, parkedTrimMaterial, leavesMaterial, barkMaterial, boxGeometry, cityAssets, parkedCars, trees: cityTrees });
@@ -83,8 +82,6 @@ function instances(group, geo, mat, items, name, shadows = true, ambientOcclusio
   }
 }
 
-// The palette is cool and wet: grey stone, dark brick, concrete, a little
-// painted render, with warm accents on fascias, awnings and lit windows.
 const WALLS = ['#846159', '#8f7064', '#755955', '#9e9ea2', '#aba7a2', '#b4b7ba', '#a0a5aa', '#90a2ab', '#78878f', '#ab9e91', '#b8a790', '#67747f', '#5a6670', '#978d81'];
 const ROOFS = ['#5c6064', '#54585c', '#666a6e', '#4f5357'];
 const GLASS = new THREE.Color('#3d515b'), LIT = ['#baa375', '#c1ab7f', '#b5a079', '#c8b58e'];
@@ -116,13 +113,12 @@ export class CityChunk {
     this.group.add(mesh); this.owned.push(g); return mesh;
   }
   inChunk(s) { return s >= this.start && s < this.start + CHUNK_LENGTH; }
-  // Scenery stands on the rendered facets; the analytic ground covers spots
-  // outside this chunk.
+  // Samples the rendered facets. Points outside this chunk use the analytic ground.
   ground(s, u) {
     const p = cityPosition(s, u, 0);
     return { x: p.x, y: this.sampleGround(p.x, p.z + this.start) ?? cityGroundHeight(s, u), z: p.z + this.start };
   }
-  // Local coordinates for a point on the road frame at a given height.
+  // Road-frame point at height y, in chunk-local coordinates.
   at(s, u, y) { const p = cityPosition(s, u, y); return { x: p.x, y: p.y, z: p.z + this.start }; }
   buildTerrain() {
     const vertices = [], colors = [], cache = new Map();
@@ -131,8 +127,8 @@ export class CityChunk {
       const key = `${row},${col}`;
       if (!cache.has(key)) {
         let p = cityVertex(row, col);
-        // Extra street rows split the distant terrain's existing edges;
-        // resampling its jitter here could fold the closely spaced rows.
+        // Extra street rows interpolate distant terrain. Resampling its jitter
+        // could fold the closely spaced rows.
         if (!Number.isInteger(row) && (p.u < -260 || p.u > 170)) {
           const a = vertex(Math.floor(row), col), b = vertex(Math.ceil(row), col), t = row - Math.floor(row);
           p = { column: col };
@@ -142,8 +138,8 @@ export class CityChunk {
       }
       return cache.get(key);
     };
-    // Put terrain edges at the asphalt edges as well as the outer pavements.
-    // Otherwise a lowered eight-metre row leaves a trough outside the kerb.
+    // Terrain rows also sit on side-road asphalt edges, or a lowered 8 m row
+    // leaves a trough outside the kerb.
     const end = this.start + CHUNK_LENGTH, rows = new Set();
     for (let s = this.start; s <= end; s += CITY_STEP) rows.add(s / CITY_STEP);
     for (let index = blockAt(this.start) - 1; index <= blockAt(end) + 1; index++) {
@@ -178,8 +174,8 @@ export class CityChunk {
     const s = tri.reduce((sum, p) => sum + p.s, 0) / tri.length, u = tri.reduce((sum, p) => sum + p.u, 0) / tri.length, cross = Math.abs(u);
     const facet = randomAt(row * 2 + i, col + 3041);
     let color;
-    // Secondary asphalt has its own precisely clipped mesh. Its terrain
-    // backing stays paved so coarse facets cannot spill past the sidewalks.
+    // Side roads have their own clipped mesh. The terrain under them stays
+    // paved so coarse facets can't spill past the sidewalks.
     if (cross <= KERB + .3) color = asphalt.clone();
     else if (cross < 6.6) color = gutter.clone();
     else if (u > 0) {
@@ -215,12 +211,11 @@ export class CityChunk {
     this.ribbon([[-5.05, -4.89], [4.89, 5.05]], .09, edgeMaterial, 'road-edges', (s, u) => onCrossStreet(s, Math.sign(u) * 7) || (u < 0 && cityParkingAt(s)));
     this.ribbon([[-.21, -.07], [.07, .21]], .093, centerMaterial, 'center-lines', s => Math.abs(s - crossStreetAt(s).center) < STREET_HALF_WIDTH + 6);
   }
-  // The river: one level plane from the far bank to just inside the quay
-  // wall, so the wall's own facet meets the water without a seam.
+  // One level plane reaching just inside the quay wall, so the wall meets it seamlessly.
   buildRiver() {
     const vertices = [], colors = [], coordinates = [];
-    // Keep coordinates small on long drives, with the same noise period at
-    // each chunk seam. Never wrap individual vertices across a triangle.
+    // Wrap per chunk to keep coordinates small, matching the noise period at seams.
+    // Never wrap individual vertices within a triangle.
     const flowStart = ((this.start % 4096) + 4096) % 4096;
     for (let s = this.start; s < this.start + CHUNK_LENGTH; s += CITY_STEP) {
       const t = s + CITY_STEP;
@@ -237,7 +232,7 @@ export class CityChunk {
     water.geometry.setAttribute('riverCoord', new THREE.Float32BufferAttribute(coordinates, 2));
     water.geometry.boundingSphere.radius += .5;
   }
-  // A face of a building, in local coordinates, wound to face outward.
+  // Winds the quad so its normal points along `outward`.
   quad(target, points, color, outward) {
     const [p1, p2, p3, p4] = points;
     const ax = p2.x - p1.x, ay = p2.y - p1.y, az = p2.z - p1.z, bx = p3.x - p1.x, by = p3.y - p1.y, bz = p3.z - p1.z;
@@ -247,11 +242,10 @@ export class CityChunk {
       target.vertices.push(p.x, p.y, p.z); target.colors.push(color.r, color.g, color.b);
     }
   }
-  // A block standing on the road frame: its footprint is a rectangle in
-  // (s, u), so rows of buildings stay square to the road round the bends.
+  // Footprint is a rectangle in (s, u) so buildings stay square to the road on bends.
   prism(target, s0, s1, u0, u1, y0, y1, color, { top = true, back = true, sides = true, shade = 1 } = {}) {
-    // Follow the same curved road frame as the windows. A single chord across
-    // a long facade can bury its middle windows inside the wall on a bend.
+    // Subdivide along the curved road frame like the windows do. One chord
+    // across a long facade can bury its middle windows on a bend.
     const divisions = (a, b, mid) => Math.max(1, Math.ceil(Math.sqrt(Math.hypot(mid.x - (a.x + b.x) / 2, mid.z - (a.z + b.z) / 2) / .018)));
     const steps = target === this.scenery?.skyline ? 1 : Math.max(...[u0, u1].map(u => divisions(this.at(s0, u, 0), this.at(s1, u, 0), this.at((s0 + s1) / 2, u, 0))));
     for (let k = 0; k < steps; k++) {
@@ -262,8 +256,8 @@ export class CityChunk {
       if (back) face(2, 3, .82, [1, 0, 0]);
       if (top) this.quad(target, [c[0][1], c[1][1], c[2][1], c[3][1]], color.clone().multiplyScalar(1.04 * shade), [0, 1, 0]);
     }
-    // The normal offset also eases across the lot depth. Subdivide the ends
-    // near the road so their windows follow the wall rather than cutting it.
+    // The frame also curves across the lot depth, so subdivide the ends too
+    // or their windows cut into the wall.
     if (sides) {
       const across = target === this.scenery?.skyline ? 1 : Math.max(...[s0, s1].map(s => divisions(this.at(s, u0, 0), this.at(s, u1, 0), this.at(s, (u0 + u1) / 2, 0))));
       for (const [s, outward] of [[s0, [0, 0, 1]], [s1, [0, 0, -1]]]) for (let k = 0; k < across; k++) {
@@ -272,8 +266,7 @@ export class CityChunk {
       }
     }
   }
-  // Face the boulevard on either bank, with end windows for both driving
-  // directions. All panes are baked into the existing opaque/lit batches.
+  // End windows serve both driving directions. Panes bake into the opaque and lit batches.
   windows(b, y0, seed, kind) {
     const { u0 } = b, { blocks, lit } = this.scenery;
     const near = u0 > 0 && u0 < 40, middle = u0 > -240 && u0 < 90;
@@ -292,8 +285,8 @@ export class CityChunk {
           const from = .7 + bay * pitch + (pitch - width) / 2, to = from + width;
           const on = randomAt(seed, 3061 + ++n) < b.lit;
           if (kind !== 'ribbon' && (middle || index === 0)) {
-            // A single surround and sill plane replace tiny solid boxes. Wider
-            // bay spacing pays for richer facades in the middle and rear rows.
+            // Flat surround and sill panels instead of tiny boxes. Wider bay
+            // spacing pays for the extra detail in the middle and rear rows.
             facadePanel(this, blocks, face, from - .14, to + .14, low - .14, high + .13, surround, .035);
             if (near && index === 0) facadePanel(this, blocks, face, from - .2, to + .2, low - .16, low - .04, sill, .075);
           }
@@ -310,7 +303,6 @@ export class CityChunk {
     }
   }
 
-  // One building: walls, roof, parapet or gable, roof furniture and windows.
   building(b, seed) {
     const { blocks } = this.scenery, { s0, s1, u0, u1 } = b;
     this.reserveBuilding(s0, s1, u0, u1);
@@ -341,15 +333,14 @@ export class CityChunk {
       this.quad(blocks, [this.at(s0, u0, y1 + .02), this.at(s1, u0, y1 + .02), this.at(s1, u1, y1 + .02), this.at(s0, u1, y1 + .02)], roof, [0, 1, 0]);
       buildParapet(this, b, y1, p);
       buildRoofDetails(this, b, y1, seed);
-      // Tanks, plant and stair heads on the flat roofs.
       const inset = 1.4, tank = rooftopTank(b, seed), count = 1 + Math.floor(randomAt(seed, 3081) * 3);
       const serviceStart = s0 + (s1 - s0) * .58, slotDepth = (u1 - u0 - inset * 2) / count;
       for (let k = 0; k < count; k++) {
         const w = Math.min(1.4 + randomAt(seed, 3082 + k) * 2.2, s1 - inset - serviceStart);
         const d = Math.min(1.4 + randomAt(seed, 3086 + k) * 2, slotDepth - .55), h = .9 + randomAt(seed, 3090 + k) * 1.8;
         if (w < 1.2 || d < 1.2) continue;
-        // Keep mechanical plant beside the roof lantern / terrace, not inside it.
-        // Separate depth slots prevent the units from intersecting one another.
+        // Plant stays beside the roof lantern or terrace. Separate depth slots
+        // keep units from intersecting.
         const rs = serviceStart + randomAt(seed, 3094 + k) * (s1 - inset - serviceStart - w);
         const ru = u0 + inset + k * slotDepth + randomAt(seed, 3098 + k) * (slotDepth - d - .55);
         if (tank && Math.abs(rs + w / 2 - tank.s) < w / 2 + 1.8 && Math.abs(ru + d / 2 - tank.u) < d / 2 + 1.8) continue;
@@ -363,8 +354,7 @@ export class CityChunk {
     }
     if (b.windows !== 'none') this.windows(b, y0, seed, b.windows);
     else if (u0 < 0) {
-      // Wharf workshops read as occupied buildings even at a distance:
-      // loading doors and a short clerestory use only a few flat panels.
+      // Windowless wharf workshops get flat-panel loading doors and a clerestory.
       for (let s = s0 + 2; s < s1 - 3; s += 6.5) {
         this.quad(blocks, [this.at(s, u1 + .055, y0 + .3), this.at(s + 2.6, u1 + .055, y0 + .3), this.at(s + 2.6, u1 + .055, y0 + 3.3), this.at(s, u1 + .055, y0 + 3.3)], new THREE.Color('#4a595d'), [1, 0, 0]);
         this.quad(blocks, [this.at(s, u1 + .06, y1 - 1.5), this.at(s + 2.6, u1 + .06, y1 - 1.5), this.at(s + 2.6, u1 + .06, y1 - .65), this.at(s, u1 + .06, y1 - .65)], GLASS, [1, 0, 0]);
@@ -373,8 +363,7 @@ export class CityChunk {
     if (b.shop) buildShopfront(this, b, y0, seed);
     dressBuilding(this, b, y0, y1, seed);
   }
-  // Lots along each block, each row of buildings at its own scale: shops
-  // and flats on the building line, taller blocks behind, towers at the back.
+  // Lot width depends on the band, widest for the towers at the back.
   lotsFor(block, band, s0, s1) {
     const lots = [];
     let s = s0, i = 0;
@@ -406,8 +395,7 @@ export class CityChunk {
         }
       }
     }
-    // The opposite bank shares the street grid, so bridge landings lead into
-    // open intersections rather than through randomly positioned buildings.
+    // The far bank shares the street grid so bridge landings meet open intersections.
     for (const [k, range] of BANK_BANDS.entries()) {
       for (let block = first; block <= last; block++) for (const lot of this.lotsFor(block, k ? 2 : 3, blockBoundary(block) + STREET_HALF_WIDTH + 1.5, blockBoundary(block + 1) - STREET_HALF_WIDTH - 1.5)) {
         const { s0, s1 } = lot, seed = block * 97 + k * 31 + lot.i, r = j => randomAt(seed, 3141 + j);
@@ -418,10 +406,8 @@ export class CityChunk {
           roof: !k && r(8) < .55 ? 'gable' : 'flat', windows: k ? 'punched' : 'none', shop: false, lit: k ? .05 : 0, shade: .94 + r(9) * .08 }, seed);
       }
     }
-    // The skyline: lightly banded towers beyond the far blocks, fading into the fog,
-    // without shadows or soft shading, like the far windbreaks on the plains.
-    // The near side has none: nothing on the camera's side of the road is
-    // ever far enough away for the fog to soften it.
+    // Skyline towers fade into the fog with no shadows or smooth shading.
+    // None on the camera's side, which is never far enough away to fog.
     const { skyline } = this.scenery;
     for (const [lane, u] of [[0, 260], [1, 320], [2, 390], [3, 470]]) {
       for (let n = Math.floor((this.start - 60) / 46); n * 46 < this.start + CHUNK_LENGTH + 60; n++) {
@@ -447,12 +433,11 @@ export class CityChunk {
       const a = corners[i], b = corners[(i + 1) % 4], steps = Math.ceil(Math.max(Math.abs(b[0] - a[0]), Math.abs(b[1] - a[1])) / 2);
       for (let j = 0; j < steps; j++) points.push(this.at(lerp(a[0], b[0], j / steps), lerp(a[1], b[1], j / steps), 0));
     }
-    // Include projecting sills and roof edges, as well as the wall itself.
+    // Margin covers projecting sills and roof edges.
     this.planting.reserve(points, .65);
   }
-  // A building's walls stop the car. A lot is a rectangle in (s, u), which a
-  // bend shears a little; the rectangle through the middles of its four sides
-  // stays within a hand of the walls.
+  // A bend shears the (s, u) lot slightly. The box through its side midpoints
+  // stays close to the walls.
   solidLot(s0, s1, u0, u1) {
     const s = (s0 + s1) / 2, u = (u0 + u1) / 2, near = this.at(s, u0, 0), far = this.at(s, u1, 0);
     solidSpan(this, this.at(s0, u, 0), this.at(s1, u, 0), Math.hypot(far.x - near.x, far.z - near.z) / 2);
@@ -475,10 +460,9 @@ export class CityChunk {
     return true;
   }
   parkedCar(s, u, yaw, seed, lift = 0) {
-    // Two body shapes per chunk: variety along the route, few draw calls in it.
+    // Two body shapes per chunk keeps draw calls low but varies along the route.
     const names = Object.keys(parkedCars), name = names[(Math.abs(this.index) * 2 + (randomAt(seed, 3181) < .5 ? 0 : 1)) % names.length], p = this.ground(s, u), { parked } = this.scenery;
     if (!parked.has(name)) parked.set(name, []);
-    // Handbrake on: a parked car stands as firm as the kerb it is against.
     const spec = TRAFFIC_MODELS.find(spec => spec.name === name);
     solidBox(this, p.x, p.z, yaw, spec.width / 2, spec.length / 2);
     parked.get(name).push({ p: [p.x, p.y + .02 + lift, p.z], r: [0, yaw, 0], color: PARKED_PAINTS[Math.floor(randomAt(seed, 3182) * PARKED_PAINTS.length)] });
@@ -492,8 +476,6 @@ export class CityChunk {
     const yaw = s => -roadFrame(s).angle, across = s => yaw(s) + Math.PI / 2;
     const street = s => { const c = crossStreetAt(s); return Math.abs(s - c.center) < STREET_HALF_WIDTH + 2; };
     const clear = (s, u, radius = 1) => this.clearAt(s, u, radius) && waterfrontClears(s, u, this.waterfrontSites, radius);
-    // Street lamps face the road from both pavements; benches, trees and
-    // shelters keep the promenade side, with trees also along the far pavement.
     for (let s = Math.ceil((this.start - 4) / 26) * 26 + 5; s < this.start + CHUNK_LENGTH + 4; s += 26) {
       if (!this.inChunk(s) || street(s)) continue;
       if (clear(s, 7.4)) this.furniture('lamp', s, 7.4, yaw(s));
@@ -518,7 +500,6 @@ export class CityChunk {
       const u = cityParkingAt(s, 4) ? -18.2 : -8.6;
       if (randomAt(Math.round(s), 3222) < .5 && clear(s, u, 2.5)) this.furniture('shelter', s, u, yaw(s) + Math.PI);
     }
-    // The quay railing follows the wandering embankment in four-metre runs.
     for (let s = this.start; s < this.start + CHUNK_LENGTH; s += 4) {
       const street = crossStreetAt(s + 2), edge = STREET_HALF_WIDTH - .3;
       const spans = nearStreet(street.index) ? [[s, Math.min(s + 4, street.center - edge)], [Math.max(s, street.center + edge), s + 4]] : [[s, s + 4]];
@@ -532,8 +513,7 @@ export class CityChunk {
         this.furniture('railing', mid, u, Math.atan2(dx, dz), { scale: [1, 1, length / 4], lift: (a.y + b.y) / 2 - this.ground(mid, u).y });
       }
     }
-    // Every cross street gets corner signals and zebra crossings. River-bound
-    // streets stay clear for the bridge approaches built with the road network.
+    // River-bound streets stay clear for the bridge approaches built in city-roads.
     const first = crossStreetAt(this.start - 20).index, last = crossStreetAt(this.start + CHUNK_LENGTH + 20).index;
     for (let index = first; index <= last; index++) {
       const center = blockBoundary(index);
@@ -548,22 +528,20 @@ export class CityChunk {
           boxes.push({ p: [p.x, p.y, p.z], scale: [.62, .012, 2.6], r: [0, yaw(crossing), 0], color: '#d2d4d2' });
         }
       }
-      // Cars parked along the side streets, nose to the kerb.
       for (const k of [-1, 1]) for (let u = 17; u < 34; u += 6.2) {
         const s = center + k * 4.15;
         if (!this.inChunk(s) || randomAt(index * 4 + k, Math.round(u) + 3231) > .5 || !clear(s, u, 2)) continue;
         this.parkedCar(s, u, across(s), index * 100 + Math.round(u) + k * 7, .075);
       }
     }
-    // Cars in the alleys behind the building line. Waterfront cars belong
-    // to the pull-offs so their placement always agrees with the bay markings.
+    // Waterfront cars belong to the pull-offs so they match the bay markings.
     for (const alley of [(BANDS[0].back + BANDS[1].front) / 2]) {
       for (let s = Math.ceil((this.start - 4) / 22) * 22 + 6; s < this.start + CHUNK_LENGTH + 4; s += 22) {
         if (!this.inChunk(s) || street(s) || randomAt(Math.round(s), Math.round(alley) + 3241) > .4 || !clear(s, alley, 2)) continue;
         this.parkedCar(s, alley - 1.6, yaw(s) + (randomAt(Math.round(s), 3242) < .5 ? 0 : Math.PI), Math.round(s) * 3 + Math.round(alley), .075);
       }
     }
-    // Manholes sit flush with the wet asphalt.
+    // Lift is relative to the ground so manholes sit flush with the road surface.
     for (let k = 0; k < 2; k++) {
       const s = this.start + 12 + random() * (CHUNK_LENGTH - 24), u = (random() - .5) * 6;
       this.furniture('manhole', s, u, yaw(s), { lift: .08 - (this.ground(s, u).y - cityRoadHeight(s)) });
@@ -598,8 +576,7 @@ export class CityChunk {
   }
 }
 
-// Lightning: a rare double flash, on a fixed schedule from the scene clock so
-// it pauses with the drive and repeats for a shared seed.
+// Scheduled from the scene clock so it pauses with the drive and repeats per seed.
 export function lightning(time) {
   const window = 42, k = Math.floor(time / window);
   let strength = 0;

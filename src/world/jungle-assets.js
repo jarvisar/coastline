@@ -34,8 +34,7 @@ function blade(vertices, colors, spine, widths, side, tint, sag = .03) {
   }
 }
 
-// Broadleaf crowns: overlapping faceted lobes, brighter toward the top. The
-// unit crown spans radius one and rises from y = 0 so instances scale simply.
+// Normalised to radius 1 and rising from y = 0 so instances scale simply.
 function crown(seed, { lobes = 5, spread = .55, flat = 1, size = [.5, .75] } = {}) {
   const parts = [];
   for (let i = 0; i < lobes; i++) {
@@ -54,7 +53,7 @@ function crown(seed, { lobes = 5, spread = .55, flat = 1, size = [.5, .75] } = {
   merged.translate(0, -box.min.y, 0); merged.scale(1 / radius, 1 / radius, 1 / radius);
   merged.computeBoundingBox();
   const top = merged.boundingBox.max.y, position = merged.attributes.position, color = merged.attributes.color;
-  // Sunlit tops warm toward lime while the undersides stay a deep green.
+  // Warm the tops toward lime and keep the undersides deep green.
   for (let i = 0; i < position.count; i++) {
     const height = position.getY(i) / top, shade = color.getX(i) * (.62 + .44 * Math.pow(height, .8)), warm = Math.pow(height, 1.8);
     color.setXYZ(i, shade * (1 + .32 * warm), shade * (1 + .07 * warm), shade * (1 - .2 * warm));
@@ -63,14 +62,12 @@ function crown(seed, { lobes = 5, spread = .55, flat = 1, size = [.5, .75] } = {
   return merged;
 }
 
-// Emergent trees: a buttressed trunk with a few limbs opening into a wide,
-// flat crown that overhangs the road. Height is the unit; the crown is separate.
+// Height is the unit. The crown is a separate geometry.
 function emergentTrunk(seed) {
   const parts = [];
   const trunk = new THREE.CylinderGeometry(.026, .044, .8, 7); trunk.translate(0, .4, 0); parts.push(tinted(trunk, 1));
   for (let i = 0; i < 4; i++) {
-    // Short ascending limbs finish inside the central foliage instead of
-    // projecting horizontally beyond the flat crown.
+    // Short rising limbs end inside the foliage so none pokes out past the flat crown.
     const angle = i * 1.57 + randomAt(seed, i + 2311) * .8, reach = .12 + randomAt(seed, i + 2312) * .07;
     const from = new THREE.Vector3(0, .7, 0), to = new THREE.Vector3(Math.cos(angle) * reach, .83 + randomAt(seed, i + 2313) * .025, Math.sin(angle) * reach);
     const direction = to.clone().sub(from);
@@ -86,8 +83,7 @@ function emergentTrunk(seed) {
   return finish(parts);
 }
 
-// Palms: a leaning trunk topped by drooping, creased fronds. Both share one
-// unit so an instance transform places the fronds on the trunk's top.
+// Trunk and fronds share one unit so the same instance transform fits both.
 function palmTrunk(seed) {
   const parts = [], lean = .1 + randomAt(seed, 2321) * .08, stations = [[0, 0], [lean * .25, .35], [lean * .62, .7], [lean, 1]];
   for (let i = 0; i < stations.length - 1; i++) {
@@ -112,7 +108,6 @@ function palmFronds(seed, lean) {
   return geometry(vertices, colors);
 }
 
-// Ferns and broad-leaved plants fill the floor between the trunks.
 function fern(seed) {
   const vertices = [], colors = [], count = 6;
   for (let i = 0; i < count; i++) {
@@ -138,8 +133,7 @@ function bigLeaf(seed) {
   return geometry(vertices, colors);
 }
 
-// Rounded boulders with moss baked onto their upward faces, so a single
-// instanced material covers dry grey stone and the damp rocks by the river.
+// Moss is baked onto upward faces so one material covers dry and river rocks.
 function boulder(seed, moss) {
   const sides = 5 + seed % 3, vertices = [], colors = [];
   const rings = [[-.48, .8], [.08, 1], [.72, .66]].map(([y, radius], layer) =>
@@ -170,8 +164,6 @@ function boulder(seed, moss) {
   }
   return geometry(vertices, colors);
 }
-// Columnar rock for the gorge walls and crags: tall faceted sides in warm
-// grey, darker toward the foot, with moss spilling over the top.
 function cliffBlock(seed) {
   const sides = 6 + seed % 2, vertices = [], colors = [];
   const ring = (y, radius, layer) => Array.from({ length: sides }, (_, i) => {
@@ -204,7 +196,6 @@ function cliffBlock(seed) {
   return geometry(vertices, colors);
 }
 
-// Banana plants: a short stem and long paddle leaves that arch out and droop.
 function banana(seed) {
   const vertices = [], colors = [], count = 6;
   for (let i = 0; i < count; i++) {
@@ -214,13 +205,12 @@ function banana(seed) {
     const spine = [0, .3, .7, 1].map(t => ({ x: dir[0] * reach * t, y: lerp(base, peak, Math.sin(Math.min(1, t * 1.6) * Math.PI / 2)) - (peak - tip) * t * t, z: dir[1] * reach * t }));
     blade(vertices, colors, spine, [.02, .14, .15, .02], side, .88 + randomAt(seed, i + 2404) * .22, .05);
   }
-  // A pair of crossed ribbons stands in for the stem.
+  // Two crossed ribbons stand in for the stem.
   for (const side of [[1, 0], [0, 1]]) blade(vertices, colors, [{ x: 0, y: 0, z: 0 }, { x: 0, y: .45, z: 0 }], [.07, .05], side, .62, 0);
   return geometry(vertices, colors);
 }
 
-// Hanging vines: two crossed ribbons, a unit long, with leaves alternating
-// down their length so the strands still read from the scenic camera.
+// Two crossed unit-length ribbons. The leaves keep strands visible from the scenic camera.
 function vineStrand() {
   const vertices = [], colors = [];
   for (const side of [[1, 0], [0, 1]]) {
@@ -233,8 +223,6 @@ function vineStrand() {
   return geometry(vertices, colors);
 }
 
-// Bamboo: a clump of culms arching outward from a tight base, each carrying
-// sprays of narrow leaves along its upper half.
 function bamboo(seed) {
   const parts = [], vertices = [], colors = [];
   for (let i = 0; i < 7; i++) {
@@ -261,7 +249,7 @@ function bamboo(seed) {
   return finish(parts);
 }
 
-// A lily pad: a flat disc with a notch cut to its centre.
+// The skipped last segment is the notch.
 function lilyPad() {
   const vertices = [], colors = [], segments = 9;
   for (let i = 0; i < segments - 1; i++) {

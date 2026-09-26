@@ -74,7 +74,7 @@ export function buildCoastalDiscoveries(chunk, sites) {
           add('cove-dock-pilings', assets.box, timberMaterial, point(s + ds, v, .25), [.28, deck * 2 + .8, .28], [0, angle, 0]);
         }
       }
-      // A short crosshead and one small rowboat keep this a landing, not a marina.
+      // Just a short crosshead and one rowboat so it reads as a landing.
       for (let i = 0; i < 5; i++) add('cove-dock-planks', assets.box, timberMaterial,
         point(s, u - 18.5 - i * .65, deck), [.6, .2, 6.6], [0, angle, 0]);
       add('moored-rowboat', assets.boat, boatMaterial, point(s + 4.9, u - 15, .1), undefined, [0, angle + .12, 0]);

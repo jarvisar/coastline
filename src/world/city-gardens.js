@@ -8,15 +8,15 @@ const shrubGeometry = new THREE.IcosahedronGeometry(1, 0);
 const shrubVertices = Array.from(shrubGeometry.attributes.position.array);
 shrubGeometry.dispose();
 
-// A few loose planting compositions, not a new asset or draw call per park.
-// Keep the original site's envelope and seed, so walks and chunk ownership
-// stay stable as the car travels in either direction.
+// Built into the chunk's shared detail geometry, so no extra draw calls.
+// Keeps the site's envelope and seed so walks and chunk ownership stay stable
+// whichever way the car travels.
 export function buildWaterfrontGarden(chunk, s, u0, u1, half, seed) {
   const r = salt => randomAt(seed, 3720 + salt), { details } = chunk.scenery;
   const h = half * (.78 + r(0) * .2), d = (u1 - u0) * (.78 + r(1) * .18) / 2;
   const u = (u0 + u1) / 2, offset = (r(2) - .5) * (half - h) * 1.6;
   const cut = [3, 4, 5, 6].map(k => .12 + r(k) * .26);
-  // Unequal chamfered corners soften the outline while keeping broad facets.
+  // Unequal chamfered corners.
   const outline = [[-h + h * cut[0], -d], [h - h * cut[1], -d], [h, -d + d * cut[1]],
     [h, d - d * cut[2]], [h - h * cut[2], d], [-h + h * cut[3], d], [-h, d - d * cut[3]], [-h, -d + d * cut[0]]];
   const inset = Math.min(.22 / d, .2);
@@ -53,11 +53,10 @@ export function buildWaterfrontGarden(chunk, s, u0, u1, half, seed) {
     }
   };
   if (style === 0) {
-    // An open lawn with a small, uneven shrub cluster opposite its shade tree.
+    // Shrub cluster opposite the single tree.
     for (let i = 0; i < (d > 2 ? 3 : 2); i++) shrub(h * (.38 + i * .11) * mirror, (i - 1) * Math.min(.85, d * .28), i);
   } else if (style === 1) {
-    // Sometimes a short broken hedge, sometimes just shrubs. Change both the
-    // end and orientation rather than repeating a full-width green bar.
+    // A short broken hedge in varied orientation, or just shrubs.
     if (r(39) < .55 && d > 2.2) {
       const along = r(40) < .5;
       for (let i = 0; i < 2; i++) {

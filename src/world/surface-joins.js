@@ -1,17 +1,16 @@
 import * as THREE from 'three';
 import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 
-// Give each coplanar patch one owner. Later faces (trim, glazing, masonry)
-// replace only the covered portion of earlier faces, keeping their shared
-// boundary on the original plane. This is construction-time geometry work,
-// not a depth bias, so shadows and every camera view use the same joins.
-// Use on a single-material, static surface batch before computing bounds.
+// Give each coplanar patch one owner. Later faces (trim, glazing, masonry) cut
+// away the part of earlier faces they cover. Done at build time rather than with
+// depth bias, so shadows and every view agree.
+// Use on a single-material static batch before computing bounds.
 export function joinCoplanarFaces(geometry) {
   if (geometry.groups.length) throw new Error('Join material batches separately');
   const source = geometry.index ? geometry.toNonIndexed() : geometry;
   const attributes = Object.entries(source.attributes), position = source.attributes.position, faces = Math.floor(position.count / 3);
-  // Faces are read once into flat arrays. A chunk's rock or street batch holds
-  // tens of thousands of them, and objects per face cost more than the joins.
+  // Flat arrays: a batch can hold tens of thousands of faces and per-face
+  // objects cost more than the joins.
   const corner = new Float64Array(faces * 9), normal = new Float64Array(faces * 3), distance = new Float64Array(faces);
   const first = new Uint8Array(faces), second = new Uint8Array(faces), bounds = new Float64Array(faces * 4), plane = [0, 0];
   for (let v = 0; v < faces * 3; v++) { corner[v * 3] = position.getX(v); corner[v * 3 + 1] = position.getY(v); corner[v * 3 + 2] = position.getZ(v); }
@@ -42,8 +41,7 @@ export function joinCoplanarFaces(geometry) {
     for (let band = plane[0]; band <= plane[1]; band++) {
       if (!planes.has(band)) planes.set(band, new Map());
       const cells = planes.get(band);
-      // Broad, level ground puts thousands of faces on one plane. A coarse
-      // grid over each plane keeps a face's search to its own neighbourhood.
+      // Level ground puts thousands of faces on one plane, so a grid keeps searches local.
       const x0 = cell(bounds[f * 4]), x1 = cell(bounds[f * 4 + 2]), z0 = cell(bounds[f * 4 + 1]), z1 = cell(bounds[f * 4 + 3]);
       for (let cx = x0; cx <= x1; cx++) for (let cz = z0; cz <= z1; cz++) {
         const key = cellKey(cx, cz), list = cells.get(key);
@@ -52,16 +50,15 @@ export function joinCoplanarFaces(geometry) {
     }
     triangles.push(f);
   }
-  // Bounds that meet, then the actual planes: quantized normals are only a
-  // broad phase, and nearby parallel surfaces and intersecting slopes must
-  // stay intact.
+  // Quantized normals are only a broad phase. Check bounds, then the real planes,
+  // so nearby parallel surfaces and intersecting slopes stay intact.
   const overlaps = (f, m) => {
     const a = f * 4, b = m * 4;
     if (bounds[a] >= bounds[b + 2] - 1e-7 || bounds[a + 2] <= bounds[b] + 1e-7
       || bounds[a + 1] >= bounds[b + 3] - 1e-7 || bounds[a + 3] <= bounds[b + 1] + 1e-7) return false;
     const nx = normal[f * 3], ny = normal[f * 3 + 1], nz = normal[f * 3 + 2];
-    // A millimeter accommodates normals reconstructed from very thin
-    // Float32 trim faces. Deliberately raised surface layers stay apart.
+    // 1 mm tolerance covers normals from thin Float32 trim faces.
+    // Deliberately raised layers stay apart.
     for (let j = m * 9; j < m * 9 + 9; j += 3) if (Math.abs(nx * corner[j] + ny * corner[j + 1] + nz * corner[j + 2] - distance[f]) > .001) return false;
     return nx * normal[m * 3] + ny * normal[m * 3 + 1] + nz * normal[m * 3 + 2] >= .999999;
   };
@@ -79,21 +76,18 @@ export function joinCoplanarFaces(geometry) {
     const s = positionOffset + first[f], t = positionOffset + second[f];
     return v => [v[s], v[t]];
   };
-  // Most faces overlap nothing. They are read in full only once another face
-  // actually clips them, or when the joined batch is finally rebuilt.
+  // Most faces overlap nothing, so full vertices are only read when clipping or rebuilding.
   const clipped = new Array(faces).fill(null), seen = new Int32Array(faces).fill(-1), masks = [], bins = [[], [], []];
   for (const f of triangles) {
-    // Float32 rotations can put an otherwise shared normal on either side
-    // of a bin boundary. Search that neighboring bin as well.
+    // Float32 rotations can push a shared normal across a bin boundary,
+    // so also search the neighbouring bin.
     for (let j = 0; j < 3; j++) {
       const scaled = normal[f * 3 + j] * 100, rounded = Math.round(scaled), remainder = scaled - rounded;
       bins[j].length = 0; bins[j].push(rounded);
       if (Math.abs(remainder) > .4) bins[j].push(rounded + Math.sign(remainder));
     }
-    // Faces whose bounds can meet this one share a cell with it. They clip it
-    // in the order a search of whole planes finds them: by normal bin, then
-    // plane, then build order. A face met again in a later bin or plane was
-    // already considered at its first.
+    // Clip order is normal bin, then plane, then build order. A face met again
+    // in a later bin or plane was already handled at its first.
     const x0 = cell(bounds[f * 4]), x1 = cell(bounds[f * 4 + 2]), z0 = cell(bounds[f * 4 + 1]), z1 = cell(bounds[f * 4 + 3]);
     let group = 0;
     masks.length = 0;
@@ -137,21 +131,19 @@ export function joinCoplanarFaces(geometry) {
     clipped[f] = pieces;
   }
   if (changed) {
-    // Each face kept whole is its index; a clipped one leaves the triangles of
-    // its remaining pieces.
+    // Whole faces are stored as their index, clipped ones as their remaining triangles.
     const emitted = [];
     for (const f of triangles) {
       const pieces = clipped[f];
       if (!pieces) {
-        // An untouched face is copied as it is, unless it is too thin to keep.
+        // Untouched faces are copied unless degenerate.
         const p = f * 9, s = first[f], t = second[f];
         const a = [corner[p + s], corner[p + t]], b = [corner[p + 3 + s], corner[p + 3 + t]], c = [corner[p + 6 + s], corner[p + 6 + t]];
         if (Math.abs(cross(b, c, a)) >= 1e-9 && Math.abs(cross(a, b, c)) >= 1e-9 && Math.abs(cross(c, a, b)) >= 1e-9 && area([a, b, c]) >= 1e-10) emitted.push(f);
         continue;
       }
       const project = projection(f);
-      // Clipping can leave extra points along a straight edge. Remove those
-      // before triangulating so repeated railings do not gain needless faces.
+      // Drop collinear points left by clipping so repeated railings don't gain faces.
       for (const piece of pieces) {
         const polygon = [...piece];
         for (let i = polygon.length - 1; i >= 0 && polygon.length >= 3; i--) {
@@ -169,7 +161,7 @@ export function joinCoplanarFaces(geometry) {
     for (const [name, attribute] of attributes) {
       const size = attribute.itemSize, from = offset;
       const result = new THREE.BufferAttribute(new attribute.array.constructor(emitted.length * 3 * size), size, attribute.normalized), array = result.array;
-      // Plain arrays take the values as they are; normalized ones re-encode them.
+      // Normalized attributes re-encode through setComponent.
       const put = attribute.normalized ? (i, n, value) => result.setComponent(i, n, value) : (i, n, value) => { array[i * size + n] = value; };
       let i = 0;
       for (const face of emitted) {
@@ -192,9 +184,8 @@ export function joinCoplanarFaces(geometry) {
 }
 
 const cross = (a, b, p) => (b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0]);
-// Small integer keys, which a Map finds without allocating. A quantized normal
-// has components within ±101. Grid cells wrap every 262 km; faces that far
-// apart can share a list, but never overlap, so they are passed over.
+// Integer keys so Map lookups don't allocate. Quantized normals stay within ±101.
+// Grid cells wrap every 262 km. Faces that far apart can share a list but never overlap.
 const normalCode = (x, y, z) => ((x + 128) * 256 + y + 128) * 256 + z + 128;
 const CELL = 8;
 const cell = value => Math.floor(value / CELL);
@@ -209,7 +200,7 @@ function planeRange(corner, p, x, y, z, range) {
 }
 function area(points) {
   if (points.length < 3) return 0;
-  // Relative coordinates avoid cancellation in chunks far from the origin.
+  // Relative coordinates avoid cancellation far from the origin.
   let sum = 0;
   for (let i = 1; i < points.length - 1; i++) sum += cross(points[0], points[i], points[i + 1]);
   return Math.abs(sum) / 2;
@@ -235,8 +226,8 @@ function subtract(polygon, outline, project) {
   return { inside, outside };
 }
 
-// Extrude a roof cross-section as one closed shell. Ridge and pitch changes
-// share vertices instead of intersecting the square ends of rotated slabs.
+// Extrude a roof cross-section as one closed shell so ridges share vertices
+// instead of intersecting rotated slabs.
 export function roofShell(profile, length, thickness = .22) {
   const outline = [...profile, ...profile.toReversed().map(([x, y]) => [x, y - thickness])];
   const shape = new THREE.Shape(outline.map(([x, y]) => new THREE.Vector2(x, y)));

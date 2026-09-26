@@ -83,7 +83,7 @@ test('the alpine lake has a level open basin and continuous dry shores', () => {
     assert.ok(snowHeight(s, lake.far - 5) > lake.y + .45);
     for (const u of [lake.near, lake.far]) assert.ok(Math.abs(snowHeight(s, u - .001) - snowHeight(s, u + .001)) < .01);
   }
-  // Rendered shoreline samples must also remain above the level surface.
+  // Rendered shoreline vertices also stay above the water.
   for (let row = -256; row <= 256; row++) {
     const lake = alpineLake(row * SNOW_STEP), columns = snowColumns(row * SNOW_STEP);
     for (const u of [lake.near, lake.far]) {
@@ -98,7 +98,6 @@ test('lakeside cabins stay on dry land through positive and negative route cells
     const cabin = alpineCabin(i);
     assert.ok(cabin.y > LAKE_LEVEL + .5);
     for (const ds of [-3, 3]) assert.ok(cabin.u - 2.5 > alpineLake(cabin.s + ds).near);
-    // Cabins sit on shore benches, never pitched on the face of the bluff.
     assert.ok(cabin.slope < .9, `cabin ${i} perches on a ${cabin.slope.toFixed(1)} slope`);
     assert.ok(cabin.s > i * CABIN_SPACING && cabin.s < (i + 1) * CABIN_SPACING, 'each cabin keeps to its own stretch');
     assert.deepEqual(alpineCabin(i), cabin);

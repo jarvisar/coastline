@@ -2,8 +2,8 @@ import * as THREE from 'three';
 
 const PAGE_SIZE = 6;
 
-// Immersive sessions cannot show DOM menus. The game supplies the same actions
-// to this small canvas menu, operated by stick/A or pointing with a trigger.
+// Immersive sessions can't show DOM menus, so the same actions go to this canvas
+// menu, driven by stick/A or by pointing with a trigger.
 export class VRStatus {
   constructor(camera) {
     this.camera = camera; this.model = null; this.selected = 0;
@@ -24,7 +24,7 @@ export class VRStatus {
     this.signature = signature;
     if (!this.mesh) {
       this.canvas = document.createElement('canvas');
-      // Keep the GPU texture dimensions fixed across button/menu transitions.
+      // Fixed texture size across button/menu transitions.
       this.canvas.width = 1024; this.canvas.height = 1024;
       this.texture = new THREE.CanvasTexture(this.canvas);
       this.texture.colorSpace = THREE.SRGBColorSpace;

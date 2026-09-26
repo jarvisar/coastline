@@ -253,8 +253,7 @@ test('neighboring volcanic terrain and lava meshes share exact boundary vertices
   for (const index of [-9, 0, 65]) {
     const a = new VolcanicChunk(index), b = new VolcanicChunk(index + 1);
     try {
-      // Terrain jitter is global, so compare shared positions even when the
-      // seam bends away from the nominal chunk boundary.
+      // Jitter is global, so compare shared positions even where the seam bends.
       for (const name of ['volcanic-basalt', 'volcanic-lava', 'surface-creek']) {
         const points = chunk => {
           const attributes = chunk.group.getObjectByName(name === 'surface-creek' ? 'volcanic-lava' : name).geometry.attributes, p = attributes.position, result = new Set();
@@ -298,8 +297,8 @@ test('crater, rock and buttress footprints leave the full road clear on bends', 
           const dx = p.x - solid.x, dz = p.z - solid.z;
           let distance = Math.hypot(dx, dz) - solid.reach;
           if (solid.heading !== undefined) {
-            // A turned rock's broad-phase circle can reach over the road even
-            // when its actual rectangular footprint leaves the shoulder clear.
+            // A turned rock's broad-phase circle can overlap the road when its
+            // rectangle doesn't, so test the rectangle.
             const cos = Math.cos(solid.heading), sin = Math.sin(solid.heading);
             distance = Math.hypot(Math.max(0, Math.abs(dx * cos + dz * sin) - solid.halfWidth),
               Math.max(0, Math.abs(dx * sin - dz * cos) - solid.halfLength));

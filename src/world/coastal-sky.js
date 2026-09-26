@@ -1,9 +1,7 @@
 import * as THREE from 'three';
 
-// A clear Pacific sky for the chase and cockpit views: a gradient that meets
-// the fog exactly at the horizon, with a pale marine haze just above it. The
-// overhead views look down on the land and never see the sky, so the dome
-// collapses to nothing under an orthographic camera.
+// Sky for the chase and cockpit views. Overhead views never see it, so the
+// dome collapses under an orthographic camera.
 const SUN = new THREE.Vector3(-190, 215, 125).normalize();
 
 export class CoastalSky {
@@ -23,9 +21,9 @@ export class CoastalSky {
         void main() {
           vec3 direction = normalize(vSkyDirection);
           float elevation = max(0.0, direction.y);
-          // Exactly the fog colour at the horizon, deepening overhead.
+          // Matches the fog colour at the horizon.
           vec3 color = mix(horizon, zenith, pow(smoothstep(0.0, 0.85, elevation), 0.75));
-          // A thin marine haze lies on the sea, rising off the fogged horizon.
+          // Thin haze band just above the horizon.
           color = mix(color, haze, smoothstep(0.0, 0.02, elevation) * (1.0 - smoothstep(0.02, 0.13, elevation)) * 0.55);
           color += vec3(0.16, 0.13, 0.08) * pow(max(dot(direction, sun), 0.0), 16.0);
           gl_FragColor = vec4(color, 1.0);
@@ -33,7 +31,7 @@ export class CoastalSky {
         }` });
     this.dome = new THREE.Mesh(this.domeGeometry, this.domeMaterial); this.dome.name = 'coastal-sky-dome';
     this.dome.renderOrder = -1000; this.dome.frustumCulled = false; this.dome.userData.ambientOcclusion = false;
-    // The fully faded fog is the view's horizon; keep the dome's horizon on it.
+    // Fully faded fog is the visible horizon, so match the dome to it.
     this.dome.onBeforeRender = (renderer, scene) => { if (scene.fog) this.domeMaterial.uniforms.horizon.value.copy(scene.fog.color); };
     this.group.add(this.dome);
   }

@@ -20,15 +20,14 @@ export class ThirdPersonCamera {
   snap() { this.initialized = false; }
   update(car, dt) {
     const heading = -car.rotation.y;
-    // Let the horizon suggest the slope without copying every chassis movement.
+    // Follow the slope partly so the horizon doesn't copy every chassis movement.
     const pitch = THREE.MathUtils.clamp(car.rotation.x * .45, -.18, .18);
     if (!this.initialized) {
       this.heading = heading; this.headingVelocity = 0;
       this.pitch = pitch; this.height = car.position.y; this.initialized = true;
     } else {
-      // A critically damped spring eases into and out of turns. Limit its error
-      // so even a sudden U-turn produces a controlled orbit (about 125 deg/s).
-      // Small steps keep the speed limit consistent across display refresh rates.
+      // Critically damped spring. Clamping the error caps a U-turn orbit at about
+      // 125 deg/s, and fixed small steps keep that cap the same at any refresh rate.
       for (let remaining = dt; remaining > 1e-8;) {
         const step = Math.min(remaining, 1 / 120);
         const difference = Math.atan2(Math.sin(heading - this.heading), Math.cos(heading - this.heading));
@@ -44,9 +43,8 @@ export class ThirdPersonCamera {
     }
     this.forward.set(Math.sin(this.heading), 0, -Math.cos(this.heading));
     this.camera.position.copy(car.position).addScaledVector(this.forward, -14);
-    // A lower chase position and a higher, farther aim show more of the road
-    // and horizon, with the car sitting in the lower part of the frame.
-    // A tall machine lifts the camera with it, so the road stays in view over its roof.
+    // A low camera aimed high and far shows more road and keeps the car low in frame.
+    // chaseLift raises it so tall cars don't hide the road.
     const lift = car.userData.chaseLift ?? 0;
     this.camera.position.y = this.height + 4.5 + lift - Math.sin(this.pitch) * 14;
     this.target.copy(car.position).addScaledVector(this.forward, 7);

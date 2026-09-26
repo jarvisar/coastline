@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import { chromium } from '@playwright/test';
 import { mkdir, writeFile } from 'node:fs/promises';
 
-// Compare shading at fixed points on real bale meshes and the small faceted
-// shapes used elsewhere. Unlit white surfaces isolate AO from other effects.
+// Samples AO at fixed points on the bale meshes and small faceted shapes.
+// Unlit white surfaces isolate AO from other effects.
 const browser = await chromium.launch({ executablePath: 'C:/Program Files/Google/Chrome/Application/chrome.exe', headless: true,
   args: ['--enable-webgl', '--ignore-gpu-blocklist'] });
 try {
@@ -100,8 +100,7 @@ try {
       const label = `${revised.variant}, ${after.name}, ${revised.perspective ? 'perspective' : 'overhead'}, span ${revised.span}`;
       assert.ok(after.shimmer < .03, `${label}: keep frame-to-frame shading changes under 3%`);
       assert.ok(after.darkness > before.darkness * .65 && after.darkness < before.darkness * 1.4, `${label}: retain object shading`);
-      // Small contact shadows are only a few percent dark; compare their
-      // absolute change so a one-point shift is not treated as a large error.
+      // Contact shadows are only a few percent dark, so compare absolute change.
       assert.ok(after.contact > before.contact * .65 && Math.abs(after.contact - before.contact) < .03, `${label}: retain contact shading within three percentage points`);
     });
   }

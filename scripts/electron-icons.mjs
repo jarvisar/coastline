@@ -3,9 +3,8 @@ import { mkdir, readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { chromium } from '@playwright/test';
 
-// Rasterize the web app's favicon for the desktop packages. electron-builder
-// converts electron/build/icon.png into .ico (Windows) and .icns (macOS) itself.
-// Re-run after changing public/favicon.svg: npm run electron:icons
+// Rasterises public/favicon.svg to electron/build/icon.png. electron-builder
+// makes the .ico and .icns from it. Re-run after changing the favicon.
 const chrome = 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 const browser = await chromium.launch(process.env.CHROME_PATH
   ? { executablePath: process.env.CHROME_PATH }

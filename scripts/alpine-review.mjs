@@ -42,8 +42,7 @@ try {
         await page.evaluate(() => { document.querySelector('#pause-overlay').hidden = true; });
         await page.screenshot({ path: `${directory}/mobile-with-controls.png` });
         await style.evaluate((el, content) => { el.textContent = content; }, hideUI);
-        // Framing has to leave the car visible when entering the scene and
-        // rotating between portrait and landscape on different phone sizes.
+        // The car must stay in frame across phone sizes and orientations.
         for (const [width, height] of [[320, 568], [430, 932], [844, 390], [390, 844]]) {
           await page.setViewportSize({ width, height });
           const position = await page.evaluate(() => {
@@ -72,8 +71,8 @@ try {
           const a = window.__coastline;
           a.vehicle.s = site.s; a.vehicle.reset(); await a.world.chunkSource?.prepare(site.s);
           a.world.update(site.s); a.vehicle.render(1, a.world.origin); a.rendering.snap();
-          // Show the relay in the existing wide view, and the landing in the
-          // phone's default view. Detail shots below are explicitly reframed.
+          // Relay in the wide view, landing in the phone's default view.
+          // Detail shots below are reframed.
           const view = site.kind ? (mobile ? 'Close view' : 'Medium view') : 'Scenic view';
           while (a.rendering.viewLabel !== view) a.rendering.toggleView();
           a.rendering.update(a.vehicle.car, 10, a.world.origin); a.world.animate(9, a.vehicle); a.rendering.render();

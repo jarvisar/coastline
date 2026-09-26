@@ -13,8 +13,7 @@ const colors = Object.fromEntries(Object.entries({
   deck: '#3e3d40', concrete: '#68625b', cap: '#827b6d', stripe: '#b29855', line: '#c4bcb0', yellow: '#b5934c',
 }).map(([key, value]) => [key, new THREE.Color(value)]));
 
-// A short, heavy plate-girder crossing. Everything is baked into two chunk
-// meshes; the clear opening has no columns planted in the molten channel.
+// Baked into two chunk meshes. No columns stand in the molten channel.
 export function buildVolcanicBridge(chunk) {
   const bridge = volcanicCrossing(chunk.start + 64);
   if (bridge.centre <= chunk.start || bridge.centre >= chunk.start + 128) return;
@@ -48,8 +47,7 @@ export function buildVolcanicBridge(chunk) {
     face(target, a, c, b, color); face(target, a, d, c, color);
   };
 
-  // The deck follows the road's curve and grade in short plates. Its black
-  // wearing course leaves room for narrow, recessed maintenance gratings.
+  // Deck follows the road's curve and grade in 2 m plates.
   for (let s = start; s < end; s += 2) {
     const next = Math.min(s + 2, end);
     box(steel, s, next, -7.45, 7.45, -.48, -.025, colors.web);
@@ -61,16 +59,13 @@ export function buildVolcanicBridge(chunk) {
       box(steel, s, next, side * 7.05 - .17, side * 7.05 + .17, -.06, .29, colors.flange);
       surface(s, next, side * 5.13 - .085, side * 5.13 + .085, .078, colors.line, concrete);
       surface(s, next, side * .14 - .045, side * .14 + .045, .078, colors.stripe, concrete);
-      // The deep web sits below the deck; stiffeners and paired flange plates
-      // give its side a strong horizontal silhouette without a tall truss.
       box(steel, s, next, side * 7.22 - .18, side * 7.22 + .18, -1.9, -.23, colors.web);
       for (const h of [-1.92, -.25]) box(steel, s, next, side * 7.22 - .46, side * 7.22 + .46, h - .12, h + .12, colors.flange);
       beam(at(s, side * 7.22, .95), at(next, side * 7.22, .95), .23, .19, colors.edge);
       beam(at(s, side * 7.22, .48), at(next, side * 7.22, .48), .13, .12, colors.flange);
     }
   }
-  // Grating crossbars catch occasional slivers of light; they remain sparse
-  // enough to read clearly from the overhead driving camera.
+  // Grating bars kept sparse enough to read from the driving camera.
   for (let s = start + .3; s < end; s += .55) for (const side of [-1, 1]) {
     box(steel, s, s + .07, side * 6.35 - .62, side * 6.35 + .62, .025, .075, colors.flange);
   }
@@ -96,12 +91,10 @@ export function buildVolcanicBridge(chunk) {
   for (const [s, direction] of [[start, -1], [end, 1]]) {
     box(concrete, s - 1.7, s + 1.7, -8.05, 8.05, -6.8, -.56, colors.concrete);
     box(concrete, s - 1.9, s + 1.9, -8.35, 8.35, -.72, -.35, colors.cap);
-    // Narrow expansion plates interrupt the wearing course at each landing.
     surface(s - .17, s + .17, -5.5, 5.5, .084, colors.dark);
     for (const d of [-.22, .22]) surface(s + d - .055, s + d + .055, -5.5, 5.5, .085, colors.flange);
     for (const side of [-1, 1]) {
-      // Battered retaining cheeks sink into the embankment. Their far caps
-      // follow the actual ground instead of projecting flat concrete spokes.
+      // Retaining cheek caps follow the ground so they don't jut out flat.
       const landing = (along, across, raised) => {
         const p = at(along, across, 0), floor = chunk.ground(p.x, p.z) ?? p.y;
         p.y = Math.min(p.y + raised, floor + .12); return p;
@@ -115,7 +108,6 @@ export function buildVolcanicBridge(chunk) {
       box(concrete, s - .9, s + .9, side * 7.55 - .68, side * 7.55 + .68, .26, .4, colors.cap);
       box(steel, s - .3, s + .3, side * 7.22 - .36, side * 7.22 + .36, -.08, 1.23, colors.dark);
       for (let n = 0; n < 3; n++) box(steel, s - .31, s + .31, side * 7.22 - .37, side * 7.22 + .37, .22 + n * .27, .34 + n * .27, colors.yellow);
-      // Short splayed approach rails tie the industrial deck into the road.
       for (let j = 0; j < 3; j++) {
         const t0 = j / 3, t1 = (j + 1) / 3;
         const p = at(s + direction * t0 * 6, side * (7.22 + t0 * .55), .95 - t0 * .15);
@@ -128,7 +120,6 @@ export function buildVolcanicBridge(chunk) {
       }
     }
   }
-  // A few oxidised plates break the uniform paint, concentrated underneath.
   for (let n = 0; n < 5; n++) {
     const s = start + 2 + randomAt(bridge.index, 80730 + n) * (end - start - 4), side = n % 2 ? -1 : 1;
     box(steel, s, s + .6, side * 7.41 - .012, side * 7.41 + .012, -1.65, -.95, colors.rust);

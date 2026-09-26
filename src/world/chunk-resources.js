@@ -1,6 +1,6 @@
-// Stable names connect worker-built meshes to the existing shared resources.
-// Shader callbacks and clocks stay on the renderer's materials; shared geometry
-// is never transferred (which would detach it from subsequent worker jobs).
+// Stable names link worker-built meshes to the shared resources. Shader callbacks
+// and clocks stay on the renderer's materials. Shared geometry is never
+// transferred, which would detach it from later worker jobs.
 const resources = new Map(), keys = new WeakMap();
 
 export function registerChunkResources(prefix, values) {

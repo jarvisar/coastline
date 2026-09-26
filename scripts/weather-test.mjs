@@ -19,8 +19,8 @@ try {
     const { Snowfall } = await import('/src/world/snowfall.js');
     const { Rainfall } = await import('/src/world/rainfall.js');
     const { weatherMotionGLSL } = await import('/src/world/weather-motion.js');
-    // Transform feedback reads actual vertex-shader positions before rasterizing.
-    // Synchronous readback belongs only in this test, never in the game loop.
+    // Transform feedback reads the real vertex-shader output. Synchronous
+    // readback is fine in this test but must never go in the game loop.
     const gl = document.createElement('canvas').getContext('webgl2');
     const shader = (type, source) => {
       const result = gl.createShader(type); gl.shaderSource(result, source); gl.compileShader(result);
@@ -73,7 +73,7 @@ try {
           gl.bindBuffer(gl.TRANSFORM_FEEDBACK_BUFFER, output); gl.getBufferSubData(gl.TRANSFORM_FEEDBACK_BUFFER, 0, actual);
           for (let i = 0; i < positions.count; i++) {
             const n = i * stride, seeds = weather.seeds;
-            // Original CPU equations, independent of the new GLSL inputs.
+            // Reference CPU equations, independent of the GLSL inputs.
             const expected = [
               wrap(seeds[n] + (stride === 6 ? time * .8 + Math.sin(time * .55 + seeds[n + 4]) * seeds[n + 5] * 2.1 : 0) - anchor.x, 300),
               wrap(seeds[n + 1] - time * seeds[n + 3] - anchor.y, 200),
@@ -95,7 +95,7 @@ try {
     return records;
   });
   for (const result of results) assert.ok(result.maxError < .003, `${result.weather}: GPU motion diverged by ${result.maxError} meters`);
-  // Exercise the full PointsMaterial shader, fog, and both camera projections.
+  // Run the full PointsMaterial shader with fog and both camera projections.
   for (const id of ['snow', 'city']) {
     await page.evaluate(id => window.__coastline.changeJourney(id), id);
     await page.evaluate(() => {

@@ -8,8 +8,8 @@ import { coplanarOverlaps } from './surface-audit.js';
 
 test('overlapping surface patches meet without holes, depth layers, or lost attributes', () => {
   const g = new THREE.BufferGeometry();
-  // Two overlapping squares with differently colored surfaces and a scalar
-  // shader attribute. The second square owns the shared two-square-meter area.
+  // Two overlapping 2x2 squares with different colours and a scalar attribute.
+  // The second square should own the overlap.
   const vertices = [], colors = [], glow = [];
   for (const [x, tint] of [[0, 0], [1, 1]]) {
     for (const [dx, y] of [[0, 0], [2, 0], [2, 2], [0, 0], [2, 2], [0, 2]]) {
@@ -94,8 +94,7 @@ test('all seven routes and every discovery kind have no competing opaque faces',
       const chunk = new Chunk(index);
       try {
         chunk.group.traverse(mesh => {
-          // Foam, smoke and other transparent shader effects intentionally
-          // blend layers, and animated birds move their wings after upload.
+          // Transparent effects layer on purpose, and bird wings move in the shader.
           if (!mesh.isMesh || mesh.material.transparent || !mesh.material.depthWrite ||
               mesh.geometry.attributes.birdWing || seen.has(mesh.geometry)) return;
           seen.add(mesh.geometry); geometriesChecked++;

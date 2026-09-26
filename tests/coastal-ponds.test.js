@@ -71,9 +71,8 @@ test('pond water closes against the rendered bank without detached grid edges or
     try {
       const edges = new Map();
       let area = 0;
-      // Adjacent chunks store z relative to different origins in Float32.
-      // Weld within a fraction of a millimetre instead of rounding either
-      // side of an arbitrary decimal boundary into two disconnected keys.
+      // Neighbouring chunks store Float32 z from different origins, so weld by
+      // distance. Rounding to a key can split a shared vertex across two buckets.
       const buckets = new Map(); let nextVertex = 0;
       const key = p => {
         const x = Math.floor(p.x * 1000), z = Math.floor(p.z * 1000);
@@ -108,8 +107,7 @@ test('pond water closes against the rendered bank without detached grid edges or
       for (const {a, b, count} of edges.values()) {
         assert.ok(count === 1 || count === 2);
         if (count === 2) continue;
-        // Every exposed perimeter segment must touch the bank, including
-        // either side of a jittered chunk seam. No square-grid water teeth.
+        // Open edges must lie on the bank, including at chunk seams.
         const x = (a.x + b.x) / 2, z = (a.z + b.z) / 2;
         const height = chunks.map(chunk => chunk.sampleGround(x, z + chunk.start)).find(y => y !== null);
         assert.notEqual(height, undefined);

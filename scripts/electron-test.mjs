@@ -6,11 +6,10 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import { _electron as electron } from '@playwright/test';
 
-// Smoke test for the desktop shell. It launches the real Electron app on the
-// production renderer build and checks the few things the wrapper is responsible
-// for: serving the build over app://, keeping the worker and secure-context APIs
-// working, hiding web-only install UI, keyboard driving, fullscreen, and route
-// changes. Screenshots and a JSON report go to .artifacts/electron/.
+// Smoke test for the desktop shell. Launches Electron on the production renderer
+// build and checks what the wrapper owns: app:// serving, worker and secure-context
+// APIs, hidden install UI, keyboard driving, fullscreen and route changes.
+// Screenshots and a JSON report go to .artifacts/electron/.
 //
 //   npm run test:electron               build dist-electron/ if missing, test `electron .`
 //   npm run test:electron -- --build    rebuild dist-electron/ first
@@ -53,7 +52,7 @@ const appArgs = ['--seed=4817', ...(flags.has('--windowed') ? ['--windowed'] : [
 const { ELECTRON_RUN_AS_NODE: _ignored, ...env } = process.env;
 const launchOptions = {
   cwd: root,
-  // No update check: a packaged build must not download a release or show a dialog mid-test.
+  // No update check, so a packaged build can't download or show a dialog mid-test.
   env: { ...env, COASTLINE_FULLSCREEN: '', COASTLINE_USER_DATA: userData, COASTLINE_NO_UPDATE: '1' },
   args: packaged ? appArgs : ['.', ...appArgs],
   ...(packaged ? { executablePath: packagedExecutable() } : {}),
@@ -114,7 +113,6 @@ try {
   report.environment = { ...environment, bounds: initial.bounds };
   await page.screenshot({ path: path.join(out, 'welcome.png') });
 
-  // Keyboard driving through the shell.
   await page.keyboard.down('KeyW');
   await page.waitForFunction(() => document.querySelector('#distance').textContent !== '0.0', null, { timeout: 25_000 });
   await page.keyboard.up('KeyW');
@@ -125,9 +123,8 @@ try {
   await page.keyboard.press('KeyP');
   await page.waitForFunction(() => document.querySelector('#pause-overlay').hidden);
 
-  // All fullscreen controls share native state, without HTML fullscreen swallowing Escape.
-  // Playwright's synthetic keys bypass Electron's before-input-event, so the shell's
-  // own shortcuts are sent through Chromium's input pipeline with sendInputEvent.
+  // Playwright's synthetic keys bypass Electron's before-input-event, so shell
+  // shortcuts go through sendInputEvent instead.
   const sendKey = keyCode => electronApp.evaluate(({ BrowserWindow }, keyCode) => {
     const { webContents } = BrowserWindow.getAllWindows()[0];
     webContents.focus();
@@ -172,7 +169,7 @@ try {
   state = await windowState();
   fullscreenCheck('F11 restores the window', !state.fullscreen, state.bounds);
 
-  // Route changes exercise worker streaming for every journey inside the shell.
+  // Cycling routes exercises worker streaming for every journey.
   const journeys = await page.evaluate(() => [...document.querySelectorAll('button[data-journey]')].map(button => button.dataset.journey));
   check('journeys listed', journeys.length >= 3, journeys);
   for (const expected of [...journeys.slice(1), journeys[0]]) {
@@ -191,7 +188,7 @@ try {
 } catch (error) {
   report.errors.push(String(error?.stack ?? error));
   console.error(error);
-  // Capture what the page looked like so a CI failure can be diagnosed from the artifacts.
+  // Capture page state so CI failures can be diagnosed from the artifacts.
   if (page) {
     report.failureState = await page.evaluate(() => ({
       href: location.href, readyState: document.readyState,

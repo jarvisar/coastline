@@ -9,9 +9,8 @@ import { dockRailingSpans } from './city-docks.js';
 const STONE = new THREE.Color('#aaa99e'), JOINT = new THREE.Color('#80888b');
 const GRASS = ['#6b8058', '#71865e', '#627951'];
 
-// Small pieces of public space share one vertex-coloured mesh per chunk.
-// All the paving samples the actual ground at its corners, including bends
-// and chunk edges; the global street grid decides ownership of larger props.
+// Paving samples the real ground at its corners. Larger props belong to a
+// chunk by the global street grid.
 export function buildPromenade(chunk) {
   const { details, boxes } = chunk.scenery;
   const end = chunk.start + CHUNK_LENGTH;
@@ -28,8 +27,6 @@ export function buildPromenade(chunk) {
     return y + .38;
   };
 
-  // Quiet joints give the pavement scale. Pale edge stones and a darker tide
-  // line make the embankment read as masonry instead of an unbroken grey slab.
   for (let s = chunk.start; s < end; s += 8) {
     const t = Math.min(s + 8, end), q0 = quayOffset(s), q1 = quayOffset(t);
     const nearCrossing = Math.abs(s - crossStreetAt(s).center) < STREET_HALF_WIDTH;
@@ -45,8 +42,6 @@ export function buildPromenade(chunk) {
       const coping = [[from, -.12], [to, -.12], [to, 1.25], [from, 1.25]]
         .map(([a, offset]) => chunk.at(a, quayOffset(a) + offset, pavementHeight(a) + .075));
       chunk.quad(details, coping, STONE, [0, 1, 0]);
-      // A continuous warm stone walk follows the water, tying the individual
-      // gardens and timber terraces together without filling the open pavement.
       const riverwalk = (a, b, near, far, color, lift) => chunk.quad(details,
         [[a, near], [b, near], [b, far], [a, far]].map(([t, offset]) => {
           const p = chunk.ground(t, quayOffset(t) + offset); p.y += lift; return p;
@@ -61,8 +56,7 @@ export function buildPromenade(chunk) {
     };
     const wet = [waterline(s, q0, RIVER_LEVEL + .04), waterline(t, q1, RIVER_LEVEL + .04), waterline(t, q1, RIVER_LEVEL + .62), waterline(s, q0, RIVER_LEVEL + .62)];
     chunk.quad(details, wet, new THREE.Color('#596663'), [-1, 0, 0]);
-    // Staggered masonry courses and pale cap stones break up the quay's tall
-    // retaining face. Each panel follows its real sloping embankment surface.
+    // Masonry courses on the quay wall, each panel following the sloped face.
     const wallTop = Math.min(pavementHeight(s), pavementHeight(t)) - .24;
     for (let row = 0; RIVER_LEVEL + .72 + row * .95 < wallTop; row++) {
       const low = RIVER_LEVEL + .72 + row * .95, high = Math.min(low + .89, wallTop);
@@ -80,8 +74,7 @@ export function buildPromenade(chunk) {
     }
   }
 
-  // Raised garden islands break the promenade into a walking route, planted
-  // seating areas and small parking bays. Leave full access to every street.
+  // Garden islands keep 6 m clear of every cross street.
   for (let block = blockAt(chunk.start - 80); block <= blockAt(end + 80); block++) {
     if (waterfrontKioskForBlock(block)) continue;
     const from = blockBoundary(block) + STREET_HALF_WIDTH + 6, to = blockBoundary(block + 1) - STREET_HALF_WIDTH - 6;
@@ -91,8 +84,7 @@ export function buildPromenade(chunk) {
       const parking = cityParkingForBlock(block), shift = parking ? 6 : 0;
       let u0 = Math.max(q + (parking || q < -35 ? 12 : 4.5), -28) - shift;
       const u1 = -14.5 - shift, half = Math.min(11, ((to - from) / count - 8) / 2);
-      // Wide stretches retain a planted belt behind the new waterside rooms.
-      // Narrow stretches alternate between a garden and an open seating terrace.
+      // Push gardens back behind any waterfront site they would overlap.
       for (const site of chunk.waterfrontSites) if (Math.abs(site.s - s) < site.half + half + 1) u0 = Math.max(u0, site.u1 + 2.4);
       if (!chunk.inChunk(s) || u1 - u0 < 2.2 || !chunk.clearAt(s, (u0 + u1) / 2, half + 2)) continue;
       buildWaterfrontGarden(chunk, s, u0, u1, half, n);
@@ -101,8 +93,7 @@ export function buildPromenade(chunk) {
 
   buildWaterfrontPlaces(chunk);
 
-  // An occasional coffee stand and two benches occupy one of the wider
-  // landings. They stay low enough to preserve the view of the driving lane.
+  // Kiosk props stay low so they don't block the view of the lane.
   for (let block = blockAt(chunk.start - 80); block <= blockAt(end + 80); block++) {
     const site = waterfrontKioskForBlock(block);
     if (!site || !chunk.inChunk(site.s) || !chunk.clearAt(site.s, site.u, 7)) continue;
@@ -118,8 +109,7 @@ export function buildPromenade(chunk) {
     chunk.furniture('bin', s + 3.6, u - 3, yaw);
   }
 
-  // Tree pits are attached to their existing street layout, so
-  // furniture does not accumulate independently at the same position.
+  // Pit surrounds come from the placed trees so they can't drift from them.
   for (const items of chunk.scenery.bark.values()) for (const item of items) {
     if (!item.pit) continue;
     const [x, y, z] = item.p;
@@ -127,8 +117,7 @@ export function buildPromenade(chunk) {
     boxes.push({ p: [x, y + .16, z], scale: [1.85, .15, 1.85], r: [0, matrixYaw, 0], color: '#a8a797' });
     boxes.push({ p: [x, y + .25, z], scale: [1.55, .06, 1.55], r: [0, matrixYaw, 0], color: '#536249' });
   }
-  // Safety cabinets add a small warm accent at the otherwise quiet river edge.
-  // Road drains are already baked into city-roads, so do not duplicate boxes.
+  // Road drains are built in city-roads, so none are added here.
   for (let n = Math.floor(chunk.start / 80); n * 80 + 24 < end; n++) {
     const s = n * 80 + 24, u = quayOffset(s) + .6;
     if (!chunk.inChunk(s) || !chunk.clearAt(s, u, 2) || dockRailingSpans(s - 1, s + 1).reduce((sum, [a, b]) => sum + b - a, 0) < 2 - 1e-6) continue;

@@ -4,21 +4,20 @@ import { CoastalChunk } from '../src/world/environment.js';
 import { coastalGuardrail, coastalDrivingRoute, bridgeAt, overlookWidth, positionAt,
   GUARDRAIL_OFFSET, GUARDRAIL_STOP, GUARDRAIL_SEGMENT, CHUNK_LENGTH } from '../src/world/route.js';
 
-// Rail beams and posts are the only things in this instanced batch.
+// This batch holds only rail beams and posts.
 function railParts(index) {
   const chunk = new CoastalChunk(index);
   const mesh = chunk.group.children.find(child => child.name === 'coastal-guardrails');
   const parts = [];
   if (mesh) for (let i = 0; i < mesh.count; i++) {
     const matrix = mesh.instanceMatrix.array, o = i * 16;
-    // Column 3 is the translation; the diagonal holds the box scale.
+    // Elements 12-14 are the translation; column lengths give the box scale.
     parts.push({ x: matrix[o + 12], y: matrix[o + 13], z: matrix[o + 14],
       width: Math.hypot(matrix[o], matrix[o + 1], matrix[o + 2]),
       height: Math.hypot(matrix[o + 4], matrix[o + 5], matrix[o + 6]),
       length: Math.hypot(matrix[o + 8], matrix[o + 9], matrix[o + 10]) });
   }
   chunk.dispose();
-  // A beam is the long piece; a post is the short, tall one.
   return { beams: parts.filter(p => p.length > 1), posts: parts.filter(p => p.length <= 1) };
 }
 const delineators = index => {
@@ -42,7 +41,6 @@ test('the car is stopped by exactly the guardrails it can see', () => {
     railed++;
     assert.ok(oceanSide >= GUARDRAIL_OFFSET,
       `a rail stands at s=${s} but driving allows u=${oceanSide.toFixed(2)}, past it`);
-    // The stop must leave the rail reachable, not a wall out in the lane.
     assert.ok(oceanSide <= GUARDRAIL_STOP + 1e-9, `s=${s} stops short of the rail at ${oceanSide.toFixed(2)}`);
   }
   assert.ok(railed > 2000, `expected a good stretch of railed road, measured ${railed} samples`);
@@ -99,9 +97,7 @@ test('built rails match the rule, and every run is closed by a post', () => {
     assert.equal(posts.length, expected.length + runEnds, `chunk ${index} must post both ends of every run`);
     for (const beam of beams) {
       assert.ok(beam.height > .2 && beam.height < .5, 'a beam keeps its rail profile');
-      // A beam spans the chord between its two posts, which a bend shortens or
-      // lengthens a little. Anything well outside that is a sliver or a beam
-      // stretched across a segment that should have been left out.
+      // Bends change the chord a little. Far outside that is a sliver or a stray beam.
       assert.ok(beam.length > GUARDRAIL_SEGMENT - .5 && beam.length < GUARDRAIL_SEGMENT + 1,
         `a beam ${beam.length.toFixed(2)} m long does not span one ${GUARDRAIL_SEGMENT} m segment`);
     }
@@ -112,7 +108,7 @@ test('no delineator post doubles up beside a guardrail', () => {
   for (const index of [-4, -2, 0, 1, 3, 5, 9]) {
     const start = index * CHUNK_LENGTH;
     for (const post of delineators(index)) {
-      // Find the route position this post was placed at, on the ocean side only.
+      // Match the post to its ocean-side route position.
       for (let s = start; s < start + CHUNK_LENGTH; s += 16) {
         const ocean = positionAt(s, -6.85);
         if (Math.hypot(ocean.x - post.x, ocean.z + start - post.z) > .3) continue;

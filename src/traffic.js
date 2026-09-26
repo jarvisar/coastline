@@ -5,19 +5,16 @@ import { collisionImpulse, contactPoint } from './impact.js';
 
 export const TRAFFIC_CRUISE_SPEED = 16;
 const LANE = 2.4;
-// A struck car is never knocked further from its lane than this, which keeps
-// it on the tarmac and on its own side of the centre line.
+// Max lane offset for a struck car. Keeps it on its own side of the centre line.
 const REACH = 1.2;
-// How quickly locked tyres take the speed off a car driven backwards.
+// Decay rate of recoil speed after a car is knocked backwards.
 const RECOIL_GRIP = 8;
 const BEHIND = 380, AHEAD = 620;
 const DENSITY = { coast: 1, snow: .75, desert: .5, jungle: .6, plains: .5, city: 1, volcanic: .35 };
-// The city runs half as many cars again over the same stretch of road.
 const FLEET = { city: 9 };
 const LIGHTS = { snow: 1, city: .35, volcanic: .65 };
 
-// Four separating axes give a forgiving rectangular footprint even when the
-// player is sideways. All collision coordinates are independent of render origin.
+// Separating-axis test on two rectangles. Coordinates ignore the render origin.
 export function trafficContact(a, b) {
   const axes = car => [{ x: Math.cos(car.heading), z: Math.sin(car.heading) }, { x: Math.sin(car.heading), z: -Math.cos(car.heading) }];
   const aa = axes(a), ba = axes(b), dx = a.x - b.x, dz = a.z - b.z;
@@ -42,7 +39,7 @@ export class Traffic {
     this.group = new THREE.Group(); this.group.name = 'traffic'; scene.add(this.group);
     this.models = createTrafficModels();
     this.poseRotation = new THREE.Euler(0, 0, 0, 'YXZ');
-    // A small shared pool illuminates nearby traffic without shadow-map passes.
+    // A few shared shadowless spotlights, moved to the nearest cars.
     this.headlightRigs = Array.from({ length: 3 }, () => {
       const rig = new THREE.Group();
       const light = new THREE.SpotLight('#ffe0a6', 170, 24, .64, .8, 1.5);
@@ -50,8 +47,8 @@ export class Traffic {
       rig.add(light, light.target);
       return { rig, light };
     });
-    // Three cars in each direction over a kilometer: usually one or two in
-    // view. The pool holds a few more for the routes that run heavier traffic.
+    // Six cars by default, three each way over about a kilometre.
+    // Extra pool slots are for routes with a larger FLEET.
     this.pool = Array.from({ length: 9 }, (_, index) => {
       const model = this.models.create(index % TRAFFIC_MODELS.length, TRAFFIC_COLORS[0]);
       this.group.add(model.car);
@@ -73,7 +70,7 @@ export class Traffic {
   }
   reset(route, s, journey = this.journey) {
     this.route = route; this.journey = journey; this.salt = { coast: 2100, desert: 2200, snow: 2300, jungle: 2400, plains: 2500, city: 2600, volcanic: 2700 }[journey];
-    // Traffic gets a fresh roll even when revisiting the same seeded scenery.
+    // Unseeded on purpose so traffic differs on each visit to the same scenery.
     this.seed = Math.floor(Math.random() * 4294967296);
     this.spacing = 1 / (DENSITY[journey] ?? 1);
     const fleet = FLEET[journey] ?? 6;
@@ -101,7 +98,7 @@ export class Traffic {
     this.pose(car); car.previousPosition.copy(car.position); car.previousQuaternion.copy(car.quaternion);
   }
   recycle(car, playerS) {
-    // Pick a clear spot outside the camera, including when reversing or resetting.
+    // Pick the candidate spot out of view with the largest gap to same-direction cars.
     let bestS = playerS + (AHEAD - 30) * this.spacing, bestGap = -Infinity;
     for (const offset of [-360, -300, 460, 530, 600]) {
       const s = playerS + (offset + (this.random(car, offset) - .5) * 35) * this.spacing;
@@ -131,8 +128,7 @@ export class Traffic {
       let target = car.cruiseSpeed;
       const scale = this.route.frame(car.s).scale;
       car.routeScale = scale;
-      // Basic following/braking prevents the few cars from driving through a
-      // stopped player or piling into one another. No passing or pathfinding.
+      // Simple following distance so cars brake for the player and each other. No passing.
       for (let i = 0; i <= this.vehicles.length; i++) {
         const other = i < this.vehicles.length ? this.vehicles[i] : player;
         if (other === car || Math.abs(other.u - car.u) > 2.2) continue;
@@ -144,7 +140,7 @@ export class Traffic {
       car.targetSpeed = target;
     }
     for (const car of this.vehicles) {
-      // Braking is for the road ahead. A car shoved past its cruising speed eases back down to it.
+      // Hard braking only below cruise speed. A car shoved faster eases back down.
       car.speed += clamp(car.targetSpeed - car.speed, -(car.targetSpeed < car.cruiseSpeed ? 14 : 2) * dt, 3 * dt);
       if (car.recoil) this.giveGround(car, dt);
       car.s += car.direction * (car.speed - car.recoil) * dt / car.routeScale;
@@ -153,9 +149,7 @@ export class Traffic {
     }
     this.collide(player);
   }
-  // A blow heavy enough to stop a car and more sends it back up the road, tyres
-  // locked, which takes the speed off again within a few metres. It stops short
-  // of the car behind it rather than being pushed through.
+  // Decays backward recoil and stops it short of the car behind.
   giveGround(car, dt) {
     car.recoil *= Math.exp(-dt * RECOIL_GRIP);
     const blocked = this.vehicles.some(other => {
@@ -164,8 +158,8 @@ export class Traffic {
     });
     if (blocked || car.recoil < .05) car.recoil = 0;
   }
-  // A struck car has been pushed across its lane and turned. Its driver
-  // steers it back: two damped springs, which a car nothing has hit never runs.
+  // Damped springs steer a struck car back to its lane and heading.
+  // Early return keeps undisturbed cars off this path.
   settle(car, dt) {
     const lane = car.direction * LANE;
     if (!car.drift && !car.spin && !car.yaw && car.u === lane) return;
@@ -183,17 +177,15 @@ export class Traffic {
       if (Math.abs(car.s - player.s) > 9) continue;
       const p = player.groundedPosition, velocity = player.velocity;
       const a = { x: p.x, z: p.z, heading: player.heading, halfWidth: player.spec.width / 2, halfLength: player.spec.length / 2, vx: velocity.x, vz: velocity.z, mass: player.spec.mass };
-      // Traffic runs along the road and drifts across it, whichever way a knock has turned it.
+      // Velocity follows the road axes, not the car's heading, even when it has been turned.
       const angle = this.route.frame(car.s).angle, alongX = Math.sin(angle) * car.direction, alongZ = -Math.cos(angle) * car.direction, acrossX = Math.cos(angle), acrossZ = Math.sin(angle);
       const b = { x: car.position.x, z: car.position.z, heading: car.heading, halfWidth: car.spec.width / 2, halfLength: car.spec.length / 2,
         vx: alongX * (car.speed - car.recoil) + acrossX * car.drift, vz: alongZ * (car.speed - car.recoil) + acrossZ * car.drift };
       const contact = trafficContact(a, b);
       if (!contact) continue;
-      // The player is moved clear, and the two share the blow by weight. The
-      // car on its rails takes its share as speed along the road, a drift
-      // across it and a turn, the last two of which settle() steers out.
-      // What would carry it through rest is recoil instead, so a heavy blow
-      // drives it back and a light car leaning on it barely moves it.
+      // The player is pushed clear and the impulse is shared by mass. Traffic takes
+      // its share as speed, drift and spin, which settle() steers out.
+      // Negative speed becomes recoil so a heavy blow drives the car back.
       const blow = collisionImpulse(a, b, contact, contactPoint(a, b));
       player.resolveTrafficCollision(contact.x * (contact.depth + .025), contact.z * (contact.depth + .025), blow?.a.x, blow?.a.z, blow?.a.spin);
       if (!blow) continue;
@@ -211,7 +203,7 @@ export class Traffic {
       car.car.quaternion.slerpQuaternions(car.previousQuaternion, car.quaternion, clamp(alpha, 0, 1));
     }
     if (this.journey === 'snow') {
-      // Reused, so ranking the fleet each frame allocates nothing.
+      // Reused array so the per-frame sort doesn't allocate.
       const nearest = this.nearest;
       for (let i = 0; i < this.vehicles.length; i++) nearest[i] = this.vehicles[i];
       nearest.sort((a, b) => Math.abs(a.s - this.lastPlayerS) - Math.abs(b.s - this.lastPlayerS));
@@ -220,7 +212,7 @@ export class Traffic {
         rig.position.copy(car.car.position); rig.quaternion.copy(car.car.quaternion);
         light.position.set(0, 1.01, -car.spec.length / 2 - .05);
         light.target.position.set(0, -1, -car.spec.length / 2 - 10);
-        // Fade in from 225 to 150 meters; every vehicle retains its glowing lamps.
+        // Fade in from 225 to 150 m. The lamp meshes glow regardless.
         light.intensity = 170 * clamp((225 - Math.abs(car.s - this.lastPlayerS)) / 75, 0, 1);
       }
     }

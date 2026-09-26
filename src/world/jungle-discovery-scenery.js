@@ -10,7 +10,7 @@ function buildLandingPaths(chunk,a,b,site) {
   const surfaces=[chunk.terrain,...['road-shoulders','jungle-road'].map(name=>chunk.group.getObjectByName(name))];
   const vertices=[],coords=[];
   const axis=b.clone().sub(a).setY(0).normalize(),across=axis.clone().cross(up);
-  // Continue the near landing up the bank, ending just inside the asphalt.
+  // The near landing path runs up the bank and ends just inside the asphalt.
   for(const [end,direction,length] of [[a,-1,6.5],[b,1,-4.4-site.nearU]]) {
     for(const surface of surfaces) {
       const floor=surface.geometry.attributes.position;
@@ -20,8 +20,7 @@ function buildLandingPaths(chunk,a,b,site) {
           return {x,y,z,along:(dx*axis.x+dz*axis.z)*direction,cross:dx*across.x+dz*across.z};
         });
         if(tri.every(p=>p.along<-1.1)||tri.every(p=>p.along>length)||tri.every(p=>p.cross<-1.5)||tri.every(p=>p.cross>1.5)) continue;
-        // Follow the actual ground, shoulder and asphalt faces so the dirt
-        // remains flush with each surface all the way to its feathered end.
+        // Copy the real surface faces so the dirt stays flush with each one.
         for(const p of tri) {vertices.push(p.x,p.y+.025,p.z);coords.push(p.along,p.cross,length);}
       }
     }
@@ -64,7 +63,6 @@ function buildBridge(chunk,site) {
     const root=p.clone().setY(y-.4),top=p.clone().setY(p.y+1.65);
     parts.beam(root,top,.15,'#75674f',6);
     posts.push({x:p.x,z:p.z-chunk.start,bottom:root.y,ground:y,top:top.y});
-    // Rope wraps on the four weathered anchor posts.
     for(const h of [1.12,1.32]) {
       const wrap=new THREE.TorusGeometry(.17,.032,4,7);
       parts.add(wrap,[p.x,p.y+h,p.z],'#b0a07b',[Math.PI/2,0,0]);
@@ -106,8 +104,7 @@ export function buildJungleDiscoveries(chunk,sites) {
       details={radius};
     } else {
       const mesh=new THREE.InstancedMesh(parrotGeometry,parrotMaterial,site.count);mesh.name='jungle-parrots';
-      // Small loops over the river keep the flock out of the trees and visible
-      // above the lower canopy, without moving instance buffers every frame.
+      // Static instances above the river and lower canopy. The shader animates them.
       const height=jungleRoadHeight(site.s)+11;
       for(let i=0;i<site.count;i++) {
         const p=positionAt(site.s+i*2.5,site.u+(i%2?1.6:-1.2),height+i*.75);

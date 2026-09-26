@@ -1,15 +1,9 @@
 import { Box3, Matrix4, Sphere, Vector3 } from 'three';
 
-// One instanced batch per chunk gets a bounding sphere as wide as the chunk,
-// which the frustum test can almost never reject: scenery reaches hundreds of
-// metres to either side of the road, so a batch keeps drawing long after its
-// plants or rocks have left the screen. Halve a wide batch along its longer
-// axis until the parts are small enough to cull; leave compact batches alone,
-// since splitting those would only add draw calls.
-//
-// Every route's scenery items carry the same `p: [x, y, z]` placement, so the
-// split works on the positions alone. The instances, geometry and materials are
-// unchanged, and so is the picture.
+// A chunk-wide batch has a bounding sphere the frustum test almost never
+// rejects. Halve wide batches along the longer axis until they can be culled.
+// Compact batches are left whole since splitting only adds draw calls.
+// Works on each item's `p: [x, y, z]` alone.
 const BATCH_SPAN = 260, BATCH_MINIMUM = 24;
 
 export function splitBatch(items, depth = 0) {
@@ -30,11 +24,9 @@ export function splitBatch(items, depth = 0) {
 const bounds = new Box3(), matrix = new Matrix4(), instance = new Sphere();
 const center = new Vector3(), extent = new Vector3();
 
-// Three.js incrementally unions instance spheres in placement order. That can
-// leave a loose, off-center bound on long roadside batches. Try a centered
-// enclosing sphere as well, and keep it only if it is smaller. Both candidates
-// contain every transformed geometry sphere, including its motion allowance.
-// Run at construction time, before callers add any batch-level animation margin.
+// Three.js unions instance spheres in order, which leaves a loose off-centre
+// bound on long batches. Keep a centred enclosing sphere when it is smaller.
+// Call before adding any animation margin to the batch.
 export function computeInstanceBounds(mesh) {
   mesh.computeBoundingSphere();
   if (!mesh.count || !Number.isFinite(mesh.boundingSphere.radius)) return;

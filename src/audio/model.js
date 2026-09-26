@@ -4,8 +4,8 @@ export const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 const finite = value => Number.isFinite(value) ? value : 0;
 const damp = (from, to, dt, seconds) => from + (to - from) * (1 - Math.exp(-dt / seconds));
 
-// Sound-only automatic gearing. Different up/down thresholds avoid hunting
-// between gears; physics and the controls remain independent of this model.
+// Gearing for sound only. Physics doesn't use it.
+// Downshift threshold sits 2.5 below upshift so gears don't hunt.
 export class DriveSoundModel {
   constructor() { this.profile = engineFor('coast'); this.reset(); }
   setProfile(profile) { this.profile = profile; this.reset(); }
@@ -33,8 +33,7 @@ export class DriveSoundModel {
     this.load = damp(this.load, throttle * (1 - brake) * clutch, dt, .16);
     const motion = clamp(speed / 28, 0, 1);
     const offRoad = clamp(finite(telemetry.offRoad), 0, 1);
-    // A restrained scrub follows steering load. The arcade physics has no tire
-    // slip solver, so this is feedback, not a claim of simulated wheel slip.
+    // Physics has no tyre slip, so skid sound is faked from steering and braking.
     const corner = Math.abs(clamp(finite(telemetry.steer), -1, 1)) * motion;
     const skid = clamp((corner - .38) * 1.5 + brake * Math.max(0, motion - .28) * .6 + finite(telemetry.handbrake) * motion * .7, 0, 1);
     return {
@@ -53,8 +52,8 @@ export class DriveSoundModel {
   }
 }
 
-// Listener-relative traffic without depending on Three.js or render-origin
-// rebasing. Relative radial velocity supplies a bounded Doppler pitch shift.
+// Uses world positions, so it doesn't depend on Three.js or render-origin rebasing.
+// Doppler comes from relative radial velocity and is clamped.
 export function trafficSound(player, car, listenerHeading = player.heading) {
   const dx = finite(car.position?.x) - finite(player.groundedPosition?.x);
   const dz = finite(car.position?.z) - finite(player.groundedPosition?.z);

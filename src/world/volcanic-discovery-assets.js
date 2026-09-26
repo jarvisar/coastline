@@ -4,8 +4,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { registerChunkResources } from './chunk-resources.js';
 import { volcanicClock } from './volcanic-materials.js';
 
-// All fixtures are baked into a handful of shared, flat-shaded meshes. Local
-// -X faces the road; muted mineral colors belong to the surrounding basalt.
+// Fixtures are baked into a few shared flat-shaded meshes. Local -X faces the road.
 export class VolcanicParts {
   constructor() { this.parts = []; this.offsetY = 0; }
   add(source, position, color, rotation = [0, 0, 0]) {
@@ -56,18 +55,16 @@ function station() {
   p.box([1, 4.95, 1], [8.7, .36, 12.7], '#393e41');
   p.box([-3.09, 3.65, 1], [.15, .5, 12], ochre);
   for (const z of [-2.7, 1, 4.7]) window(p, -3.08, 2.5, z, 2);
-  // Service-side details remain legible when the road-facing wall turns away.
+  // The service side needs detail too, since it faces the camera on some bends.
   p.box([5.08, 3.65, 1], [.12, .5, 12], ochre);
   for (const z of [-2.7, 1, 4.7]) {
     p.box([5.09, 2.4, z], [.12, 1.6, 1.8], dark);
     for (let y=1.8;y<3.1;y+=.25) p.box([5.17,y,z],[.08,.08,1.65],iron);
   }
   p.box([-3.13, 1.28, -4.2], [.14, 2.56, 1.2], dark);
-  // A modest service canopy and grated stair with a yellow safety edge.
   p.box([-4.5, 3.45, -4.1], [3, .18, 2.5], iron);
   for (const z of [-5.2, -3]) p.box([-5.8, 1.7, z], [.14, 3.4, .14], iron);
   for (let i = 0; i < 3; i++) p.box([-5.8 + i * .7, .14 + i * .17, -4.1], [.8, .28 + i * .34, 2.1], '#817d6d');
-  // Broad insulated pipes have elbows, flange collars, saddles and red valves.
   for (const z of [-8.5, 9]) {
     p.beam([-5, 1.5, z], [5.8, 1.5, z], .55, iron, 8);
     p.beam([5.8, 1.5, z], [5.8, 4, z], .55, iron, 8);
@@ -100,8 +97,7 @@ function stationLights() {
 }
 function mine() {
   const p = new VolcanicParts();
-  // An open-bottom tunnel is extruded into the rock, leaving a true recessed
-  // throat and irregular lintel instead of painting a doorway on a boulder.
+  // The tunnel is extruded into the rock so the entrance is a real recess.
   const outline = [[-12, -2], [-11, 5], [-9, 10], [-5, 12], [0, 11.5], [4, 13], [9, 9], [12, 4], [12, -2],
     [3, -2], [3, 3.2], [1.9, 5], [-1.9, 5], [-3, 3.2], [-3, -2]];
   const shape = new THREE.Shape(outline.map(v => new THREE.Vector2(...v)));
@@ -133,8 +129,7 @@ function mine() {
     p.box([-10.6, .26, z - .15], [2, .15, .13], iron, [0, -.17, .04]);
   }
   function cart(x, z, surface) {
-    // Tire bottoms meet either the ballast or the rail head. Both axles
-    // share the rails' 1.64 m gauge; the old wheels missed them sideways.
+    // Tyres sit on the ballast or the rail head. Axles match the 1.64 m rail gauge.
     p.offsetY = surface - .18;
     p.box([x, .65, z], [2.6, .3, 1.85], dark);
     for(const dx of [-.85,.85])p.box([x+dx,.97,z],[.3,.4,1.65],iron);
@@ -174,7 +169,6 @@ function camp(part, ground = () => 0) {
       p.box([x+2.14,2.5,z+dz],[.05,.85,1.3],'#35454a');
       for (const dx of [-1.96, 1.96]) p.cylinder([x + dx, .47, z + dz], .47, .47, .27, dark, 8, [0, 0, Math.PI / 2]);
     }
-    // Deployed stabilizers make the parked trailers visibly bear on the pad.
     for(const dx of [-2,2])for(const dz of [-length/2+.6,length/2-.6]) {
       p.box([x+dx,.3,z+dz],[.12,.6,.12],iron);
       p.box([x+dx,.035,z+dz],[.42,.07,.42],'#797268');
@@ -184,7 +178,6 @@ function camp(part, ground = () => 0) {
     p.box([x + .4, 3.99, z], [1.3, .4, 1.6], iron);
   }
   if (part !== 'equipment') return p.finish();
-  // Fold-out solar panel, field cases, seismometer and a tripod instrument.
   p.offsetY = Math.max(ground(-5.8, 3.1), ground(-5.8, 5.7));
   p.box([-5.8, 1.65, 4.4], [3, .13, 3.4], '#344b58', [0, 0, -.22]);
   for (const z of [3, 3.7, 4.4, 5.1, 5.8]) p.box([-5.8, 1.73, z], [3, .025, .04], '#8a9d9d', [0, 0, -.22]);
@@ -204,7 +197,6 @@ function camp(part, ground = () => 0) {
   p.offsetY = ground(7,-3);
   p.cylinder([7, .3, -3], .55, .75, .6, iron);
   p.beam([7, .6, -3], [7, 2, -3], .06, edge);
-  // Radio mast with three levels of braces and anchored guy wires.
   const mx = 5.5, mz = -.5;
   p.offsetY = ground(mx,mz);
   for (const dx of [-.48, .48]) p.beam([mx + dx, 0, mz], [mx + dx * .35, 10, mz], .065, edge);
@@ -230,8 +222,7 @@ function beacon() {
 }
 function arch() {
   const p = new VolcanicParts();
-  // A continuous jagged bridge, with an asymmetric missing shoulder. Broad
-  // facets and a broken upper rim read as eroded basalt rather than masonry.
+  // Broad facets and a broken upper rim so it reads as eroded basalt.
   const outline = [[-20,-8],[-20,2],[-17,7],[-13,12],[-8,15],[-2,17],[4,16.5],[5.5,14.3],[9,14.8],[14,10],[18,5],[20,-8],
     [12,-8],[12,3],[9,7.5],[4,10.6],[-2,11.4],[-7,9.5],[-11,6],[-13,2],[-13,-8]];
   const shape = new THREE.Shape(outline.map(v => new THREE.Vector2(...v)));
@@ -246,7 +237,6 @@ function arch() {
     p.rock([x,y,z],[wx,wy,wz],basalt[Math.abs(x)%4],[.1,x*.025,.14]);
   }
   for (const [x,y] of [[-14,7],[-6,13],[4,13],[14,5]]) p.rock([x,y,-2.6],[3.5,2.6,2.4],basalt[1],[.2,x*.05,-.13]);
-  // Exposed fracture faces under the lost section catch the warm basin light.
   p.rock([6, 12.7, 2.3], [2.1, .8, 1.3], '#786158', [.12, .25, -.3]);
   return p.finish();
 }

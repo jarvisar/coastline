@@ -24,7 +24,7 @@ test('zero-width stream tips never fill their surrounding terrain facets', () =>
     coverage.add(outline);
   }
   assert.equal(coverage.rows.size, 0);
-  // A real tapered tip still draws, even though two of its corners coincide.
+  // A real tapered tip with two coincident corners still draws.
   const tip = [point(5, 5), point(5, 5), point(8, 5.1), point(8, 4.9)];
   near(totalArea(surface.project(tip)), .3);
 });

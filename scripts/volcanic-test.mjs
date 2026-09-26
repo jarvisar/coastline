@@ -42,7 +42,7 @@ try {
     records.push(state);
     if (s < 1000 && s > 0) await page.screenshot({ path: `.artifacts/volcanic-${s}.png` });
   }
-  // Exercise both road-level cameras as well as all four overhead distances.
+  // Cycle both road-level cameras and all four overhead distances.
   for (let i = 0; i < 6; i++) { await page.keyboard.press('KeyV'); await page.waitForTimeout(200); }
   const clock = () => page.evaluate(() => {
     const shader = { uniforms: {}, vertexShader: '', fragmentShader: '' };

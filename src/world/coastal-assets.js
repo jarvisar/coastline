@@ -11,9 +11,7 @@ function geometry(vertices, colors) {
 
 function crag(seed) {
   const vertices = [], colors = [], sides = 8;
-  // Each scaffold has its own broken crown: a broad stack, a sloping slab,
-  // and a cleft pinnacle. Shared vertical joints keep the facets connected;
-  // uneven shoulder heights avoid horizontal rings and diamond-like cones.
+  // One hand-tuned crown per variant. Uneven shoulder heights avoid horizontal rings.
   const profile = [
     { crown: [.76, .93, .81, .56, .62, .88, 1.02, .86], width: [.68, .59, .66, .81, .72, .51, .47, .63], lean: [-.13, .09], ridge: [1.04, 1.12] },
     { crown: [.49, .57, .73, .96, 1.04, .89, .62, .41], width: [.84, .76, .59, .52, .48, .64, .77, .83], lean: [-.22, -.08], ridge: [.96, .86] },
@@ -38,8 +36,7 @@ function crag(seed) {
     edgeA.set(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
     edgeB.set(c[0] - a[0], c[1] - a[1], c[2] - a[2]);
     const up = Math.max(0, edgeA.cross(edgeB).normalize().y);
-    // Warm weathered caps and cool fracture planes, shared across a joint
-    // instead of unrelated random colors on every triangle.
+    // Warmer on upward faces. The random tint is per joint, not per triangle.
     const color = cool.clone().lerp(warm, .32 + up * .53 + randomAt(seed, joint + 81) * .12);
     for (let i = 0; i < 3; i++) colors.push(color.r, color.g, color.b);
   };
@@ -52,8 +49,7 @@ function crag(seed) {
     }
     face([0, -1.2, 0], rings[0][i], rings[0][j], i);
   }
-  // Two offset ridge points make a chipped roof with a long crest, rather
-  // than closing every variant with the same pointed summit.
+  // Close the top with two offset ridge points instead of a single summit.
   const top = rings.at(-1);
   const front = [profile.lean[0] - .11, profile.ridge[0], .25 + profile.lean[1]];
   const back = [profile.lean[0] + .13, profile.ridge[1], -.24 + profile.lean[1]];
@@ -124,8 +120,7 @@ export const coastalCypress = coastalTree();
 export const coastalMontereyPine = coastalTree(true);
 
 function scrub(seed) {
-  // Coastal sage and coyote brush grow as low, lumpy mounds of overlapping
-  // lobes, bleached lighter on top by sun and salt. The base sits at y = 0.
+  // Low mound of overlapping lobes, lighter on top. The base sits at y = 0.
   const lobes = [
     [[0, .46, 0, .74, .54, .7], [.56, .32, .24, .52, .38, .48], [-.5, .3, -.2, .56, .4, .52], [.06, .28, -.58, .46, .34, .42]],
     [[0, .42, 0, .7, .5, .76], [.46, .34, -.36, .54, .42, .46], [-.44, .28, .36, .5, .34, .48]],
@@ -168,20 +163,19 @@ function sedge() {
     }
   }
   const g = geometry(vertices, colors);
-  // Both sides receive sky light. Flipped card normals make the far-facing
-  // half of a clump black even though these narrow leaves transmit daylight.
+  // Point all normals up so back-facing blades don't render black.
   const normals = g.attributes.normal;
   for (let i = 0; i < normals.count; i++) normals.setXYZ(i, 0, 1, 0);
   return g;
 }
 export const coastalSedge = sedge();
 
-// Bucket projected terrain triangles once; grounding hundreds of plants then
-// only visits a few nearby faces instead of raycasting the whole chunk.
+// Buckets terrain triangles by XZ cell once so each height lookup checks only
+// a few faces instead of raycasting the whole chunk.
 export function terrainSampler(mesh, topmost = false) {
   const positions = mesh.geometry.attributes.position, buckets = new Map(), step = 16;
-  // Integer cell keys avoid building a string for every face and every
-  // lookup. They repeat every 524 km, far beyond any one chunk's faces.
+  // Integer keys avoid string building per lookup. They wrap every 524 km,
+  // far larger than a chunk.
   const cell = (x, z) => ((Math.floor(x / step) & 0x7fff) << 15) | (Math.floor(z / step) & 0x7fff);
   for (let i = 0; i < positions.count; i += 3) {
     const a = { x: positions.getX(i), y: positions.getY(i), z: positions.getZ(i) };
@@ -209,9 +203,8 @@ export function terrainSampler(mesh, topmost = false) {
     }
     return height;
   };
-  // The face under a point, as a height function over its plane: small
-  // details can then drape over the rendered ground with a single lookup.
-  // Neighbouring details usually share a face, so try the last one first.
+  // Returns the face under a point as a height function over its plane.
+  // Nearby lookups usually hit the same face, so the last one is tried first.
   const planeOf = ([a, b, c]) => {
     const det = (b.z - c.z) * (a.x - c.x) + (c.x - b.x) * (a.z - c.z);
     if (Math.abs(det) < 1e-8) return null;

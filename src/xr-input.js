@@ -1,8 +1,8 @@
 const deadzone = (value = 0, threshold = .18) => Math.abs(value) <= threshold ? 0 : Math.sign(value) * Math.min(1, (Math.abs(value) - threshold) / (1 - threshold));
 const button = (pad, index) => pad?.buttons[index]?.value ?? Number(pad?.buttons[index]?.pressed ?? false);
 
-// XR controllers belong to the session, not navigator.getGamepads(). These
-// indices are the xr-standard layout, including its empty touchpad slots.
+// XR controllers come from the session, not navigator.getGamepads().
+// Indices follow the xr-standard layout, including its empty touchpad slots.
 export class XRInput {
   constructor(onAction) {
     this.onAction = onAction;
@@ -34,9 +34,9 @@ export class XRInput {
     };
     const pressed = Object.keys(buttons).filter(action => buttons[action] && !this.previous[action]);
     this.previous = buttons;
-    // Pause must remain reachable while a trigger/stick is held after focus
-    // changes. Driving still requires neutral, and blocked sessions consume
-    // every edge so system-menu presses cannot leak back into the game.
+    // Pause stays reachable while a trigger is held after a focus change.
+    // Driving still waits for neutral. Blocked sessions swallow every press so
+    // system-menu input doesn't leak into the game.
     if (!blocked) for (const action of ['exitVR', 'pause', 'recenterVR']) {
       if (pressed.includes(action)) { this.state = {}; this.onAction(action); return; }
     }

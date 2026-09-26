@@ -3,9 +3,9 @@ import * as THREE from 'three';
 const WIDTH = 300, HEIGHT = 200, DEPTH = 360, EPOCH = 256;
 const mod = (value, extent) => value - Math.floor(value / extent) * extent;
 
-// Keep particle buffers resident. Only a few small uniforms change each frame.
-// Inputs stay near the origin even after hours of travel: double-precision JS
-// wraps the anchor and periodically rebases fall time before GLSL sees them.
+// Particles move in the shader so only a few uniforms change per frame.
+// JS wraps the anchor and rebases fall time every EPOCH seconds so shader inputs
+// stay small enough for float precision on long drives.
 export const weatherMotionGLSL = /* glsl */`
   attribute vec3 weatherMotion;
   uniform float weatherTime;

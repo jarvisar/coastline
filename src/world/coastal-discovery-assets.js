@@ -4,8 +4,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { registerChunkResources } from './chunk-resources.js';
 import { waterClock } from './water.js';
 
-// Small hand-built silhouettes, with the same flat faces and muted palette as
-// the coast. Bake colors into shared geometry rather than adding draw calls.
+// Colours are baked into merged geometry to avoid extra draw calls.
 export class Parts {
   constructor() { this.parts = []; }
   add(g, p, color, rotation = [0, 0, 0]) {
@@ -52,7 +51,6 @@ function lighthouse() {
   p.cylinder([0, 16.6, 0], 2.05, 2.05, .22, iron);
   p.cylinder([0, 17.32, 0], .2, 2.55, 1.3, '#536765');
   p.cylinder([0, 18.2, 0], .08, .1, .65, iron);
-  // Windows sit on the visible facets; a small amber pane suggests the lens.
   for (const height of [4.7, 8.5, 11.3]) {
     const radius = 2.65 - height / 13.3 * .75;
     p.box([-.03, height, radius - .08], [.66, 1.15, .14], trim);
@@ -73,7 +71,6 @@ function cottage() {
       p.box([side * 2.72, 2.05, z], [.05, .88, .8], '#577778');
     }
   }
-  // Gable infill is a triangular prism along the roof's ridge.
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute([
     -2.65, 3.6, 3.56, 2.65, 3.6, 3.56, 0, 4.77, 3.56,
@@ -107,8 +104,7 @@ function whale() {
 }
 
 function routeShield() {
-  // California's green spade-shaped State Route 1 marker on a steel post,
-  // facing traffic along +z. A white border frames the shield and its "1".
+  // State Route 1 marker facing traffic along +z.
   const p = new Parts(), green = '#2f6e4b', white = '#f1f0e8';
   p.box([0, 1.25, 0], [.1, 2.5, .1], '#8e9597');
   const badge = (scale, z, color) => {
