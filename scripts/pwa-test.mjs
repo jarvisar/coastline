@@ -106,7 +106,7 @@ async function checkProduction(base) {
     await page.waitForFunction(() => document.querySelector('#loading.loaded') && document.querySelector('#error').hidden);
     // Builders are split per route, so unvisited routes must load from the precache offline.
     for (const [id, label] of [['desert', 'RED ROCK DESERT'], ['snow', 'MIDNIGHT ALPINE'],
-      ['jungle', 'EMERALD JUNGLE'], ['plains', 'GOLDEN PLAINS'], ['city', 'RAINY DOWNTOWN'], ['volcanic', 'VOLCANIC RIFT'], ['salt', 'SALT PLAINS']]) {
+      ['jungle', 'EMERALD JUNGLE'], ['plains', 'GOLDEN PLAINS'], ['city', 'RAINY DOWNTOWN'], ['volcanic', 'VOLCANIC RIFT'], ['salt', 'SALT FLATS']]) {
       const chunks = await page.evaluate(() => window.__chunkWorkerCheck.chunks);
       await page.locator('#change-journey').click();
       await page.locator(`.journey-card[data-journey="${id}"]`).click();

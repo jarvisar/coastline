@@ -51,7 +51,7 @@ export const JOURNEYS = {
     canvas: 'A winding road through dark, faceted volcanic cliffs, glowing orange lava rifts, scattered basalt boulders and smoking craters. Drive with WASD or the arrow keys.',
   },
   salt: {
-    title: 'Salt Plains', label: 'SALT PLAINS', routeNumber: '8', route: saltDrivingRoute,
+    title: 'Salt Flats', label: 'SALT FLATS', routeNumber: '8', route: saltDrivingRoute,
     introduction: 'Cross a blinding white salt flat where shallow pools mirror the sky.',
     sound: 'Open wind, flamingos and engine sounds on',
     canvas: 'A raised causeway across a white salt flat cracked into polygons, with turquoise pools reflecting the clouds, faceted boulders, wading flamingos and violet mountains on the horizon. Drive with WASD or the arrow keys.',

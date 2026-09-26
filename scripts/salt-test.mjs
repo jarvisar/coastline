@@ -16,8 +16,8 @@ try {
   await page.goto(`${url}/?seed=4817`, { waitUntil: 'networkidle' }); await ready(page);
   await page.getByRole('button', { name: /^Change route$/i }).click();
   assert.equal(await page.locator('.journey-card').count(), 8);
-  await page.getByRole('button', { name: 'Salt Plains', exact: true }).click(); await ready(page);
-  assert.equal(await page.locator('.location-title').textContent(), 'SALT PLAINS');
+  await page.getByRole('button', { name: 'Salt Flats', exact: true }).click(); await ready(page);
+  assert.equal(await page.locator('.location-title').textContent(), 'SALT FLATS');
   assert.equal(await page.evaluate(() => document.body.dataset.journey), 'salt');
   assert.equal(await page.evaluate(() => document.querySelector('meta[name="theme-color"]').content), '#dae8ef');
   await page.click('#start');
@@ -76,9 +76,9 @@ try {
   const mobile = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true }); watch(mobile);
   await mobile.goto(`${url}/?seed=4817`, { waitUntil: 'networkidle' }); await ready(mobile);
   await mobile.getByRole('button', { name: /^Change route$/i }).tap();
-  await mobile.getByRole('button', { name: 'Salt Plains', exact: true }).scrollIntoViewIfNeeded();
+  await mobile.getByRole('button', { name: 'Salt Flats', exact: true }).scrollIntoViewIfNeeded();
   await mobile.screenshot({ path: '.artifacts/salt-chooser-mobile.png' });
-  await mobile.getByRole('button', { name: 'Salt Plains', exact: true }).tap(); await ready(mobile);
+  await mobile.getByRole('button', { name: 'Salt Flats', exact: true }).tap(); await ready(mobile);
   await mobile.click('#start'); await mobile.waitForTimeout(400);
   await mobile.screenshot({ path: '.artifacts/salt-mobile.png' });
 
