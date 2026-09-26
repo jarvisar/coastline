@@ -49,7 +49,7 @@ body[data-journey=jungle] .panel-button:hover { background: #2c4a33e8; }
 .paint-note { margin: 11px 0 0; font-size: 11px; line-height: 1.6; opacity: .62; }
 .paint-note b { font-weight: 650; opacity: .85; }
 .garage-subheading { margin: 0 0 10px; font-size: 9px; font-weight: 700; letter-spacing: 2.1px; text-transform: uppercase; opacity: .72; }
-body[data-journey=desert] .paint-shop, body[data-journey=plains] .paint-shop, body[data-journey=city] .paint-shop { background: #fff6; }
+body[data-journey=desert] .paint-shop, body[data-journey=plains] .paint-shop, body[data-journey=city] .paint-shop, body[data-journey=salt] .paint-shop { background: #fff6; }
 body[data-journey=snow] .paint-shop { background: #ffffff0f; border-color: #8aa4c442; }
 body[data-journey=jungle] .paint-shop { background: #ffffff0f; border-color: #8fb58442; }
 body[data-journey=snow] .paint-custom, body[data-journey=jungle] .paint-custom { border-color: #ffffff4d; }

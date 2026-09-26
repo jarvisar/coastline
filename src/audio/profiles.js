@@ -10,6 +10,7 @@ export const ENGINES = {
   plains: voice({ idle: 740, cylinders: 6, gearing: .9, body: 1.2, rasp: .5 }),
   city: voice({ idle: 850, body: .8, rasp: .35, intake: .4 }),
   volcanic: voice({ idle: 710, cylinders: 6, gearing: .88, body: 1.4, rasp: .8 }),
+  salt: voice({ idle: 760, cylinders: 6, gearing: .92, body: 1.25, rasp: .55 }),
   hatchback: voice({ idle: 920, gearing: 1.2, body: .6, rasp: .85, intake: .9, harmonics: [1, .35, .42, .15, .13, .06] }),
   sedan: voice({ idle: 720, cylinders: 6, gearing: .95, rasp: .35, harmonics: [1, .25, .15, .08, .04] }),
   wagon: voice({ idle: 780, body: 1.2, rasp: .55 }),
@@ -34,6 +35,7 @@ export const AMBIENCE = {
   plains: { low: 410, high: 2400, bed: .065, swell: .08, air: .022, wash: .065, rough: 1200, wildlife: 'lark', interval: [7, 15], root: 60 },
   city: { low: 300, high: 4600, bed: .085, swell: .04, air: .14, wash: .1, rough: 1000, wildlife: 'drip', interval: [2, 5], root: 53 },
   volcanic: { low: 120, high: 1200, bed: .17, swell: .13, air: .035, wash: .07, rough: 1500, wildlife: 'vent', interval: [5, 12], root: 43 },
+  salt: { low: 520, high: 2100, bed: .07, swell: .12, air: .018, wash: .045, rough: 1900, wildlife: 'flamingo', interval: [9, 20], root: 52 },
 };
 
 export const MIX_PRESETS = {

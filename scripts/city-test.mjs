@@ -12,7 +12,7 @@ try {
   await page.waitForFunction(() => window.__coastline && document.querySelector('#loading').classList.contains('loaded'));
   const initial = await page.evaluate(() => { const a = window.__coastline; return { rotation: a.rendering.camera.quaternion.toArray(), top: a.rendering.camera.top, scale: a.vehicle.car.scale.toArray(), color: a.rendering.scene.background.getHex(), exposure: a.rendering.renderer.toneMappingExposure, fog: a.rendering.scene.fog.near, lamps: a.vehicle.nightLights[0].material.emissiveIntensity }; });
   await page.getByRole('button', { name: /^Change route$/i }).click();
-  assert.equal(await page.locator('.journey-card').count(), 7);
+  assert.equal(await page.locator('.journey-card').count(), 8);
   await page.getByRole('button', { name: 'Rainy Downtown', exact: true }).click();
   await page.waitForFunction(() => window.__coastline.journey === 'city' && !window.__coastline.changingJourney);
   assert.equal(await page.locator('.location-title').textContent(), 'RAINY DOWNTOWN');

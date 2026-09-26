@@ -91,7 +91,7 @@ test('scene resets and recycled cars vary the fleet while reusing meshes and geo
   }
   const snapshot = () => traffic.vehicles.map(car => [car.spec.name, car.paint.color.getHex(), car.s]);
   const shapes = new Set(), colors = new Set();
-  for (const journey of ['coast', 'city', 'snow', 'desert', 'jungle', 'plains', 'volcanic']) {
+  for (const journey of ['coast', 'city', 'snow', 'desert', 'jungle', 'plains', 'volcanic', 'salt']) {
     const before = snapshot();
     traffic.reset(straightRoute, 24, journey);
     assert.notDeepEqual(snapshot(), before);

@@ -119,6 +119,15 @@ body[data-journey=volcanic] .pause-overlay { background: #241a2466; }
 body[data-journey=volcanic] .eyebrow>span { background: #ff963d; }
 body[data-journey=volcanic] .start-button:hover { background: #ffd0a0; }
 body[data-journey=volcanic] .touch-controls button.active { background: var(--ink); }
+body[data-journey=salt] { --ink: #2c4658; --cream: #f5f9fa; color: var(--ink); background: #d9e7ee; }
+body[data-journey=salt] .vignette { background: linear-gradient(180deg,#ffffff4d,transparent 22%,transparent 82%,#c3d8e340); }
+body[data-journey=salt] .chooser { background: #f5f9faf7; }
+body[data-journey=salt] .chooser::backdrop { background: #2c465838; }
+body[data-journey=salt] #journey-transition { background: #dce8ee; }
+body[data-journey=salt] .pause-overlay { background: #d3e3ec55; }
+body[data-journey=salt] .eyebrow>span { background: #df7f96; }
+body[data-journey=salt] .start-button:hover { background: #3a6179; }
+body[data-journey=salt] .touch-controls button.active { background: var(--ink); }
 @media(max-width:1000px) { .weather { display: none; } }
 @media(max-width:600px) {
   .journey-button { position: absolute; right: 0; top: 53px; padding: 9px 13px; font-size: 10px; }

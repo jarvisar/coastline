@@ -8,6 +8,7 @@ const loaders = {
   plains: () => import('./plains.js').then(module => ({ World: module.PlainsWorld, Chunk: module.PlainsChunk })),
   city: () => import('./city.js').then(module => ({ World: module.CityWorld, Chunk: module.CityChunk })),
   volcanic: () => import('./volcanic.js').then(module => ({ World: module.VolcanicWorld, Chunk: module.VolcanicChunk })),
+  salt: () => import('./salt.js').then(module => ({ World: module.SaltWorld, Chunk: module.SaltChunk })),
 };
 const pending = new Map();
 

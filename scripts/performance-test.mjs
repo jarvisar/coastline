@@ -13,7 +13,7 @@ try {
   await page.waitForFunction(() => window.__coastline && document.querySelector('#loading.loaded'));
   const eagerScenery = await page.evaluate(() => performance.getEntriesByType('resource')
     .map(entry => new URL(entry.name).pathname)
-    .filter(path => /\/src\/world\/(desert|snow|jungle|plains|city|volcanic)\.js$/.test(path)));
+    .filter(path => /\/src\/world\/(desert|snow|jungle|plains|city|volcanic|salt)\.js$/.test(path)));
   assert.deepEqual(eagerScenery, [], 'unselected scenery must stay off the startup path');
   const renderFrame = () => page.evaluate(() => window.__coastline.rendering.renderer.info.render.frame);
   const settle = () => page.evaluate(async () => {
@@ -40,7 +40,7 @@ try {
       return render(...args);
     };
   });
-  for (const id of ['coast', 'desert', 'snow', 'jungle', 'plains', 'city', 'volcanic']) {
+  for (const id of ['coast', 'desert', 'snow', 'jungle', 'plains', 'city', 'volcanic', 'salt']) {
     await page.evaluate(id => window.__coastline.changeJourney(id), id);
     await settle();
     assert.ok(await page.evaluate(() => window.__compileChecks.every(Boolean)),

@@ -5,6 +5,7 @@ import { jungleDrivingRoute } from './world/jungle-route.js';
 import { plainsDrivingRoute } from './world/plains-route.js';
 import { cityDrivingRoute } from './world/city-route.js';
 import { volcanicDrivingRoute } from './world/volcanic-route.js';
+import { saltDrivingRoute } from './world/salt-route.js';
 
 export const JOURNEYS = {
   coast: {
@@ -48,5 +49,11 @@ export const JOURNEYS = {
     introduction: 'Wind between glowing lava rivers and smoking basalt craters.',
     sound: 'Volcanic rumble, steam and engine sounds on',
     canvas: 'A winding road through dark, faceted volcanic cliffs, glowing orange lava rifts, scattered basalt boulders and smoking craters. Drive with WASD or the arrow keys.',
+  },
+  salt: {
+    title: 'Salt Plains', label: 'SALT PLAINS', routeNumber: '8', route: saltDrivingRoute,
+    introduction: 'Cross a blinding white salt flat where shallow pools mirror the sky.',
+    sound: 'Open wind, flamingos and engine sounds on',
+    canvas: 'A raised causeway across a white salt flat cracked into polygons, with turquoise pools reflecting the clouds, faceted boulders, wading flamingos and violet mountains on the horizon. Drive with WASD or the arrow keys.',
   },
 };

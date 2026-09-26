@@ -10,7 +10,7 @@ const REACH = 1.2;
 // Decay rate of recoil speed after a car is knocked backwards.
 const RECOIL_GRIP = 8;
 const BEHIND = 380, AHEAD = 620;
-const DENSITY = { coast: 1, snow: .75, desert: .5, jungle: .6, plains: .5, city: 1, volcanic: .35 };
+const DENSITY = { coast: 1, snow: .75, desert: .5, jungle: .6, plains: .5, city: 1, volcanic: .35, salt: .4 };
 const FLEET = { city: 9 };
 const LIGHTS = { snow: 1, city: .35, volcanic: .65 };
 
@@ -69,7 +69,7 @@ export class Traffic {
     }
   }
   reset(route, s, journey = this.journey) {
-    this.route = route; this.journey = journey; this.salt = { coast: 2100, desert: 2200, snow: 2300, jungle: 2400, plains: 2500, city: 2600, volcanic: 2700 }[journey];
+    this.route = route; this.journey = journey; this.salt = { coast: 2100, desert: 2200, snow: 2300, jungle: 2400, plains: 2500, city: 2600, volcanic: 2700, salt: 2800 }[journey];
     // Unseeded on purpose so traffic differs on each visit to the same scenery.
     this.seed = Math.floor(Math.random() * 4294967296);
     this.spacing = 1 / (DENSITY[journey] ?? 1);

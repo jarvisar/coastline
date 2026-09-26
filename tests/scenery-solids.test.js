@@ -10,6 +10,7 @@ import { DesertChunk } from '../src/world/desert.js';
 import { SnowChunk } from '../src/world/snow.js';
 import { JungleChunk } from '../src/world/jungle.js';
 import { VolcanicChunk } from '../src/world/volcanic.js';
+import { SaltChunk } from '../src/world/salt.js';
 import { snowBridgeAt, snowDrivingRoute } from '../src/world/snow-route.js';
 import { CHUNK_LENGTH } from '../src/world/route.js';
 import { chunkResource } from '../src/world/chunk-resources.js';
@@ -49,6 +50,7 @@ test('large rocks in each rocky journey are solid and their collision survives w
     ['snow', SnowChunk, [0, 1, 2, 3].map(i => `alpineRockVariants/${i}/rock`)],
     ['jungle', JungleChunk, [0, 1, 2].map(i => `jungleBoulders/${i}`)],
     ['volcanic', VolcanicChunk, ['rockGeometry']],
+    ['salt', SaltChunk, [0, 1, 2].map(i => `saltBoulders/${i}`)],
   ];
   const matrix = new THREE.Matrix4(), p = new THREE.Vector3(), scale = new THREE.Vector3(), q = new THREE.Quaternion(), size = new THREE.Vector3();
   for (const [journey, Chunk, keys] of scenes) {

@@ -14,7 +14,7 @@ try {
   await page.addInitScript(() => localStorage.setItem('coastline.graphics', JSON.stringify({ mode: 'high', level: 'high' })));
   await page.goto(`${url}/?seed=4817`, { waitUntil: 'networkidle' }); await ready(page);
   await page.getByRole('button', { name: /^Change route$/i }).click();
-  assert.equal(await page.locator('.journey-card').count(), 7);
+  assert.equal(await page.locator('.journey-card').count(), 8);
   await page.getByRole('button', { name: 'Volcanic Rift', exact: true }).click(); await ready(page);
   assert.equal(await page.locator('.location-title').textContent(), 'VOLCANIC RIFT');
   assert.equal(await page.evaluate(() => document.body.dataset.journey), 'volcanic');
@@ -56,7 +56,7 @@ try {
   assert.equal(await page.evaluate(() => !!window.__coastline.rendering.scene.getObjectByName('volcanic-smoke')), false);
   await page.keyboard.press('Digit7'); await ready(page); assert.equal(await page.evaluate(() => window.__coastline.journey), 'volcanic');
   assert.deepEqual(await page.evaluate(() => ({ s: window.__coastline.vehicle.s, distance: window.__coastline.vehicle.distance })), saved);
-  await page.keyboard.press('KeyN'); await ready(page); assert.equal(await page.evaluate(() => window.__coastline.journey), 'coast');
+  await page.keyboard.press('KeyN'); await ready(page); assert.equal(await page.evaluate(() => window.__coastline.journey), 'salt');
   await page.keyboard.press('Digit7'); await ready(page);
   await page.reload({ waitUntil: 'networkidle' }); await ready(page); assert.equal(await page.evaluate(() => window.__coastline.journey), 'volcanic');
 

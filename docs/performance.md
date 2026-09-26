@@ -26,7 +26,7 @@ npm run profile:performance
 npm run profile:driving
 ```
 
-Reports and screenshots go to `.artifacts/performance/`. The driving profiler records CPU time, buffer uploads and draw calls on all seven routes.
+Reports and screenshots go to `.artifacts/performance/`. The driving profiler records CPU time, buffer uploads and draw calls on all eight routes.
 
 Both accept `TEST_URL`, `CHROME_PATH` and `PROFILE_LABEL` (to keep runs in separate folders). `profile:performance` also accepts `PROFILE_QUALITY` (`high`, `balanced`, `smooth` or `basic`) and `PROFILE_MOBILE=1` to simulate a phone screen.
 

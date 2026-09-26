@@ -8,7 +8,7 @@ The [website](https://jarvisar.github.io/coastline/) can be installed like a reg
 
 The title screen and pause menu also have an install button.
 
-All seven routes work offline once the first visit finishes caching. To get an update, close every Coastline tab and window and reopen it. If you clear your browser storage, you'll need to load it online again. Fullscreen depends on the browser; some keep the system bars visible or need a tap first.
+All eight routes work offline once the first visit finishes caching. To get an update, close every Coastline tab and window and reopen it. If you clear your browser storage, you'll need to load it online again. Fullscreen depends on the browser; some keep the system bars visible or need a tap first.
 
 ## Hosting
 

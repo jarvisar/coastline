@@ -36,6 +36,10 @@ body[data-journey=city] {
   --surface: #eef1f4; --surface-card: #f9fafb; --surface-control: #e2e8ed;
   --surface-hover: #d6dfe6; --muted: #586773; --line: #99a8b3;
 }
+body[data-journey=salt] {
+  --surface: #f5f9fa; --surface-card: #fbfdfd; --surface-control: #e4edf1;
+  --surface-hover: #d5e3ea; --muted: #4b6373; --line: #9cb2bf;
+}
 body[data-journey=volcanic] {
   color-scheme: dark;
   --surface: #30272a; --surface-card: #403236; --surface-control: #3c2f32;

@@ -3,7 +3,7 @@ import { chromium } from '@playwright/test';
 import { mkdir, writeFile } from 'node:fs/promises';
 
 const url = process.env.TEST_URL ?? 'http://127.0.0.1:5173';
-const routes = ['coast', 'desert', 'snow', 'jungle', 'plains', 'city', 'volcanic'];
+const routes = ['coast', 'desert', 'snow', 'jungle', 'plains', 'city', 'volcanic', 'salt'];
 const records = [], errors = [];
 await mkdir('.artifacts/themes', { recursive: true });
 const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH ?? 'C:/Program Files/Google/Chrome/Application/chrome.exe',

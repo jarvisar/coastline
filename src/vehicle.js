@@ -99,6 +99,12 @@ export function createClassicCar(entry = carEntry(DEFAULT_CAR)) {
   tube([0, 2.62, -.58], [0, 3.14, -.2]); tube([0, 3.14, -.2], [0, 3.14, .32]); tube([0, 3.14, .32], [0, 2.62, .58]);
   tube([0, 3.14, -.2], [0, 2.62, .12]); tube([0, 2.62, .12], [0, 2.62, .58]);
   box(bike, [.34, .04, .04], [0, 3.2, -.2], rubber); box(bike, [.08, .05, .22], [0, 3.22, .3], rubber);
+  const cans = new THREE.Group(); cans.name = 'salt-jerrycans'; body.add(cans);
+  const fuel = mat('#c8412f'), water = mat('#e9e4d6');
+  for (const [x, can] of [[-.46, fuel], [0, water], [.46, fuel]]) {
+    box(cans, [.3, .44, .5], [x, 2.47, .2], can);
+    box(cans, [.08, .06, .16], [x, 2.72, .06], chrome);
+  }
   const wheels = [];
   for (const x of [-1.02, 1.02]) for (const z of [-1.18, 1.21]) {
     const pivot = new THREE.Group(); pivot.position.set(x, .49, z); car.add(pivot);
@@ -113,8 +119,9 @@ export function createClassicCar(entry = carEntry(DEFAULT_CAR)) {
     kitJourney = journey;
     const kit = entry.trim ?? journey;
     paint.color.set(customPaint ?? ROUTE_PAINT[kit] ?? ROUTE_PAINT.coast);
-    surfboard.visible = kit === 'coast'; spare.visible = kit === 'desert' || kit === 'volcanic'; roofBox.visible = kit === 'snow'; cargo.visible = kit === 'jungle'; bale.visible = kit === 'plains'; bike.visible = kit === 'city';
-    rack.visible = surfboard.visible || roofBox.visible || cargo.visible || bale.visible || bike.visible;
+    surfboard.visible = kit === 'coast'; spare.visible = kit === 'desert' || kit === 'volcanic' || kit === 'salt'; roofBox.visible = kit === 'snow'; cargo.visible = kit === 'jungle'; bale.visible = kit === 'plains'; bike.visible = kit === 'city';
+    cans.visible = kit === 'salt';
+    rack.visible = surfboard.visible || roofBox.visible || cargo.visible || bale.visible || bike.visible || cans.visible;
     plate.position.x = spare.visible ? -.65 : 0;
   }
   function paintCar(color) { customPaint = color || null; applyTrim(kitJourney); }
@@ -319,7 +326,8 @@ export class DrivingController {
     this.steer = THREE.MathUtils.damp(this.steer, touch ? 0 : (Number(input.right) || 0) - (Number(input.left) || 0), 7, dt);
     // 0 on the road, 1 on open ground, ramped over half a car width. Drives drag,
     // grip and audio. Ends by 5.9 m because the alpine shoulder is only 6.3 m.
-    const looseness = clamp((Math.abs(this.u) - 4.8) / 1.1, 0, 1);
+    // Routes with hard open ground, like the salt crust, scale it down.
+    const looseness = clamp((Math.abs(this.u) - 4.8) / 1.1, 0, 1) * (this.route.looseness ?? 1);
     // Balances full throttle at stats.offRoad and bleeds excess over about a second.
     // Scales up with speed so at a standstill it can't beat reverse torque.
     const surface = looseness * (stats.loose * Math.min(1, Math.abs(this.speed) / stats.offRoad)

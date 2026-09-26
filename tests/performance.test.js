@@ -74,7 +74,7 @@ test('route metadata and worker startup do not construct unselected scenery', ()
     const { chunkResource } = await import('./src/world/chunk-resources.js');
     await import('./src/world/chunk-builders.js');
     const resources = ['coast/terrainMaterial', 'desert/stoneGeometry', 'snow/alpineRockVariants/0/rock',
-      'jungle/jungleBoulders/0', 'plains/barkMaterial', 'city/terrainMaterial', 'volcanic/rockGeometry'];
+      'jungle/jungleBoulders/0', 'plains/barkMaterial', 'city/terrainMaterial', 'volcanic/rockGeometry', 'salt/crustMaterial'];
     for (const key of resources) assert.throws(() => chunkResource(key), /Unknown chunk resource/);
     const { loadScenery } = await import('./src/world/scenery.js');
     const [a, b] = await Promise.all([loadScenery('coast'), loadScenery('coast')]);
@@ -82,7 +82,7 @@ test('route metadata and worker startup do not construct unselected scenery', ()
     assert.ok(chunkResource(resources[0]).isMaterial);
     assert.equal(typeof a.World, 'function'); assert.equal(typeof a.Chunk, 'function');
     for (const key of resources.slice(1)) assert.throws(() => chunkResource(key), /Unknown chunk resource/);
-    assert.equal(Object.keys(JOURNEYS).length, 7);
+    assert.equal(Object.keys(JOURNEYS).length, 8);
   `], { cwd: new URL('..', import.meta.url), stdio: 'pipe' });
 });
 

@@ -66,6 +66,10 @@ export class SoundDirector {
       sing(0, 390, 330, .48, .028); sing(.7, 360, 310, .75, .024);
     } else if (kind === 'wind') {
       g.event('weather', { time: now, duration: 3.5, frequency: 640, endFrequency: 350, level: .05, pan, attack: .9 });
+    } else if (kind === 'flamingo') {
+      // A nasal, goose-like chatter answered further off.
+      for (let i = 0; i < 3; i++) sing(i * .2, 830 - i * 40, 640, .13, .016);
+      sing(.85, 760, 590, .18, .009); sing(1.05, 800, 620, .14, .008);
     } else if (kind === 'drip') {
       sing(0, 1700, 700, .11, .012); sing(.32, 2200, 900, .09, .008);
     }

@@ -30,7 +30,7 @@ try {
   await page.waitForFunction(() => window.__coastline && document.querySelector('#loading.loaded'));
   await page.click('#start');
   await page.evaluate(() => window.__coastline.action('pause'));
-  for (const id of ['coast', 'desert', 'snow', 'jungle', 'plains', 'city', 'volcanic']) {
+  for (const id of ['coast', 'desert', 'snow', 'jungle', 'plains', 'city', 'volcanic', 'salt']) {
     await page.evaluate(id => window.__coastline.changeJourney(id), id);
     const record = await page.evaluate(async () => {
       const a = window.__coastline, { scene, renderer } = a.rendering;

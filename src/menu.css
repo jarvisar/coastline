@@ -9,6 +9,7 @@ body[data-journey=snow] { --action: #243c55; --action-hover: #345370; }
 body[data-journey=jungle] { --action: #294e37; --action-hover: #386446; }
 body[data-journey=plains] { --action: #65502c; --action-hover: #80673a; }
 body[data-journey=city] { --action: #304853; --action-hover: #42616f; }
+body[data-journey=salt] { --action: #2e566f; --action-hover: #3b6a87; }
 
 .topbar { justify-content: flex-end; }
 #welcome {

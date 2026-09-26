@@ -6,6 +6,7 @@ import { AmbientOcclusion } from './ambient-occlusion.js';
 import { Graphics, renderScale } from './graphics.js';
 import { XRCameraRig } from './xr-camera.js';
 import { volcanicPalette } from './world/volcanic-palette.js';
+import { saltPalette, SALT_SUN, SALT_LIGHT } from './world/salt-palette.js';
 
 // Overhead follow rates per second. Ground settles fast so steering feels
 // immediate. Height stays slow so the view doesn't bob over terrain.
@@ -84,6 +85,8 @@ export function createRendering(canvas, graphics = new Graphics()) {
     plains: { color: '#e9b360', near: 500, far: 1000, thirdNear: 200, thirdFar: 360 },
     city: { color: new THREE.Color('#aab4bc').multiplyScalar(.9), near: 470, far: 900, thirdNear: 130, thirdFar: 330 },
     volcanic: { color: volcanicPalette.horizon, near: 290, far: 800, thirdNear: 105, thirdFar: 310 },
+    // Clear air: the flat reads a long way before it pales into the horizon.
+    salt: { color: saltPalette.fog, near: 700, far: 1300, thirdNear: 230, thirdFar: 470 },
   };
   function updateFog() {
     const profile = fogProfiles[journey];
@@ -183,6 +186,15 @@ export function createRendering(canvas, graphics = new Graphics()) {
       sky.color.set(volcanicPalette.skyLight); sky.groundColor.set(volcanicPalette.groundLight); sky.intensity = 1.65;
       sun.color.set(volcanicPalette.sun); sun.intensity = 2.55; sunOffset.set(-175, 185, 110);
       renderer.toneMappingExposure = 1.1;
+      return;
+    }
+    if (id === 'salt') {
+      // High sun over white ground. Strong bounce from the salt keeps shadows
+      // soft, and a high exposure lifts the crust to a bright cream.
+      scene.background.set(saltPalette.horizon); updateFog();
+      sky.color.set(saltPalette.skyLight); sky.groundColor.set(saltPalette.groundLight); sky.intensity = SALT_LIGHT.sky;
+      sun.color.set(saltPalette.sun); sun.intensity = SALT_LIGHT.sun; sunOffset.set(...SALT_SUN);
+      renderer.toneMappingExposure = 1.4;
       return;
     }
     const desert = id === 'desert';

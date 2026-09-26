@@ -1,6 +1,6 @@
 # Coastline
 
-![Coastline routes: coast, desert, alpine, jungle, plains and volcanic rift](showcase/scene-slices.png)
+![Coastline routes: coast, desert, alpine, jungle, plains, city, volcanic rift and salt plains](showcase/scene-slices.png)
 
 Endless driving game built with [Three.js](https://threejs.org/). The road, scenery and sound are all generated in code.
 
@@ -15,8 +15,9 @@ Play it [here](https://jarvisar.github.io/coastline/), or download the [desktop 
 5. Golden Plains
 6. Rainy Downtown
 7. Volcanic Rift
+8. Salt Plains
 
-Press 1-7 or click `Change Route` to switch. Each route keeps your position and mileage until you reload, and Reset starts the current route somewhere new. Add `?seed=4817` to the URL to share or revisit a world.
+Press 1-8 or click `Change Route` to switch. Each route keeps your position and mileage until you reload, and Reset starts the current route somewhere new. Add `?seed=4817` to the URL to share or revisit a world.
 
 Open the `Garage` to change cars or paint. `Default` uses the route's car. Cars handle differently and lose speed and grip off-road. Your car is saved, but paint resets when you reload.
 
@@ -35,7 +36,7 @@ For rainbow paint, enter ↑ ↑ ↓ ↓ ← → ← → B A while driving (D-pa
 | Pause | P / Esc | Menu |
 | Garage | C / G | Left stick click |
 | Next route | N | RB |
-| Choose route | 1-7 | View |
+| Choose route | 1-8 | View |
 | Reset | R | Y |
 | Sound | M | Pause menu |
 | Soft shading | O | Pause menu |

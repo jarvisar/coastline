@@ -5,7 +5,7 @@ import { chromium } from '@playwright/test';
 import { createServer } from 'vite';
 
 // All routes share a seed, road position, camera angle and full landscape framing.
-const routes = ['coast', 'desert', 'snow', 'jungle', 'plains', 'volcanic'];
+const routes = ['coast', 'desert', 'snow', 'jungle', 'plains', 'city', 'volcanic', 'salt'];
 const position = Number(process.env.POSITION ?? -1100);
 if (!Number.isFinite(position)) throw new Error('POSITION must be a finite road distance.');
 const root = fileURLToPath(new URL('../', import.meta.url));
