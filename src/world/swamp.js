@@ -6,13 +6,15 @@ import { finalizeChunkTransforms } from './chunk-transforms.js';
 import { CHUNK_LENGTH, randomAt, seededRandom, smoothstep, lerp, positionAt } from './route.js';
 import { SWAMP_STEP, SWAMP_COLUMN_COUNT, WATER_LEVEL, swampVertex, swampGround, swampRoadHeight as roadHeight, swampBridgeAt, onBridge,
   bayouAmount, bankEdge, swampNoise, islandField, ISLAND_THRESHOLD } from './swamp-route.js';
-import { swampDiscoveries, swampDiscoveryNear as nearCamp } from './swamp-discoveries.js';
+import { swampDiscoveries, swampDiscoveryNear as nearCamp, swampPad, swampDriveway } from './swamp-discoveries.js';
 import { material, createWaterMaterial, createReflectionMaterial, createMistMaterial, createFireflyMaterial } from './swamp-materials.js';
 import { swampReflectionGeometry } from './swamp-reflections.js';
 import { SwampSky } from './swamp-sky.js';
 import { cypressTrees, oakTrees, snagTrees, palmettoGeometry, reedTufts, lilyClusters, swampRocks, swampLogs, egretGeometry, heronGeometry,
   gatorGeometry, baskingGatorGeometry, Parts } from './swamp-assets.js';
-import { buildSwampCamp, campLantern } from './swamp-camps.js';
+import { buildSwampCamp } from './swamp-camps.js';
+import { swampLandmarkGeometry, wheelMaterial, SWAMP_LANDMARKS } from './swamp-discovery-assets.js';
+import { landmarkMatrix, swampDiscoveryLight, chapelDrive } from './swamp-discovery-scenery.js';
 import { animateWater } from './water.js';
 import { terrainSampler } from './coastal-assets.js';
 import { solidSpan } from './colliders.js';
@@ -46,7 +48,9 @@ const dummy = new THREE.Object3D();
 registerChunkResources('swamp', { terrainMaterial, roadMaterial, shoulderMaterial, edgeMaterial, centerMaterial, barkMaterial, canopyMaterial, frondMaterial,
   stoneMaterial, wildlifeMaterial, campMaterial, concreteMaterial, railMaterial, glowMaterial, waterMaterial, reflectionMaterial, basinMaterial, mistMaterial, fireflyMaterial, fireflyReflectionMaterial,
   boxGeometry, basinGeometry, shrubGeometry, cypressTrees, oakTrees, snagTrees, palmettoGeometry, reedTufts, lilyClusters, swampRocks, swampLogs, egretGeometry,
-  heronGeometry, gatorGeometry, baskingGatorGeometry });
+  heronGeometry, gatorGeometry, baskingGatorGeometry, swampLandmarkGeometry, wheelMaterial });
+// Fireflies each discovery gathers, and how far they wander from it.
+const SWARMS = { 'fishing-camp': [14, 15], 'hollow-cypress': [34, 17], chapel: [16, 22], riverboat: [8, 22] };
 
 // Fireflies draw over the mist.
 const ORDER = { water: 1, mist: 2, fireflies: 3 };
@@ -99,7 +103,7 @@ export class SwampChunk {
     const ab = new THREE.Vector3(), ac = new THREE.Vector3(), normal = new THREE.Vector3(), light = new THREE.Vector3(-120, 230, -60).normalize();
     const gravel = new THREE.Color('#8a826c'), verge = new THREE.Color('#5f7141'), tan = new THREE.Color('#8f8558'), riprap = new THREE.Color('#6a665d');
     const mud = new THREE.Color('#4a4336'), wet = new THREE.Color('#37332b'), moss = new THREE.Color('#3b4b2d'), grass = new THREE.Color('#485a32');
-    const litter = new THREE.Color('#574f39'), deepForest = new THREE.Color('#2f3d28');
+    const litter = new THREE.Color('#574f39'), deepForest = new THREE.Color('#2f3d28'), lawn = new THREE.Color('#5b6f3b'), clover = new THREE.Color('#687c44');
     const shallow = new THREE.Color('#4b6057'), deep = new THREE.Color('#354e64'), channel = new THREE.Color('#30475e');
     const rows = CHUNK_LENGTH / SWAMP_STEP, first = this.start / SWAMP_STEP;
     const grid = Array.from({ length: rows + 1 }, (_, i) => Array.from({ length: SWAMP_COLUMN_COUNT }, (_, col) => swampVertex(first + i, col)));
@@ -139,6 +143,9 @@ export class SwampChunk {
           color.lerp(litter, smoothstep(.55, .8, patch) * .6);
           color.lerp(tan, smoothstep(.62, .85, swampNoise(s, u, 23, 3305)) * .55);
           if (a2 > 200) color.lerp(deepForest, smoothstep(200, 320, a2) * .7);
+          // The chapel's mown lawn.
+          const pad = swampPad(s, u);
+          if (pad) color.lerp(lawn.clone().lerp(clover, swampNoise(s, u, 5, 3306)), smoothstep(.3, .8, pad.amount));
         }
         color.multiplyScalar((.92 + facet * .12) * (.9 + .16 * Math.max(0, normal.dot(light))));
         emit(tri, color);
@@ -196,7 +203,7 @@ export class SwampChunk {
       rails.push({ p: a.clone().add(b).multiplyScalar(.5).toArray(), scale: [.08, length + .05, .3], q: new THREE.Quaternion().setFromRotationMatrix(basis.makeBasis(side, direction, normal)), color: '#b7bcbd' });
       solidSpan(this, a, b, .12);
     };
-    const railed = s => !onBridge(s, 2);
+    const railed = s => !onBridge(s, 2) && !swampDriveway(s);
     for (let s = Math.ceil(this.start / 4) * 4; s < this.start + CHUNK_LENGTH; s += 4) {
       if (!railed(s)) continue;
       posts.push({ p: point(s, 7.45, .02).toArray(), scale: [.14, .9, .14], color: '#8b8f8c' });
@@ -327,15 +334,19 @@ export class SwampChunk {
         plant(reeds[random() < .3 ? 1 : 0], t, v, 2 + random() * 1.8, pick(['#ffffff', '#f1ead7', '#e3e6cf', '#d9ceb2']), -.05);
       }
     }
+    // Nothing lines the bank where the chapel's lawn meets the causeway.
+    const onPad = (s, u) => (swampPad(s, u)?.amount ?? 0) > .02;
     for (let s = this.start + 1; s < this.start + CHUNK_LENGTH; s += 1.5) for (const k of [-1, 1]) {
       if (onBridge(s, 4) || random() < .25) continue;
       const u = k * (bankEdge(s, k) + .3 + random() * 1.8);
+      if (onPad(s, u)) continue;
       plant(reeds[random() < .25 ? 1 : 0], s + random(), u, 1.3 + random() * 1.2, pick(['#ffffff', '#ece3cb', '#dfe4c9']), -.05);
     }
     // Riprap at the causeway waterline.
     for (let s = this.start + .5; s < this.start + CHUNK_LENGTH; s += 1.35) for (const k of [-1, 1]) {
       if (onBridge(s, 1) || random() < .12) continue;
       const u = k * (bankEdge(s, k) - .9 + random() * 1.9), g = ground(s, u), size = .45 + random() ** 3 * 1.7;
+      if (onPad(s, u)) continue;
       rocks[Math.floor(random() * rocks.length)].push({ p: [g.x, Math.max(g.y, WATER_LEVEL - .3) + size * .15, g.z], scale: [size * (.9 + random() * .5), size * (.6 + random() * .4), size * (.9 + random() * .4)],
         r: [(random() - .5) * .4, random() * Math.PI * 2, (random() - .5) * .4], color: pick(['#ffffff', '#e8e4dc', '#d8d6d0', '#f4efe6']) });
     }
@@ -346,13 +357,13 @@ export class SwampChunk {
       const size = 1.2 + random() * 2;
       plant(rocks[2], s, u, size, '#d3d8cf', -.25, .8);
     }
-    // Lily pads gather in sheltered water near the islands.
+    // Lily pads gather in sheltered water near the islands, clear of hulls and walls.
     for (let i = 0; i < 100; i++) {
       const s = this.start + random() * CHUNK_LENGTH, u = side() * (14 + random() ** 1.3 * 200), g = swampGround(s, u);
       if (g > -.35 || g < -2.2 || bayouAmount(s, u) > .8 || islandField(s, u) < ISLAND_THRESHOLD - .26) continue;
       for (let k = 0, count = 2 + Math.floor(random() * 5); k < count; k++) {
         const t = s + (random() - .5) * 12, v = u + (random() - .5) * 12;
-        if (Math.abs(v) < 13.5 || swampGround(t, v) > -.3 || !inChunk(t)) continue;
+        if (Math.abs(v) < 13.5 || swampGround(t, v) > -.3 || !inChunk(t) || nearCamp(t, v, 1.5, 'core')) continue;
         const size = 1.4 + random() * 2.2, p = positionAt(t, v, WATER_LEVEL + .01);
         lilies[Math.floor(random() * lilies.length)].push({ p: [p.x, p.y, p.z + this.start], scale: [size, size, size], r: [0, random() * Math.PI * 2, 0], color: pick(['#ffffff', '#eef3e3', '#e3ead6']) });
       }
@@ -411,15 +422,35 @@ export class SwampChunk {
     this.fireflies = fireflies;
   }
   buildDiscoveries() {
-    for (const camp of this.discoveries) {
-      if (camp.s < this.start || camp.s >= this.start + CHUNK_LENGTH) continue;
-      const { body, glow } = buildSwampCamp(camp, this.start);
-      this.addMesh(body, campMaterial, 'fishing-camp', true);
-      this.addMesh(glow, glowMaterial, 'camp-windows').receiveShadow = false;
-      this.features.discoveries.push(camp);
-      const random = seededRandom(camp.index + 4611);
-      for (let k = 0; k < 14; k++) this.fireflies.push((() => { const p = positionAt(camp.s + (random() - .5) * 30, camp.u + (random() - .5) * 30, 1 + random() * 3); return [p.x, p.y, p.z + this.start, random()]; })());
+    for (const site of this.discoveries) {
+      if (site.s < this.start || site.s >= this.start + CHUNK_LENGTH) continue;
+      if (site.kind === 'fishing-camp') {
+        const { body, glow } = buildSwampCamp(site, this.start);
+        this.addMesh(body, campMaterial, 'fishing-camp', true);
+        this.addMesh(glow, glowMaterial, 'camp-windows').receiveShadow = false;
+      } else {
+        // Shared models, one instance each, so every chunk reuses the same buffers.
+        const matrix = landmarkMatrix(site).premultiply(new THREE.Matrix4().makeTranslation(0, 0, this.start)), model = swampLandmarkGeometry[site.kind];
+        this.landmark(model.body, campMaterial, matrix, site.kind, { shadows: true });
+        this.landmark(model.glow, glowMaterial, matrix, `${site.kind}-glow`, { ambientOcclusion: false });
+        // The spinning wheel would cast a still shadow and ambient occlusion, so it skips both.
+        if (model.wheel) this.landmark(model.wheel, wheelMaterial, matrix.clone().multiply(new THREE.Matrix4().makeTranslation(...SWAMP_LANDMARKS[site.kind].wheel)),
+          'riverboat-wheel', { ambientOcclusion: false });
+        if (site.kind === 'chapel') this.addMesh(chapelDrive(site, this.start), campMaterial, 'chapel-drive');
+      }
+      this.features.discoveries.push(site);
+      const random = seededRandom(site.index + 4611), [count, spread] = SWARMS[site.kind];
+      for (let k = 0; k < count; k++) {
+        const p = positionAt(site.s + (random() - .5) * spread * 2, site.u + (random() - .5) * spread * 2, 1 + random() * 3.5);
+        this.fireflies.push([p.x, p.y, p.z + this.start, random()]);
+      }
     }
+  }
+  landmark(geometry, mat, matrix, name, { shadows = false, ambientOcclusion = true } = {}) {
+    const mesh = new THREE.InstancedMesh(geometry, mat, 1); mesh.name = name; mesh.setMatrixAt(0, matrix);
+    mesh.castShadow = shadows; mesh.receiveShadow = shadows;
+    if (!ambientOcclusion) mesh.userData.ambientOcclusion = false;
+    computeInstanceBounds(mesh); this.group.add(mesh);
   }
   // Three drifting layers of low mist, thin over the road so the car stays clear.
   buildMist() {
@@ -467,12 +498,13 @@ export class SwampWorld {
     this.scene = scene; this.chunkSource = chunkSource; this.chunks = new Map(); this.origin = 0; this.center = null;
     this.effects = new THREE.Group(); this.effects.name = 'swamp-night-effects'; scene.add(this.effects);
     this.sky = new SwampSky(this.effects);
-    // Two shadowless lanterns follow the nearest camps.
+    // Two shadowless lights follow the nearest discoveries, each tinted to match.
     this.lights = Array.from({ length: 2 }, () => { const light = new THREE.PointLight('#ffbf6e', 90, 26, 2); this.effects.add(light); return light; });
     this.glowGeometry = new THREE.BufferGeometry();
     this.glowGeometry.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(6), 3));
+    this.glowGeometry.setAttribute('color', new THREE.Float32BufferAttribute(new Float32Array(6), 3));
     this.glowGeometry.setAttribute('strength', new THREE.Float32BufferAttribute(new Float32Array(2), 1));
-    this.glowMaterial = new THREE.PointsMaterial({ color: '#ffc37c', size: 30, transparent: true, opacity: .42,
+    this.glowMaterial = new THREE.PointsMaterial({ vertexColors: true, size: 30, transparent: true, opacity: .42,
       depthWrite: false, sizeAttenuation: false, blending: THREE.AdditiveBlending, toneMapped: false, fog: false });
     this.glowMaterial.onBeforeCompile = shader => {
       shader.vertexShader = 'attribute float strength; varying float vGlow;\n' + shader.vertexShader;
@@ -495,21 +527,25 @@ export class SwampWorld {
     this.s = s; this.origin = Math.floor(s / 1024) * 1024;
     updateResidentChunks(this, Math.floor(s / CHUNK_LENGTH), SwampChunk);
     positionResidentChunks(this);
-    const camps = swampDiscoveries(s - 300, s + 300), key = camps.map(camp => camp.index).join(',');
-    if (key !== this.campKey || this.origin !== this.lightOrigin) {
-      this.camps = this.lights.map((light, i) => {
-        const camp = camps[i], p = camp ? campLantern(camp) : { x: 0, y: -1000, z: 0 };
+    const sites = swampDiscoveries(s - 300, s + 300), key = sites.map(site => site.index).join(',');
+    if (key !== this.siteKey || this.origin !== this.lightOrigin) {
+      const tint = new THREE.Color();
+      this.lamps = this.lights.map((light, i) => {
+        const site = sites[i], lamp = site ? swampDiscoveryLight(site) : null, p = lamp?.position ?? { x: 0, y: -1000, z: 0 };
         light.position.set(p.x, p.y, p.z + this.origin);
+        if (lamp) { light.color.set(lamp.color); light.distance = lamp.distance; }
         this.glowGeometry.attributes.position.setXYZ(i, p.x, p.y, p.z + this.origin);
-        return camp;
+        tint.set(lamp?.color ?? '#000000').lerp(new THREE.Color('#ffffff'), .12);
+        this.glowGeometry.attributes.color.setXYZ(i, tint.r, tint.g, tint.b);
+        return lamp && { site, ...lamp };
       });
-      this.campKey = key; this.lightOrigin = this.origin;
-      this.glowGeometry.attributes.position.needsUpdate = true;
+      this.siteKey = key; this.lightOrigin = this.origin;
+      this.glowGeometry.attributes.position.needsUpdate = true; this.glowGeometry.attributes.color.needsUpdate = true;
     }
     this.lights.forEach((light, i) => {
-      const camp = this.camps[i], strength = camp ? 1 - smoothstep(160, 260, Math.abs(camp.s - s)) : 0;
-      light.intensity = 90 * strength;
-      this.glowGeometry.attributes.strength.setX(i, strength);
+      const lamp = this.lamps[i], strength = lamp ? 1 - smoothstep(160, 260, Math.abs(lamp.site.s - s)) : 0;
+      light.intensity = (lamp?.intensity ?? 0) * strength;
+      this.glowGeometry.attributes.strength.setX(i, strength * (lamp?.halo ?? 0));
     });
     this.glowGeometry.attributes.strength.needsUpdate = true;
   }

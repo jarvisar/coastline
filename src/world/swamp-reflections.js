@@ -1,11 +1,16 @@
 import * as THREE from 'three';
 import { WATER_LEVEL } from './swamp-route.js';
 import { cypressTrees, oakTrees } from './swamp-assets.js';
+import { swampLandmarkGeometry } from './swamp-discovery-assets.js';
 
-// Small silhouette models give every tree a reflection without rendering its
-// moss, roots and branches a second time. One merged draw per resident chunk.
-const silhouettes = new Map([...cypressTrees, ...oakTrees].map(tree => [tree.trunk, tree.reflection]));
-const reflectedNames = new Set(['cypress-trunks', 'oak-trunks', 'dead-snags', 'fishing-camp', 'camp-windows', 'fallen-logs']);
+// Small silhouette models give every tree and landmark a reflection without
+// rendering its moss, roots and branches a second time. One merged draw per
+// resident chunk. Lit windows and lamps reflect nearly at full strength. The
+// chapel stands back on dry land, where its bank would hide any reflection.
+const silhouettes = new Map([...cypressTrees, ...oakTrees].map(tree => [tree.trunk, tree.reflection])
+  .concat(['hollow-cypress', 'riverboat'].map(kind => [swampLandmarkGeometry[kind].body, swampLandmarkGeometry[kind].reflection])));
+const luminous = new Set(['camp-windows', 'hollow-cypress-glow', 'riverboat-glow']);
+const reflectedNames = new Set(['cypress-trunks', 'oak-trunks', 'dead-snags', 'fishing-camp', 'fallen-logs', 'hollow-cypress', 'riverboat', 'riverboat-wheel', ...luminous]);
 
 export function swampReflectionGeometry(group) {
   const positions = [], colors = [], matrix = new THREE.Matrix4(), point = new THREE.Vector3(), tint = new THREE.Color();
@@ -28,9 +33,9 @@ export function swampReflectionGeometry(group) {
       for (let i = 0; i < mesh.count; i++) {
         mesh.getMatrixAt(i, matrix);
         tint.set('#ffffff'); if (mesh.instanceColor) mesh.getColorAt(i, tint);
-        append(geometry, matrix, tint, false);
+        append(geometry, matrix, tint, luminous.has(mesh.name));
       }
-    } else append(geometry, mesh.matrix, tint.set('#ffffff'), mesh.name === 'camp-windows');
+    } else append(geometry, mesh.matrix, tint.set('#ffffff'), luminous.has(mesh.name));
   });
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));

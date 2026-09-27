@@ -1,5 +1,5 @@
 import { roadFrame, positionAt, randomAt, smoothstep, lerp } from './route.js';
-import { swampDiscoveryNear } from './swamp-discoveries.js';
+import { swampClearing, swampPad } from './swamp-discoveries.js';
 
 export const SWAMP_STEP = 4;
 // The whole basin shares one still water level. The causeway sits a little above it.
@@ -69,10 +69,8 @@ export function islandField(s, u) {
   // Open water beside the causeway and more forest farther out.
   n += -.17 * (1 - smoothstep(15, 46, a)) + .06 * smoothstep(110, 240, a);
   n -= .55 * bayouAmount(s, u);
-  // Clear water round the fishing camps' stilts.
-  const camp = swampDiscoveryNear(s, u, 10);
-  if (camp) n -= .3 * (1 - smoothstep(9, 26, Math.hypot(s - camp.s, u - camp.u)));
-  return n;
+  // Clear water round the camps' stilts and the other landmarks.
+  return n - swampClearing(s, u);
 }
 export const ISLAND_THRESHOLD = .56;
 export function swampFloor(s, u) {
@@ -92,10 +90,13 @@ function embankment(s, u) {
   if (a <= bank + 1.8) return lerp(WATER_LEVEL + .12, -1, (a - bank) / 1.8);
   return -1 - smoothstep(bank + 1.8, bank + 6, a) * 1.1;
 }
-// Physical ground, below the bridge decks too.
+// Physical ground, below the bridge decks too. The chapel's fill meets the
+// verge, so the road itself is never raised.
 export function swampGround(s, u) {
   const floor = swampFloor(s, u), a = Math.abs(u);
   let height = a < 22 ? Math.max(embankment(s, u), floor) : floor;
+  const pad = a > 7 ? swampPad(s, u) : null;
+  if (pad) height = Math.max(height, lerp(height, pad.level, pad.amount));
   const span = a < 30 ? bridgeSpan(s) : 0;
   if (span > 0) height = lerp(height, Math.min(height, -2.2 + smoothstep(10, 30, a) * .3), span);
   return height;

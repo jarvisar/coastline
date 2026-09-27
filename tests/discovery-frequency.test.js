@@ -23,7 +23,7 @@ test('all nine scenes average about 2.5 driven miles, with each discovery near i
         `${key}, seed ${seed}: ${row['average miles']} miles`);
     }
   }
-  assert.equal(totals.size, 36, 'all 27 special discovery types and all nine scene totals are measured');
+  assert.equal(totals.size, 39, 'all 30 special discovery types and all nine scene totals are measured');
   for (const [key, { count, target, overall }] of totals) {
     const actual = miles / count;
     if (overall) assert.ok(actual > 2.25 && actual < 2.8, `${key}: ${actual} miles`);

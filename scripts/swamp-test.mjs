@@ -47,7 +47,8 @@ try {
   const { camp, reverseCamp, bridge } = await page.evaluate(async () => {
     const { swampDiscoveries } = await import('/src/world/swamp-discoveries.js');
     const { swampBridgeAt } = await import('/src/world/swamp-route.js');
-    return { camp: swampDiscoveries(0, 6000)[0], reverseCamp: swampDiscoveries(-30000, 0).find(site => site.side < 0), bridge: swampBridgeAt(640) };
+    const camps = (from, to) => swampDiscoveries(from, to).filter(site => site.kind === 'fishing-camp');
+    return { camp: camps(0, 60000)[0], reverseCamp: camps(-300000, 0).reverse().find(site => site.side < 0), bridge: swampBridgeAt(640) };
   });
   const hideUI = await page.addStyleTag({ content: 'body * { visibility: hidden !important; } #scene { visibility: visible !important; }' });
   for (const [label, s] of [['overview', 24], ['camp', camp.s], ['reverse-camp', reverseCamp.s], ['bridge', bridge.center], ['rebase', 4097], ['far', 20000], ['reverse', -12000]]) {

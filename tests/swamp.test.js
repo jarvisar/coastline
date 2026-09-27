@@ -7,6 +7,7 @@ import { SWAMP_STEP, SWAMP_COLUMN_COUNT, WATER_LEVEL, BAYOU_SPACING, swampColumn
 import { swampDiscoveries } from '../src/world/swamp-discoveries.js';
 import { SwampWorld, SwampChunk } from '../src/world/swamp.js';
 import { campLantern } from '../src/world/swamp-camps.js';
+import { swampDiscoveryLight } from '../src/world/swamp-discovery-scenery.js';
 import { waterClock } from '../src/world/water.js';
 import { DrivingController } from '../src/vehicle.js';
 
@@ -54,7 +55,7 @@ test('bayou bridges span open water at world-space intervals', () => {
 });
 
 test('fishing camps stand in water, clear of the road and the bridges', () => {
-  const camps = swampDiscoveries(-200000, 200000);
+  const camps = swampDiscoveries(-400000, 400000).filter(site => site.kind === 'fishing-camp');
   for (const camp of camps) {
     assert.ok(Math.abs(camp.u) >= 29 && Math.abs(camp.u) <= 49);
     assert.ok(Math.abs(camp.s - swampBridgeAt(camp.s).center) >= 110);
@@ -62,7 +63,7 @@ test('fishing camps stand in water, clear of the road and the bridges', () => {
     const lantern = campLantern(camp);
     assert.ok(lantern.y > WATER_LEVEL + camp.floor && lantern.y < WATER_LEVEL + camp.floor + 4);
   }
-  assert.ok(camps.length > 90 && camps.length < 110, `${camps.length} camps`);
+  assert.ok(camps.length > 35 && camps.length < 65, `${camps.length} camps`);
 });
 
 test('swamp drive stays grounded on the causeway and its bridges', () => {
@@ -111,23 +112,25 @@ test('swamp chunks keep scenery off the road, clip the ground at the water and d
   chunk.dispose();
 });
 
-test('the swamp world lights the nearest camps and follows the car with its headlights', () => {
+test('the swamp world lights the nearest discoveries in their own colours and follows the car with its headlights', () => {
   const scene = new THREE.Scene(), world = new SwampWorld(scene), car = new DrivingController(swampDrivingRoute);
   let disposed = 0;
   world.update(24);
   for (const chunk of world.chunks.values()) for (const g of chunk.owned) g.addEventListener('dispose', () => disposed++);
-  const camps = swampDiscoveries(-10000, 10000);
+  const sites = swampDiscoveries(-20000, 20000);
+  assert.equal(new Set(sites.map(site => site.kind)).size, 4, 'every kind is visited');
   assert.equal(world.headlights.parent, world.effects, 'the actual spotlight must be attached to the scene');
-  for (const s of [24, ...camps.map(camp => camp.s), 5000, -900]) {
+  for (const s of [24, ...sites.map(site => site.s), 5000, -900]) {
     car.s = s; car.reset(); world.update(s); world.animate(12, car);
     assert.equal(world.chunks.size, 9); assert.equal(waterClock.time.value, 12);
     for (const [index, chunk] of world.chunks) assert.equal(chunk.group.position.z, world.origin - index * CHUNK_LENGTH);
     world.lights.forEach((light, i) => {
-      const camp = swampDiscoveries(s - 300, s + 300)[i], p = camp ? campLantern(camp) : { x: 0, y: -1000, z: 0 };
-      const strength = camp ? 1 - smoothstep(160, 260, Math.abs(camp.s - s)) : 0;
+      const site = swampDiscoveries(s - 300, s + 300)[i], lamp = site && swampDiscoveryLight(site), p = lamp?.position ?? { x: 0, y: -1000, z: 0 };
+      const strength = site ? 1 - smoothstep(160, 260, Math.abs(site.s - s)) : 0;
       assert.deepEqual(light.position.toArray(), [p.x, p.y, p.z + world.origin]);
-      assert.equal(light.intensity, 90 * strength);
-      assert.equal(world.glowGeometry.attributes.strength.getX(i), Math.fround(strength));
+      assert.equal(light.intensity, (lamp?.intensity ?? 0) * strength);
+      if (lamp) assert.equal(light.color.getHexString(), lamp.color.slice(1));
+      assert.equal(world.glowGeometry.attributes.strength.getX(i), Math.fround(strength * (lamp?.halo ?? 0)));
     });
     const version = world.glowGeometry.attributes.position.version;
     world.update(s);

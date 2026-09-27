@@ -18,7 +18,7 @@ For example, `'cable-car': 5` means about one every five miles. Lower numbers ma
 
 The defaults work out to about one discovery every 2.5 miles. The actual gaps depend on terrain, the seed and minimum spacing, so changing one value can shift other discoveries around, but their average frequency stays the same.
 
-Birds, Alpine lakeside cabins and normal road bridges are spawned separately. Smaller objects, like the boat at a dock, come with their parent discovery. Swamp fishing camps are discoveries; their docks, boats, clearings and lanterns belong to the camp. On the salt flat, the ground under each discovery is kept dry and most cactus islands get a lagoon beside them.
+Birds, Alpine lakeside cabins and normal road bridges are spawned separately. Smaller objects, like the boat at a dock, come with their parent discovery. In the swamp, each fishing camp, hollow cypress, chapel and riverboat brings its own clearing, light and fireflies. The chapel also brings its lawn, parking lot and drive, and always sits across the road from the camera. On the salt flat, the ground under each discovery is kept dry and most cactus islands get a lagoon beside them.
 
 ## Checking placement
 
@@ -30,4 +30,4 @@ node scripts/discovery-frequency.mjs
 
 This compares the target and actual averages over 2,000 miles. Pass a different distance (e.g. `node scripts/discovery-frequency.mjs 500`) or set `TEST_WORLD_SEED` to check another world.
 
-With the dev server running, `node scripts/volcanic-discoveries-test.mjs` checks the volcanic landmarks from both directions at desktop, tablet and phone sizes. Screenshots go to `.artifacts/volcanic-discoveries/`. `node scripts/salt-discoveries-test.mjs` saves close-up and road-level views of the salt flat landmarks to `.artifacts/salt-discoveries/`.
+With the dev server running, `node scripts/volcanic-discoveries-test.mjs` checks the volcanic landmarks from both directions at desktop, tablet and phone sizes. Screenshots go to `.artifacts/volcanic-discoveries/`. `node scripts/salt-discoveries-test.mjs` saves close-up and road-level views of the salt flat landmarks to `.artifacts/salt-discoveries/`. `node scripts/swamp-discoveries-test.mjs` does the same for the swamp landmarks, saving to `.artifacts/swamp-discoveries/`.
