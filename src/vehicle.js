@@ -171,7 +171,7 @@ export class DrivingController {
     this.bodyPitch = 0; this.bodyRoll = 0; this.wheelSpin = 0;
     // Collision velocity on top of the car's own drive.
     this.knock = { x: 0, z: 0, spin: 0 };
-    this.audioTelemetry = { speed: 0, throttle: 0, brake: 0, offRoad: 0, steer: 0, handbrake: 0, impact: 0, impactSerial: 0 };
+    this.audioTelemetry = { speed: 0, throttle: 0, brake: 0, offRoad: 0, steer: 0, handbrake: 0, impact: 0, impactSerial: 0, impactKind: null };
     const pose = () => ({ position: new THREE.Vector3(), quaternion: new THREE.Quaternion(), bodyPitch: 0, bodyRoll: 0, wheelSpin: 0, steer: 0 });
     this.previousPose = pose(); this.currentPose = pose();
     this.update(0, {});
@@ -256,7 +256,7 @@ export class DrivingController {
   // heading changes speed but never reverses it. The rest becomes knock.
   resolveTrafficCollision(dx, dz, dvx = 0, dvz = 0, spin = 0) {
     const impact = Math.hypot(dvx, dvz);
-    if (impact > .4) { this.audioTelemetry.impact = impact; this.audioTelemetry.impactSerial++; }
+    if (impact > .4) { this.audioTelemetry.impact = impact; this.audioTelemetry.impactKind = 'traffic'; this.audioTelemetry.impactSerial++; }
     const cos = Math.cos(this.heading), sin = Math.sin(this.heading), along = dvx * sin - dvz * cos, across = dvx * cos + dvz * sin;
     const speed = this.speed < 0 ? Math.min(0, this.speed + along) : Math.max(0, this.speed + along), taken = speed - this.speed;
     this.knock.x += dvx - sin * taken; this.knock.z += dvz + cos * taken;
@@ -277,7 +277,7 @@ export class DrivingController {
     const closing = -(fx * nx + fz * nz);
     if (closing > 0) {
       const impact = Math.abs(this.speed) * closing;
-      if (impact > .4) { this.audioTelemetry.impact = impact; this.audioTelemetry.impactSerial++; }
+      if (impact > .4) { this.audioTelemetry.impact = impact; this.audioTelemetry.impactKind = 'scenery'; this.audioTelemetry.impactSerial++; }
       this.bodyPitch = clamp(this.bodyPitch + direction * impact * .003, -.09, .09);
       this.speed *= Math.sqrt(Math.max(0, 1 - closing * closing)); this.audioTelemetry.speed = this.speed;
       const turn = Math.atan2(fx + closing * nx, -fz - closing * nz) - Math.atan2(fx, -fz);

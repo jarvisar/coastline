@@ -11,8 +11,9 @@ import { SwampChunk } from '../src/world/swamp.js';
 import { packChunk, unpackChunk } from '../src/world/chunk-transfer.js';
 
 const KINDS = ['fishing-camp', 'hollow-cypress', 'chapel', 'riverboat'];
-const MESHES = { 'fishing-camp': ['fishing-camp', 'camp-windows'], 'hollow-cypress': ['hollow-cypress', 'hollow-cypress-glow'],
-  chapel: ['chapel', 'chapel-glow'], riverboat: ['riverboat', 'riverboat-glow', 'riverboat-wheel'] };
+const MESHES = { 'fishing-camp': ['fishing-camp', 'camp-windows', 'fishing-camp-reflection', 'camp-windows-reflection'],
+  'hollow-cypress': ['hollow-cypress', 'hollow-cypress-glow', 'hollow-cypress-reflection', 'hollow-cypress-glow-reflection'],
+  chapel: ['chapel', 'chapel-glow'], riverboat: ['riverboat', 'riverboat-glow', 'riverboat-wheel', 'riverboat-reflection', 'riverboat-glow-reflection', 'riverboat-wheel-reflection'] };
 
 test('swamp discoveries share one schedule and remain stable across reversed queries and cache eviction', () => {
   assert.deepEqual(Object.keys(SWAMP_DISCOVERY_MILES), KINDS);
@@ -74,7 +75,7 @@ test('the chapel sits square to the road on a level lawn, and its drive opens th
   }
 });
 
-test('each discovery has one owning chunk with its meshes, reflection and metadata after transfer', () => {
+test('each discovery has one owning chunk with its meshes, reflections and metadata after transfer', () => {
   const seen = new Set();
   for (const site of swampDiscoveries(-40000, 40000)) {
     if (seen.has(site.kind) && seen.size < KINDS.length) continue;
@@ -87,9 +88,16 @@ test('each discovery has one owning chunk with its meshes, reflection and metada
       for (const name of MESHES[site.kind]) assert.equal(!!restored.group.getObjectByName(name), neighbor === 0, `${name} in chunk ${index + neighbor}`);
       if (neighbor === 0) {
         assert.deepEqual(owned, [site]);
-        assert.ok(restored.group.getObjectByName('swamp-reflections').geometry.attributes.position.count > 0);
         // Landmarks share one model; the chunk only owns its instance.
         if (site.kind !== 'fishing-camp') assert.equal(restored.group.getObjectByName(site.kind).geometry, swampLandmarkGeometry[site.kind].body);
+        // The chapel stands back on dry land and has no reflection.
+        const body = restored.group.getObjectByName(site.kind), mirror = restored.group.getObjectByName(`${site.kind}-reflection`);
+        assert.equal(!!mirror, site.kind !== 'chapel');
+        if (mirror && site.kind !== 'fishing-camp') {
+          assert.equal(mirror.geometry, swampLandmarkGeometry[site.kind].reflection);
+          assert.equal(mirror.instanceMatrix, body.instanceMatrix, 'reflections reuse the landmark matrix buffer after transfer');
+        }
+        if (mirror) assert.ok(mirror.scale.y === -1 && mirror.position.y === WATER_LEVEL * 2);
       }
       chunk.dispose(); restored.dispose();
     }

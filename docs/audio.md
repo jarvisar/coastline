@@ -8,7 +8,11 @@ Sound is off by default. Press M or use the pause menu to turn it on.
 
 All audio is generated with the Web Audio API in [audio.js](../src/audio.js) and [src/audio/](../src/audio/). There are no sound files.
 
-The engine follows the car's RPM and load, and tires and wind follow speed and grip. Each route has its own ambience. Traffic is panned in stereo and uses a Doppler shift. In first-person, outside sounds are muffled, except in the Formula car since it has an open cockpit.
+The engine follows the car's RPM and load, and tires and wind follow speed and grip. Traffic is panned in stereo and uses a Doppler shift. In first-person, outside sounds are muffled, except in the Formula car since it has an open cockpit.
+
+Route sounds are set in [profiles.js](../src/audio/profiles.js). Water and lava are louder when you're near them and panned to their side. Bridges, crashes and city lightning have their own sounds.
+
+Wildlife calls, loops and music notes are generated in a web worker when a route loads. Only the current route's sounds are kept.
 
 Everything runs through one AudioContext, which fades out and suspends when you mute, pause or leave the tab. Switching cars swaps out the engine sounds, and the last three are kept cached.
 

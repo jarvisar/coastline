@@ -311,7 +311,7 @@ export function plainsVertex(row, column) {
 }
 
 export const plainsDrivingRoute = {
-  frame: plainsFrame, position: plainsPosition, height: plainsHeight,
+  frame: plainsFrame, position: plainsPosition, height: plainsHeight, bridge: plainsCreekAt,
   bounds: s => {
     const creek = plainsCreekAt(s);
     if (s > creek.start - 8 && s < creek.end + 8) return [-4.8, 4.8];

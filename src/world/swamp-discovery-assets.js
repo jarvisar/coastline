@@ -103,7 +103,7 @@ function pad(model, center, size, seed, color) {
     const a = randomAt(seed, 5061 + k) * TAU, d = size * (.55 + randomAt(seed, 5063 + k) * .2), s = size * (.62 + randomAt(seed, 5065 + k) * .15);
     model.body.lobe([x + Math.cos(a) * d, y - size * .12, z + Math.sin(a) * d], [s, s * .62, s], seed * 7 + k + 1, color.clone().multiplyScalar(.94 + k * .08), 1);
   }
-  model.silhouette.lobe(center, [size * 1.5, size * .6, size * 1.4], seed, color.clone().multiplyScalar(.8));
+  model.silhouette.lobe(center, [size * 1.5, size * .6, size * 1.4], seed, color.clone().multiplyScalar(.8), -1);
 }
 
 // ---------------------------------------------------------------------------

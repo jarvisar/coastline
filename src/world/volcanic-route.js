@@ -262,7 +262,7 @@ export function volcanicVertex(row, column, jitter = 3) {
 }
 
 export const volcanicDrivingRoute = {
-  frame: roadFrame, position: volcanicPosition, height: volcanicHeight,
+  frame: roadFrame, position: volcanicPosition, height: volcanicHeight, bridge: volcanicCrossing,
   // Leave room for the car's footprint before the roadside scarp.
   bounds: s => {
     const bridge = volcanicCrossing(s);

@@ -45,11 +45,14 @@ try {
   await page.evaluate(() => window.dispatchEvent(new Event('focus')));
   assert.equal(await page.evaluate(() => window.__coastline.audio.audible), false);
   await page.keyboard.press('KeyP');
-  for (const journey of ['desert', 'snow', 'jungle', 'plains', 'city', 'coast']) {
+  for (const journey of ['desert', 'snow', 'jungle', 'plains', 'city', 'volcanic', 'salt', 'swamp', 'coast']) {
     await page.evaluate(id => window.__coastline.changeJourney(id), journey);
     assert.equal(await page.evaluate(() => window.__coastline.audio.journey), journey);
     assert.deepEqual(await page.evaluate(() => [window.__coastline.audio.graph.nodeCount, window.__coastline.audio.graph.sourceCount]), graphSize);
   }
+  // Sounds are rendered by a worker and arrive shortly after a route loads.
+  await page.waitForFunction(() => ['thud', 'crash', 'clunk', 'mallet', 'gull'].every(kind => window.__coastline.audio.graph.buffer(kind)));
+  assert.equal(await page.evaluate(() => window.__coastline.audio.graph.buffer('thunder')), null, 'only the current route is kept');
   await page.keyboard.press('KeyP');
 
   // The mixer works while paused, takes keyboard input and persists without
@@ -73,11 +76,12 @@ try {
     const { DriveAudio } = await import('/src/audio.js');
     const { createSoundGraph } = await import('/src/audio/synthesis.js');
     const results = [];
-    for (const journey of ['coast', 'desert', 'snow', 'jungle', 'plains', 'city']) {
+    for (const journey of ['coast', 'desert', 'snow', 'jungle', 'plains', 'city', 'volcanic', 'salt', 'swamp']) {
       const rate = 24000, seconds = 14;
       const ctx = new OfflineAudioContext(2, rate * seconds, rate);
       const audio = new DriveAudio(); audio.context = ctx; audio.graph = createSoundGraph(ctx);
       audio.enabled = true; audio.setJourney(journey); audio.syncOutput();
+      await audio.graph.ready;
       const drive = time => {
         const speed = time < 2 ? 0 : time < 8 ? (time - 2) * 4.5 : time < 10 ? 27 : Math.max(0, 27 - (time - 10) * 12);
         return { speed, throttle: time >= 2 && time < 8 ? 1 : 0, brake: time >= 10 ? 1 : 0, offRoad: time >= 8 && time < 10 ? 1 : 0, steer: time > 9 ? .8 : 0 };
@@ -137,6 +141,7 @@ try {
       const audio = new DriveAudio(); audio.context = ctx; audio.graph = createSoundGraph(ctx); audio.enabled = true;
       const g = audio.graph;
       audio.setJourney('city'); audio.setCar(ENGINES[kind] ? kind : 'sports');
+      await g.ready;
       audio.mix = { master: 1, engine: 0, road: 0, ambience: 0, traffic: 0, music: 0, night: kind === 'night' };
       if (ENGINES[kind]) audio.mix.engine = 1;
       else if (['music', 'traffic'].includes(kind)) audio.mix[kind] = 1;
@@ -147,8 +152,8 @@ try {
         audio.target(g.traffic[i].level, 1); audio.target(g.traffic[i].pan, (i - 1.5) / 2);
       }
       if (kind === 'maximum' || kind === 'night') {
-        g.event('road', { time: .6, duration: .3, level: .3, frequency: 240, endFrequency: 65 });
-        g.event('weather', { time: .6, duration: 2, level: .12, frequency: 140, endFrequency: 65 });
+        g.play('road', g.buffer('crash'), { time: .6, level: 1 });
+        g.play('ambience', g.buffer('thunder'), { time: .6, level: .42 });
       }
       const buffer = await ctx.startRendering();
       let energy = 0, peak = 0, count = 0;

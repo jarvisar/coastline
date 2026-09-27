@@ -51,11 +51,12 @@ export class Parts {
       this.face(low[j], high[j], high[i], color, middle);
     }
   }
-  // Faceted foliage clump, lighter on top.
+  // Faceted foliage clump, lighter on top. Detail -1 is an eight-faced lump
+  // for reflections, which the water blurs and darkens anyway.
   lobe(center, size, seed, color, detail = 0) {
     // Mix coarse and fuller clumps for irregular crowns without making every
     // branch pay for the more detailed silhouette.
-    const g = new THREE.IcosahedronGeometry(1, detail && seed % 3 === 0 ? 1 : 0);
+    const g = detail < 0 ? new THREE.OctahedronGeometry(1) : new THREE.IcosahedronGeometry(1, detail && seed % 3 === 0 ? 1 : 0);
     g.rotateY(randomAt(seed, 3401) * TAU); g.rotateX((randomAt(seed, 3402) - .5) * .5);
     const position = g.attributes.position;
     for (let i = 0; i < position.count; i += 3) {
@@ -159,7 +160,7 @@ function cypress(seed, { lean = 0, limbs = 7, spread = .27, low = .64, mossy = 1
     bark.limb(from, to, .0075 - t * .003, .003, shade(.5));
     const size = .135 + r(40 + i) * .06 - t * .012;
     crown.lobe(to, [size * 1.15, size * (.7 + r(50 + i) * .2), size], seed * 13 + i, greens, 1);
-    reflection.lobe(to, [size * 1.15, size * .8, size], seed * 13 + i, hex('#526948'));
+    reflection.lobe(to, [size * 1.15, size * .8, size], seed * 13 + i, hex('#526948'), -1);
     if (r(60 + i) < .65) crown.lobe([to[0] * .5 + offset(y) * .5, to[1] + .04, to[2] * .5], [size * .95, size * .65, size * .95], seed * 13 + i + 50, greens);
     // Hung past the clump's edge so it shows from above.
     for (let k = 0; k < 5; k++) {
@@ -196,7 +197,7 @@ function oak(seed, { width = .5, lobes = 11, mossy = 1 } = {}) {
     const angle = i * 2.399963 + seed, d = width * Math.sqrt((i + .5) / lobes) * .9, y = .64 + (1 - d / width) * .26 + (r(40 + i) - .5) * .06;
     const size = .17 + r(50 + i) * .09;
     crown.lobe([Math.cos(angle) * d, y, Math.sin(angle) * d], [size, size * .72, size], seed * 17 + i, greens);
-    reflection.lobe([Math.cos(angle) * d, y, Math.sin(angle) * d], [size, size * .72, size], seed * 17 + i, hex('#596c45'));
+    reflection.lobe([Math.cos(angle) * d, y, Math.sin(angle) * d], [size, size * .72, size], seed * 17 + i, hex('#596c45'), -1);
   }
   for (let i = 0; i < 30 * mossy; i++) {
     const angle = r(100 + i) * TAU, d = width * (.55 + r(130 + i) * .6);
@@ -216,7 +217,7 @@ function tupelo(seed) {
   for (let i = 0; i < 7; i++) {
     const t = i / 6, angle = i * 2.2 + seed, d = .1 * Math.sin(t * Math.PI) + .03, size = .12 + r(i) * .05;
     crown.lobe([Math.cos(angle) * d, .5 + t * .42, Math.sin(angle) * d], [size, size * .9, size], seed * 19 + i, greens);
-    reflection.lobe([Math.cos(angle) * d, .5 + t * .42, Math.sin(angle) * d], [size, size * .9, size], seed * 19 + i, hex('#536b4b'));
+    reflection.lobe([Math.cos(angle) * d, .5 + t * .42, Math.sin(angle) * d], [size, size * .9, size], seed * 19 + i, hex('#536b4b'), -1);
     if (i < 5) bark.moss([Math.cos(angle) * (d + size * .6), .46 + t * .4, Math.sin(angle) * (d + size * .6)], .07 + r(20 + i) * .08, .008, seed * 3 + i, MOSS[i % 3]);
   }
   return { trunk: bark.build(), crown: crown.build(), reflection: reflection.build() };

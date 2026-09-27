@@ -28,16 +28,40 @@ export const ENGINES = {
 };
 export const engineFor = (car, journey = 'coast') => ENGINES[car === 'auto' ? journey : car] ?? ENGINES.coast;
 
+// Route sounds. `bed` is low wind (the ocean on the coast) and `gust` is how
+// much it varies. `air` is a higher noise layer. `water` plays near water or
+// lava and `chorus` is an insect or frog loop. `calls` are [kind, weight,
+// level, nearest m, farthest m], one every `interval` seconds, with `space`
+// as their reverb. `enclosure` is a minimum for the echo level and `echo` is
+// its [delay, feedback].
 export const AMBIENCE = {
-  coast: { low: 430, high: 2700, bed: .16, swell: .2, air: .025, wash: .14, rough: 1100, wildlife: 'gull', interval: [8, 18], root: 57 },
-  desert: { low: 580, high: 1500, bed: .065, swell: .1, air: .012, wash: .04, rough: 1700, wildlife: 'wind', interval: [12, 24], root: 50 },
-  snow: { low: 320, high: 1800, bed: .045, swell: .055, air: .016, wash: .055, rough: 620, wildlife: 'owl', interval: [15, 28], root: 54 },
-  jungle: { low: 370, high: 3300, bed: .085, swell: .06, air: .035, wash: .065, rough: 870, wildlife: 'bird', interval: [3, 7], root: 55 },
-  plains: { low: 410, high: 2400, bed: .065, swell: .08, air: .022, wash: .065, rough: 1200, wildlife: 'lark', interval: [7, 15], root: 60 },
-  city: { low: 300, high: 4600, bed: .085, swell: .04, air: .14, wash: .1, rough: 1000, wildlife: 'drip', interval: [2, 5], root: 53 },
-  volcanic: { low: 120, high: 1200, bed: .17, swell: .13, air: .035, wash: .07, rough: 1500, wildlife: 'vent', interval: [5, 12], root: 43 },
-  salt: { low: 520, high: 2100, bed: .07, swell: .12, air: .018, wash: .045, rough: 1900, wildlife: 'flamingo', interval: [9, 20], root: 52 },
-  swamp: { low: 300, high: 1700, bed: .055, swell: .05, air: .014, wash: .03, rough: 760, wildlife: 'frog', interval: [2.5, 6], root: 50 },
+  coast: { bed: .36, low: 420, gust: .2, air: .014, high: 2600, water: 'surf', waterLevel: .4, rough: 1100,
+    calls: [['gull', 1, .55, 25, 110]], interval: [6, 14],
+    space: { decay: 1.3, damping: 4500, echoes: [[.11, .1]] }, echo: [.14, .1] },
+  desert: { bed: .095, low: 560, gust: .55, air: .019, high: 3200, water: 'stream', waterLevel: .07, rough: 1700,
+    calls: [['wren', 3, .45, 30, 90], ['raven', 2, .5, 40, 160], ['hawk', 1, .4, 80, 260]], interval: [9, 20],
+    space: { decay: 2.2, damping: 3800, echoes: [[.16, .3], [.38, .18], [.71, .1]] }, echo: [.19, .18] },
+  snow: { bed: .06, low: 300, gust: .45, air: .011, high: 1800, water: 'lap', waterLevel: .055, rough: 620,
+    calls: [['owl', 6, .5, 40, 180], ['howl', 1, .35, 400, 900]], interval: [14, 28],
+    space: { decay: 2.8, damping: 2800, echoes: [[.4, .18], [1.1, .1]] }, echo: [.32, .12] },
+  jungle: { bed: .055, low: 380, gust: .25, air: .014, high: 3000, water: 'river', waterLevel: .095, chorus: 'jungle', chorusLevel: .095, rough: 870,
+    calls: [['piha', 3, .45, 30, 120], ['trill', 3, .35, 15, 70], ['squawk', 2, .4, 25, 110], ['drip', 1, .25, 3, 12]], interval: [3, 8],
+    space: { decay: 1.5, damping: 3500, echoes: [[.05, .15], [.09, .1]] }, echo: [.07, .15], enclosure: .3 },
+  plains: { bed: .08, low: 420, gust: .5, air: .027, high: 1900, water: 'stream', waterLevel: .07, chorus: 'crickets', chorusLevel: .07, rough: 1200,
+    calls: [['meadowlark', 4, .45, 30, 110], ['bobwhite', 2, .4, 40, 140], ['crow', 2, .4, 60, 220]], interval: [8, 16],
+    space: { decay: .9, damping: 5000 }, echo: [.12, .05] },
+  city: { bed: .08, low: 260, gust: .15, air: .034, high: 4200, rain: .35, rough: 1000,
+    calls: [['drip', 1, .4, 3, 20]], interval: [1.5, 4.5],
+    space: { decay: 1.8, damping: 5000, echoes: [[.023, .25], [.041, .2], [.067, .16], [.097, .12], [.13, .1]] }, echo: [.045, .3], enclosure: .6 },
+  volcanic: { bed: .19, low: 120, gust: .4, air: .016, high: 1300, water: 'lava', waterLevel: .16, rough: 1500,
+    calls: [['steam', 4, .35, 30, 120], ['rumble', 2, .7, 200, 600], ['clatter', 2, .4, 25, 90]], interval: [5, 12],
+    space: { decay: 2.4, damping: 2500, echoes: [[.21, .22], [.52, .14]] }, echo: [.22, .16] },
+  salt: { bed: .12, low: 500, gust: .35, air: .011, high: 2400, rough: 1900,
+    calls: [['flamingo', 3, .55, 50, 220], ['stilt', 2, .35, 25, 90]], interval: [8, 18],
+    space: { decay: .8, damping: 6000 }, echo: [.1, 0] },
+  swamp: { bed: .035, low: 300, gust: .25, air: .006, high: 1700, water: 'lap', waterLevel: .05, chorus: 'swamp', chorusLevel: .07, rough: 760,
+    calls: [['bullfrog', 4, .55, 15, 80], ['greenfrog', 3, .45, 8, 40], ['barredowl', 2, .45, 60, 220], ['heron', 1, .4, 30, 120], ['splash', 1, .35, 10, 50]], interval: [2.5, 6],
+    space: { decay: 1.7, damping: 3200, echoes: [[.11, .12]] }, echo: [.09, .1] },
 };
 
 export const MIX_PRESETS = {

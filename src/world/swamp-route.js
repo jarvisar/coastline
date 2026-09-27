@@ -136,7 +136,7 @@ export function swampVertex(row, column) {
 // Water everywhere past the waterline, bridges included. The limits stay on
 // ground free driving can reach, short of the riprap and the parapets.
 export const swampDrivingRoute = {
-  frame: swampFrame, position: swampPosition, height: swampHeight,
+  frame: swampFrame, position: swampPosition, height: swampHeight, bridge: swampBridgeAt,
   bounds: s => onBridge(s, 6) ? [-4.4, 4.4] : [-7.8, 7.8],
   water: (s, u, height) => height < WATER_LEVEL + .25,
 };

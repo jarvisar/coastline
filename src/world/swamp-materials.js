@@ -1,15 +1,29 @@
 import * as THREE from 'three';
 import { waterClock } from './water.js';
 import { WATER_LEVEL } from './swamp-route.js';
+import { randomAt } from './route.js';
 
-// Wraps at 64 cells so the pattern survives floating-origin rebases and long drives.
+// Value noise from a 64 x 64 table of cell values. Hashing with sin() in the
+// shader cost water and mist a few dozen transcendentals per pixel on phones.
+// One filtered read at the smoothed position blends the four corners the same
+// way. Wraps at 64 cells so the pattern survives floating-origin rebases and long drives.
+const NOISE_SIZE = 64;
+const noiseMap = (() => {
+  const cells = new Uint8Array(NOISE_SIZE * NOISE_SIZE).map((_, i) => Math.floor(randomAt(i, 3307, 0) * 256));
+  const texture = new THREE.DataTexture(cells, NOISE_SIZE, NOISE_SIZE, THREE.RedFormat, THREE.UnsignedByteType);
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  texture.magFilter = texture.minFilter = THREE.LinearFilter;
+  texture.needsUpdate = true;
+  return texture;
+})();
+const noiseUniform = { value: noiseMap };
 const noise = /* glsl */`
-  float swampHash(vec2 p) { p = mod(p, 64.0); return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+  uniform sampler2D swampNoiseMap;
+  float swampHash(vec2 p) { return texelFetch(swampNoiseMap, ivec2(mod(floor(p), 64.0)), 0).r; }
   float swampNoise(vec2 p) {
-    vec2 cell = floor(p), f = fract(p);
+    vec2 cell = mod(floor(p), 64.0), f = fract(p);
     f = f * f * (3.0 - 2.0 * f);
-    return mix(mix(swampHash(cell), swampHash(cell + vec2(1.0, 0.0)), f.x),
-      mix(swampHash(cell + vec2(0.0, 1.0)), swampHash(cell + vec2(1.0)), f.x), f.y);
+    return texture2D(swampNoiseMap, (cell + f + 0.5) / 64.0).r;
   }
 `;
 
@@ -21,7 +35,7 @@ export function createWaterMaterial() {
   const water = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .42, metalness: 0,
     transparent: true, opacity: .64, depthWrite: true });
   water.onBeforeCompile = shader => {
-    shader.uniforms.swampTime = waterClock.time;
+    shader.uniforms.swampTime = waterClock.time; shader.uniforms.swampNoiseMap = noiseUniform;
     shader.vertexShader = 'attribute vec3 swampCoord; varying vec3 vSwamp;\n' + shader.vertexShader;
     shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvSwamp = swampCoord;');
     shader.fragmentShader = 'uniform float swampTime; varying vec3 vSwamp;\n' + noise + shader.fragmentShader;
@@ -47,26 +61,36 @@ export function createWaterMaterial() {
       diffuseColor.a = mix(0.9, 0.57, smoothstep(0.05, 1.1, vSwamp.z)) + weed * 0.1;
     `);
   };
-  water.customProgramCacheKey = () => 'swamp-water-v2';
+  water.customProgramCacheKey = () => 'swamp-water-v3';
   return water;
 }
 
-export function createReflectionMaterial() {
-  const reflection = new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false });
+// Trees, camps and landmarks mirrored under the water, drawn dark (or nearly
+// full strength for lit windows) through the translucent surface. Meshes carry
+// the mirror in their own transform, so instanced reflections reuse the
+// original's instance buffers. Near the waterline trunks join their
+// reflections exactly. Only the submerged silhouette wavers, with a shared
+// world-space phase.
+export function createReflectionMaterial(strength) {
+  const reflection = new THREE.MeshBasicMaterial({ color: new THREE.Color(strength, strength, strength), vertexColors: true, toneMapped: false });
   reflection.onBeforeCompile = shader => {
     shader.uniforms.swampTime = waterClock.time;
     shader.uniforms.swampOrigin = waterClock.origin;
     shader.vertexShader = 'uniform float swampTime; uniform float swampOrigin; varying float vReflectionDepth;\n' + shader.vertexShader;
-    shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>', `
-      #include <begin_vertex>
-      vReflectionDepth = ${WATER_LEVEL.toFixed(1)} - (modelMatrix * vec4(position, 1.0)).y;
-      float worldZ = (modelMatrix * vec4(position, 1.0)).z - swampOrigin;
-      // Near the waterline trunks join their reflections exactly. Only the
-      // submerged silhouette wavers, with a shared world-space phase.
+    shader.vertexShader = shader.vertexShader.replace('#include <project_vertex>', `
+      vec4 reflected = vec4(transformed, 1.0);
+      #ifdef USE_INSTANCING
+        reflected = instanceMatrix * reflected;
+      #endif
+      reflected = modelMatrix * reflected;
+      vec3 still = reflected.xyz;
+      vReflectionDepth = ${WATER_LEVEL.toFixed(1)} - still.y;
       float distortion = smoothstep(0.0, 5.0, vReflectionDepth);
       // Integer cycles per 4096 m match the water clock's origin wrapping.
-      transformed.x += sin(worldZ * (6.28318530718 * 1173.0 / 4096.0) + position.y * 2.4 + swampTime * 0.8) * 0.16 * distortion;
-      transformed.z += sin(position.x * 1.1 + position.y * 3.1 - swampTime * 0.65) * 0.08 * distortion;
+      reflected.x += sin((still.z - swampOrigin) * (6.28318530718 * 1173.0 / 4096.0) + still.y * 2.4 + swampTime * 0.8) * 0.16 * distortion;
+      reflected.z += sin(still.x * 1.1 + still.y * 3.1 - swampTime * 0.65) * 0.08 * distortion;
+      vec4 mvPosition = viewMatrix * reflected;
+      gl_Position = projectionMatrix * mvPosition;
     `);
     shader.fragmentShader = 'varying float vReflectionDepth;\n' + shader.fragmentShader;
     shader.fragmentShader = shader.fragmentShader.replace('#include <color_fragment>', `
@@ -75,7 +99,7 @@ export function createReflectionMaterial() {
       diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.009, 0.021, 0.034), smoothstep(2.0, 30.0, vReflectionDepth) * 0.72);
     `);
   };
-  reflection.customProgramCacheKey = () => 'swamp-reflections-v1';
+  reflection.customProgramCacheKey = () => 'swamp-reflections-v2';
   return reflection;
 }
 
@@ -83,7 +107,7 @@ export function createReflectionMaterial() {
 export function createMistMaterial() {
   const mist = new THREE.MeshBasicMaterial({ color: '#8da5b6', transparent: true, opacity: .13, depthWrite: false, side: THREE.DoubleSide, forceSinglePass: true });
   mist.onBeforeCompile = shader => {
-    shader.uniforms.swampTime = waterClock.time;
+    shader.uniforms.swampTime = waterClock.time; shader.uniforms.swampNoiseMap = noiseUniform;
     shader.vertexShader = 'attribute vec3 mistCoord; varying vec3 vMist;\n' + shader.vertexShader;
     shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvMist = mistCoord;');
     shader.fragmentShader = 'uniform float swampTime; varying vec3 vMist;\n' + noise + shader.fragmentShader;
@@ -96,7 +120,7 @@ export function createMistMaterial() {
       diffuseColor.a *= smoothstep(0.38, 0.8, bank * 0.62 + wisp * 0.38) * vMist.z;
     `);
   };
-  mist.customProgramCacheKey = () => 'swamp-mist-v2';
+  mist.customProgramCacheKey = () => 'swamp-mist-v3';
   return mist;
 }
 

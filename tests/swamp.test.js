@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { CHUNK_LENGTH, roadX, smoothstep } from '../src/world/route.js';
+import { CHUNK_LENGTH, roadX, smoothstep, positionAt } from '../src/world/route.js';
 import { SWAMP_STEP, SWAMP_COLUMN_COUNT, WATER_LEVEL, BAYOU_SPACING, swampColumns, swampVertex, swampGround, swampHeight, swampRoadHeight,
   swampBridgeAt, onBridge, bankEdge, swampDrivingRoute } from '../src/world/swamp-route.js';
 import { swampDiscoveries } from '../src/world/swamp-discoveries.js';
@@ -93,10 +93,15 @@ test('swamp chunks keep scenery off the road, clip the ground at the water and d
       }
     });
     for (const name of ['swamp-ground', 'swamp-water', 'swamp-road', 'center-lines', 'guardrails', 'cypress-trunks', 'cypress-crowns', 'dead-snags',
-      'sawgrass', 'lily-pads', 'riprap', 'swamp-mist', 'fireflies', 'firefly-reflections', 'swamp-reflections', 'swamp-basin']) assert.ok(names.has(name), `${name} missing from chunk ${index}`);
-    const reflection = chunk.group.getObjectByName('swamp-reflections');
-    assert.equal(reflection.userData.ambientOcclusion, false);
-    assert.equal(reflection.castShadow, false);
+      'sawgrass', 'lily-pads', 'riprap', 'swamp-mist', 'fireflies', 'firefly-reflections', 'cypress-trunks-reflection', 'dead-snags-reflection'])
+      assert.ok(names.has(name), `${name} missing from chunk ${index}`);
+    // Reflections hang under the water and borrow their originals' instance buffers.
+    const mirrors = []; chunk.group.traverse(object => { if (object.name.endsWith('-reflection')) mirrors.push(object); });
+    for (const mirror of mirrors) {
+      assert.ok(mirror.scale.y === -1 && mirror.position.y === WATER_LEVEL * 2 && !mirror.castShadow && !mirror.receiveShadow);
+      assert.equal(mirror.userData.ambientOcclusion, false);
+      if (mirror.isInstancedMesh) assert.ok(chunk.group.children.some(other => other !== mirror && other.instanceMatrix === mirror.instanceMatrix && other.instanceColor === mirror.instanceColor));
+    }
     assert.equal(new Set(chunk.owned).size, chunk.owned.length, 'shared glow buffers must only be disposed once');
     const ground = chunk.terrain.geometry.attributes.position;
     for (let i = 0; i < ground.count; i++) assert.ok(ground.getY(i) >= WATER_LEVEL - .031, 'ground left under the water');
@@ -136,6 +141,9 @@ test('the swamp world lights the nearest discoveries in their own colours and fo
     world.update(s);
     assert.equal(world.glowGeometry.attributes.position.version, version, 'stationary halos need no repeated upload');
     assert.deepEqual(world.headlights.position.toArray(), car.car.position.toArray());
+    // One basin under the car, not one per chunk.
+    const road = positionAt(s, 0);
+    assert.deepEqual(world.basin.position.toArray(), [road.x, -48, road.z + world.origin]);
   }
   car.setCar('formula'); world.animate(13, car); assert.equal(world.headlights.visible, false);
   car.setCar('auto'); world.animate(14, car); assert.equal(world.headlights.visible, true);

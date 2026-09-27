@@ -8,7 +8,6 @@ import { SWAMP_STEP, SWAMP_COLUMN_COUNT, WATER_LEVEL, swampVertex, swampGround, 
   bayouAmount, bankEdge, swampNoise, islandField, ISLAND_THRESHOLD } from './swamp-route.js';
 import { swampDiscoveries, swampDiscoveryNear as nearCamp, swampPad, swampDriveway } from './swamp-discoveries.js';
 import { material, createWaterMaterial, createReflectionMaterial, createMistMaterial, createFireflyMaterial } from './swamp-materials.js';
-import { swampReflectionGeometry } from './swamp-reflections.js';
 import { SwampSky } from './swamp-sky.js';
 import { cypressTrees, oakTrees, snagTrees, palmettoGeometry, reedTufts, lilyClusters, swampRocks, swampLogs, egretGeometry, heronGeometry,
   gatorGeometry, baskingGatorGeometry, Parts } from './swamp-assets.js';
@@ -36,9 +35,7 @@ const railMaterial = material('#ffffff', { roughness: .6, metalness: .25 });
 // Unlit so windows and lanterns read as light from inside.
 const glowMaterial = new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false });
 const waterMaterial = createWaterMaterial();
-const reflectionMaterial = createReflectionMaterial();
-const basinMaterial = new THREE.MeshBasicMaterial({ color: '#142735', toneMapped: false });
-const basinGeometry = new THREE.PlaneGeometry(1400, CHUNK_LENGTH + 256).rotateX(-Math.PI / 2);
+const reflectionMaterial = createReflectionMaterial(.055), litReflectionMaterial = createReflectionMaterial(.8);
 const mistMaterial = createMistMaterial();
 const fireflyMaterial = createFireflyMaterial();
 const fireflyReflectionMaterial = createFireflyMaterial(.42);
@@ -46,8 +43,8 @@ const boxGeometry = new THREE.BoxGeometry(1, 1, 1);
 const shrubGeometry = (() => { const parts = new Parts(), leaf = new THREE.Color('#f2f4ea'); parts.lobe([0, .5, 0], [1, .8, 1], 7, leaf); parts.lobe([.45, .35, .2], [.55, .5, .55], 8, leaf); return parts.build(); })();
 const dummy = new THREE.Object3D();
 registerChunkResources('swamp', { terrainMaterial, roadMaterial, shoulderMaterial, edgeMaterial, centerMaterial, barkMaterial, canopyMaterial, frondMaterial,
-  stoneMaterial, wildlifeMaterial, campMaterial, concreteMaterial, railMaterial, glowMaterial, waterMaterial, reflectionMaterial, basinMaterial, mistMaterial, fireflyMaterial, fireflyReflectionMaterial,
-  boxGeometry, basinGeometry, shrubGeometry, cypressTrees, oakTrees, snagTrees, palmettoGeometry, reedTufts, lilyClusters, swampRocks, swampLogs, egretGeometry,
+  stoneMaterial, wildlifeMaterial, campMaterial, concreteMaterial, railMaterial, glowMaterial, waterMaterial, reflectionMaterial, litReflectionMaterial, mistMaterial, fireflyMaterial, fireflyReflectionMaterial,
+  boxGeometry, shrubGeometry, cypressTrees, oakTrees, snagTrees, palmettoGeometry, reedTufts, lilyClusters, swampRocks, swampLogs, egretGeometry,
   heronGeometry, gatorGeometry, baskingGatorGeometry, swampLandmarkGeometry, wheelMaterial });
 // Fireflies each discovery gathers, and how far they wander from it.
 const SWARMS = { 'fishing-camp': [14, 15], 'hollow-cypress': [34, 17], chapel: [16, 22], riverboat: [8, 22] };
@@ -82,8 +79,6 @@ export class SwampChunk {
     this.discoveries = swampDiscoveries(this.start - 40, this.start + CHUNK_LENGTH + 40);
     this.bridge = swampBridgeAt(this.start + CHUNK_LENGTH / 2);
     this.buildTerrain(); this.buildRoad(); this.buildBridge(); this.buildScenery(); this.buildDiscoveries();
-    const reflection = this.addMesh(swampReflectionGeometry(this.group), reflectionMaterial, 'swamp-reflections');
-    reflection.receiveShadow = false; reflection.userData.ambientOcclusion = false;
     this.buildMist();
     delete this.discoveries;
     finalizeChunkTransforms(this.group);
@@ -92,9 +87,25 @@ export class SwampChunk {
     const mesh = new THREE.Mesh(geometry, mat); mesh.name = name; mesh.castShadow = shadows; mesh.receiveShadow = true;
     this.group.add(mesh); this.owned.push(geometry); return mesh;
   }
-  instances(geometry, mat, items, name, { shadows = true, ambientOcclusion = true } = {}) {
+  instances(geometry, mat, items, name, { shadows = true, ambientOcclusion = true, reflection = null } = {}) {
     if (!items.length) return;
-    for (const part of splitBatch(items)) batch(this.group, geometry, mat, part, name, shadows, ambientOcclusion);
+    for (const part of splitBatch(items)) {
+      const mesh = batch(this.group, geometry, mat, part, name, shadows, ambientOcclusion);
+      if (reflection) this.reflect(mesh, reflection);
+    }
+  }
+  // Mirrored under the water in the mesh's own transform. Instanced copies
+  // share the original's matrices and colours, so a reflection costs a draw
+  // but no extra buffers. Trees and landmarks reflect a cheap silhouette.
+  reflect(source, geometry = source.geometry, mat = reflectionMaterial) {
+    const mirror = source.isInstancedMesh ? new THREE.InstancedMesh(geometry, mat, 0) : new THREE.Mesh(geometry, mat);
+    if (mirror.isInstancedMesh) {
+      mirror.count = source.count; mirror.instanceMatrix = source.instanceMatrix; mirror.instanceColor = source.instanceColor;
+      computeInstanceBounds(mirror); mirror.boundingSphere.radius += .5; // The waver.
+    }
+    mirror.name = `${source.name}-reflection`; mirror.position.y = WATER_LEVEL * 2; mirror.scale.y = -1;
+    mirror.receiveShadow = false; mirror.userData.ambientOcclusion = false;
+    this.group.add(mirror); return mirror;
   }
   // Faces under the water are clipped away since the water hides them. The
   // water is a flat sheet over the same grid, shaded by depth.
@@ -171,11 +182,6 @@ export class SwampChunk {
     this.sampleGround = terrainSampler(this.terrain);
     const waterGeometry = geometryFrom(water, waterColors, { swampCoord: [coords, 3] });
     const surface = this.addMesh(waterGeometry, waterMaterial, 'swamp-water'); surface.renderOrder = ORDER.water;
-    // Continuous below both water and land: copying the clipped surface here
-    // would expose holes beside islands when viewed at an oblique angle.
-    const basin = new THREE.Mesh(basinGeometry, basinMaterial); basin.name = 'swamp-basin';
-    basin.position.set(positionAt(this.start + CHUNK_LENGTH / 2, 0).x, -48, -CHUNK_LENGTH / 2);
-    basin.userData.ambientOcclusion = false; this.group.add(basin);
   }
   ribbon(ranges, lift, mat, name) {
     const vertices = [], at = (t, u) => positionAt(t, u, roadHeight(t) + lift);
@@ -400,21 +406,21 @@ export class SwampChunk {
       fly(s, u, Math.max(g, WATER_LEVEL) + .5 + random() ** 1.5 * 3.2);
     }
     cypressTrees.forEach((model, i) => {
-      this.instances(model.trunk, barkMaterial, cypress[i].trunks, 'cypress-trunks');
+      this.instances(model.trunk, barkMaterial, cypress[i].trunks, 'cypress-trunks', { reflection: model.reflection });
       this.instances(model.crown, canopyMaterial, cypress[i].crowns, 'cypress-crowns');
     });
     oakTrees.forEach((model, i) => {
-      this.instances(model.trunk, barkMaterial, oaks[i].trunks, 'oak-trunks');
+      this.instances(model.trunk, barkMaterial, oaks[i].trunks, 'oak-trunks', { reflection: model.reflection });
       this.instances(model.crown, canopyMaterial, oaks[i].crowns, 'oak-crowns');
     });
-    snagTrees.forEach((model, i) => this.instances(model, barkMaterial, snags[i], 'dead-snags'));
+    snagTrees.forEach((model, i) => this.instances(model, barkMaterial, snags[i], 'dead-snags', { reflection: model }));
     this.instances(palmettoGeometry, frondMaterial, palmettos, 'palmettos', { shadows: false });
     this.instances(shrubGeometry, canopyMaterial, shrubs, 'hammock-shrubs');
     this.instances(shrubGeometry, canopyMaterial, farShrubs, 'far-canopy', { shadows: false, ambientOcclusion: false });
     reedTufts.forEach((model, i) => this.instances(model, frondMaterial, reeds[i], 'sawgrass', { shadows: false }));
     lilyClusters.forEach((model, i) => this.instances(model, frondMaterial, lilies[i], 'lily-pads', { shadows: false }));
     swampRocks.forEach((model, i) => this.instances(model, stoneMaterial, rocks[i], 'riprap'));
-    swampLogs.forEach((model, i) => this.instances(model, barkMaterial, logs[i], 'fallen-logs'));
+    swampLogs.forEach((model, i) => this.instances(model, barkMaterial, logs[i], 'fallen-logs', { reflection: model }));
     this.instances(egretGeometry, wildlifeMaterial, egrets, 'egrets');
     this.instances(heronGeometry, wildlifeMaterial, herons, 'herons');
     this.instances(gatorGeometry, wildlifeMaterial, gators, 'alligators', { shadows: false });
@@ -426,16 +432,19 @@ export class SwampChunk {
       if (site.s < this.start || site.s >= this.start + CHUNK_LENGTH) continue;
       if (site.kind === 'fishing-camp') {
         const { body, glow } = buildSwampCamp(site, this.start);
-        this.addMesh(body, campMaterial, 'fishing-camp', true);
-        this.addMesh(glow, glowMaterial, 'camp-windows').receiveShadow = false;
+        const camp = this.addMesh(body, campMaterial, 'fishing-camp', true), windows = this.addMesh(glow, glowMaterial, 'camp-windows');
+        windows.receiveShadow = false;
+        this.reflect(camp); this.reflect(windows, glow, litReflectionMaterial);
       } else {
         // Shared models, one instance each, so every chunk reuses the same buffers.
         const matrix = landmarkMatrix(site).premultiply(new THREE.Matrix4().makeTranslation(0, 0, this.start)), model = swampLandmarkGeometry[site.kind];
-        this.landmark(model.body, campMaterial, matrix, site.kind, { shadows: true });
-        this.landmark(model.glow, glowMaterial, matrix, `${site.kind}-glow`, { ambientOcclusion: false });
+        const body = this.landmark(model.body, campMaterial, matrix, site.kind, { shadows: true });
+        const glow = this.landmark(model.glow, glowMaterial, matrix, `${site.kind}-glow`, { ambientOcclusion: false });
+        // The chapel stands back on dry land, where its bank would hide any reflection.
+        if (model.reflection) { this.reflect(body, model.reflection); this.reflect(glow, model.glow, litReflectionMaterial); }
         // The spinning wheel would cast a still shadow and ambient occlusion, so it skips both.
-        if (model.wheel) this.landmark(model.wheel, wheelMaterial, matrix.clone().multiply(new THREE.Matrix4().makeTranslation(...SWAMP_LANDMARKS[site.kind].wheel)),
-          'riverboat-wheel', { ambientOcclusion: false });
+        if (model.wheel) this.reflect(this.landmark(model.wheel, wheelMaterial, matrix.clone().multiply(new THREE.Matrix4().makeTranslation(...SWAMP_LANDMARKS[site.kind].wheel)),
+          'riverboat-wheel', { ambientOcclusion: false }));
         if (site.kind === 'chapel') this.addMesh(chapelDrive(site, this.start), campMaterial, 'chapel-drive');
       }
       this.features.discoveries.push(site);
@@ -450,7 +459,7 @@ export class SwampChunk {
     const mesh = new THREE.InstancedMesh(geometry, mat, 1); mesh.name = name; mesh.setMatrixAt(0, matrix);
     mesh.castShadow = shadows; mesh.receiveShadow = shadows;
     if (!ambientOcclusion) mesh.userData.ambientOcclusion = false;
-    computeInstanceBounds(mesh); this.group.add(mesh);
+    computeInstanceBounds(mesh); this.group.add(mesh); return mesh;
   }
   // Three drifting layers of low mist, thin over the road so the car stays clear.
   buildMist() {
@@ -498,6 +507,12 @@ export class SwampWorld {
     this.scene = scene; this.chunkSource = chunkSource; this.chunks = new Map(); this.origin = 0; this.center = null;
     this.effects = new THREE.Group(); this.effects.name = 'swamp-night-effects'; scene.add(this.effects);
     this.sky = new SwampSky(this.effects);
+    // Deep water seen through the translucent surface. One sheet follows the
+    // car rather than one per chunk, so the overlaps never draw twice. It lies
+    // below both water and land: copying the clipped surface instead would
+    // expose holes beside islands when viewed at an oblique angle.
+    this.basin = new THREE.Mesh(new THREE.PlaneGeometry(2400, 2400).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: '#142735', toneMapped: false }));
+    this.basin.name = 'swamp-basin'; this.basin.userData.ambientOcclusion = false; this.effects.add(this.basin);
     // Two shadowless lights follow the nearest discoveries, each tinted to match.
     this.lights = Array.from({ length: 2 }, () => { const light = new THREE.PointLight('#ffbf6e', 90, 26, 2); this.effects.add(light); return light; });
     this.glowGeometry = new THREE.BufferGeometry();
@@ -527,6 +542,7 @@ export class SwampWorld {
     this.s = s; this.origin = Math.floor(s / 1024) * 1024;
     updateResidentChunks(this, Math.floor(s / CHUNK_LENGTH), SwampChunk);
     positionResidentChunks(this);
+    const center = positionAt(s, 0); this.basin.position.set(center.x, -48, center.z + this.origin);
     const sites = swampDiscoveries(s - 300, s + 300), key = sites.map(site => site.index).join(',');
     if (key !== this.siteKey || this.origin !== this.lightOrigin) {
       const tint = new THREE.Color();
@@ -557,5 +573,6 @@ export class SwampWorld {
     this.chunkSource?.dispose();
     for (const chunk of this.chunks.values()) chunk.dispose(); this.chunks.clear(); this.effects.removeFromParent();
     this.headlights.dispose(); this.sky.dispose(); this.glowGeometry.dispose(); this.glowMaterial.dispose();
+    this.basin.geometry.dispose(); this.basin.material.dispose();
   }
 }

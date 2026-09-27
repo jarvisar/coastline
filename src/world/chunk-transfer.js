@@ -53,11 +53,16 @@ export function unpackChunk(data) {
     for (const geometry of this.owned) geometry.dispose();
     this.group.traverse(object => { if (object.isInstancedMesh) object.dispose(); });
   } };
+  // Meshes that shared an attribute in the worker, like a reflection reusing
+  // its original's instance matrices, share it again here: one GPU buffer.
+  const attributes = new Map();
   function attribute(value, instanced = false) {
     if (!value) return null;
+    if (attributes.has(value.array)) return attributes.get(value.array);
     const Attribute = instanced ? THREE.InstancedBufferAttribute : THREE.BufferAttribute;
     const result = new Attribute(value.array, value.itemSize, value.normalized);
     result.setUsage(value.usage); result.gpuType = value.gpuType;
+    attributes.set(value.array, result);
     return result;
   }
   try {

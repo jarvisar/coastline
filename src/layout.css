@@ -91,6 +91,7 @@ body[data-journey=city] .chooser-heading { background: #eef1f4; }
   .chooser-heading { top: -16px; }
   .chooser-options { grid-template-columns: 1fr; }
   .chooser-card { grid-template-columns: 88px minmax(0, 1fr); }
+  .journey-card { grid-template-columns: min(136px, 36%) minmax(0, 1fr); }
 }
 
 /* Short landscape screens drop secondary readouts. */

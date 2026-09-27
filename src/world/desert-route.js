@@ -249,6 +249,7 @@ export const DESERT_VERGE = 22;
 
 export const desertDrivingRoute = {
   frame: roadFrame,
+  bridge: desertBridgeAt,
   position: desertPosition,
   height: desertHeight,
   bounds: s => {

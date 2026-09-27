@@ -424,6 +424,7 @@ export const COAST_VERGE = { ocean: 18, inland: 22 };
 
 export const coastalDrivingRoute = {
   frame: roadFrame,
+  bridge: bridgeAt,
   position: positionAt,
   height: terrainHeight,
   bounds(s) {

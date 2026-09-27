@@ -22,7 +22,7 @@ const renderAt = (page, s, view = 'Medium view') => page.evaluate(async ({ s, vi
   a.rendering.snap(); a.rendering.update(a.vehicle.car, 10, a.world.origin); a.rendering.resize();
   a.world.animate(8.5, a.vehicle); a.rendering.render();
   const chunks = [...a.world.chunks.values()], info = a.rendering.renderer.info;
-  const names = ['swamp-ground', 'swamp-water', 'swamp-basin', 'swamp-road', 'swamp-reflections', 'swamp-mist', 'fireflies', 'firefly-reflections'];
+  const names = ['swamp-ground', 'swamp-water', 'swamp-road', 'cypress-trunks-reflection', 'swamp-mist', 'fireflies', 'firefly-reflections'];
   return { s, view: a.rendering.viewLabel, chunks: chunks.length, resident: a.graphics.settings.chunks.behind + a.graphics.settings.chunks.ahead + 1,
     layers: Object.fromEntries(names.map(name => [name, chunks.filter(chunk => chunk.group.getObjectByName(name)).length])),
     discoveries: chunks.flatMap(chunk => chunk.features.discoveries), sky: !!a.rendering.scene.getObjectByName('swamp-sky'),

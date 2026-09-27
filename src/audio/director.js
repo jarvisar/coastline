@@ -1,81 +1,85 @@
 import { AMBIENCE } from './profiles.js';
+import { Music } from './music.js';
 
-const note = midi => 440 * 2 ** ((midi - 69) / 12);
-// Sparse suspended chords, fully synthesised. The route sets the key and
-// cruising adds occasional upper notes.
-const CHORDS = [[0, 7, 14], [-3, 4, 12], [-5, 2, 9], [-7, 0, 7]];
+// Calls that sometimes get an answer from further away.
+const ANSWERS = new Set(['gull', 'raven', 'owl', 'piha', 'meadowlark', 'crow', 'bullfrog', 'barredowl']);
+
+// Schedules gusts, surf, wildlife, thunder and music. Seeded, so runs repeat.
 export class SoundDirector {
-  constructor() { this.seed = 0x51ca9; this.reset(); }
+  constructor() { this.seed = 0x51ca9; this.music = new Music(); this.reset(); }
   random() {
     this.seed ^= this.seed << 13; this.seed ^= this.seed >>> 17; this.seed ^= this.seed << 5;
     return (this.seed >>> 0) / 4294967296;
   }
-  reset(now = 0) { this.nextWildlife = now + 2.5; this.nextWeather = now + 12; this.nextThunder = Infinity; this.lastLightning = -Infinity; this.nextBeat = now; this.beat = 0; this.chord = 0; this.musicActive = false; }
+  reset(now = 0) {
+    this.nextCall = now + 2.5; this.answers = [];
+    this.nextThunder = Infinity; this.thunderDelay = 0; this.lastLightning = -Infinity; this.nextRumble = now + 25;
+    this.gust = .5; this.gustTarget = .5; this.nextGust = now; this.lastUpdate = now;
+    // Starts mid-wave so the ocean is audible right away.
+    this.waves = [{ at: now - 1.2, size: .8, rise: 1.5 }]; this.nextWave = now + 5; this.surf = { body: 0, foam: 0 };
+    this.music.reset();
+  }
   update(audio, state, now, scene = null) {
     const { graph: g, journey, mix } = audio, profile = AMBIENCE[journey];
-    if (now >= this.nextWildlife) {
-      this.nextWildlife = now + profile.interval[0] + this.random() * (profile.interval[1] - profile.interval[0]);
-      if (mix.ambience > 0) this.wildlife(g, profile.wildlife, now, 1 - state.motion * .45);
+    const dt = Math.min(.25, Math.max(0, now - this.lastUpdate)); this.lastUpdate = now;
+    // A new gust target every 2 to 7 seconds.
+    if (now >= this.nextGust) { this.gustTarget = this.random() ** 1.5; this.nextGust = now + 2 + this.random() * 5; }
+    this.gust += (this.gustTarget - this.gust) * (1 - Math.exp(-dt / 1.8));
+    if (profile.water === 'surf') this.updateSurf(now);
+    if (now >= this.nextCall) {
+      this.nextCall = now + profile.interval[0] + this.random() * (profile.interval[1] - profile.interval[0]);
+      if (mix.ambience > 0) this.call(g, profile, now, state.motion);
     }
-    if (scene?.lightning > .05 && now - this.lastLightning > 6) {
-      this.lastLightning = now; this.nextThunder = now + 1.4 + this.random() * 1.6;
-    }
-    if ((!scene && now >= this.nextWeather) || now >= this.nextThunder) {
-      this.nextThunder = Infinity;
-      this.nextWeather = now + 24 + this.random() * 25;
-      if (journey === 'city' && mix.ambience > 0) g.event('weather', { time: now, duration: 4.5, frequency: 140, endFrequency: 65, level: .12, pan: this.random() - .5, attack: .7 });
-    }
-    if (mix.music <= 0) {
-      for (const pad of g.pads) audio.target(pad.level, 0, .4);
-      this.musicActive = false;
-      return;
-    }
-    if (!this.musicActive) { this.musicActive = true; this.nextBeat = now; this.beat = 0; }
-    // Short lookahead. Don't replay a backlog after the tab was suspended.
-    if (this.nextBeat < now - .15) this.nextBeat = now;
-    if (this.nextBeat <= now + .1) {
-      if (this.beat % 8 === 0) this.chord = Math.floor(this.beat / 8) % CHORDS.length;
-      const chord = CHORDS[this.chord];
-      if (this.beat % 2 === 0 && (this.beat % 4 === 0 || state.motion > .25)) {
-        const pitch = chord[Math.floor(this.random() * chord.length)] + (this.beat % 4 === 0 ? 12 : 24);
-        g.event('music', { time: Math.max(now, this.nextBeat), duration: 2.5, frequency: note(profile.root + pitch), level: .035 + state.motion * .012, attack: .025, pan: this.random() * 1.1 - .55 });
-      }
-      this.beat++; this.nextBeat += 60 / 76;
-    }
-    const chord = CHORDS[this.chord];
-    for (let i = 0; i < g.pads.length; i++) {
-      audio.target(g.pads[i].frequency, note(profile.root - 12 + chord[i]), 1.2);
-      audio.target(g.pads[i].level, .026 + .005 * Math.sin(now * .21 + i * 2), 1);
-    }
-  }
-  wildlife(g, kind, now, distance) {
-    const pan = (this.random() * 1.6 - .8), variation = .88 + this.random() * .24;
-    const sing = (offset, frequency, endFrequency, duration, level) => g.event('ambience', {
-      time: now + offset, frequency: frequency * variation, endFrequency: endFrequency * variation,
-      duration, level: level * distance, pan, attack: .04,
+    this.answers = this.answers.filter(answer => {
+      if (answer.time > now) return true;
+      if (mix.ambience > 0) this.emit(g, answer.kind, answer.level, answer.distance, answer.pan, now, state.motion, 1);
+      return false;
     });
-    if (kind === 'vent') {
-      g.event('weather', { time: now, duration: 3.5, frequency: 115, endFrequency: 45, level: .07 * distance, pan, attack: .8 });
-      g.event('weather', { time: now + .8, duration: 2, frequency: 950, endFrequency: 350, level: .018 * distance, pan, attack: .35 });
-    } else if (kind === 'gull') {
-      sing(0, 1050, 1550, .24, .015); sing(.28, 1500, 740, .65, .02); sing(1, 1100, 800, .45, .012);
-    } else if (kind === 'bird' || kind === 'lark') {
-      const base = kind === 'bird' ? 1800 : 2400;
-      for (let i = 0; i < 4; i++) sing(i * .19, base + i % 2 * 650, base + (i % 2 ? -200 : 800), .14 + this.random() * .09, .012);
-    } else if (kind === 'owl') {
-      sing(0, 390, 330, .48, .028); sing(.7, 360, 310, .75, .024);
-    } else if (kind === 'wind') {
-      g.event('weather', { time: now, duration: 3.5, frequency: 640, endFrequency: 350, level: .05, pan, attack: .9 });
-    } else if (kind === 'flamingo') {
-      // A nasal, goose-like chatter answered further off.
-      for (let i = 0; i < 3; i++) sing(i * .2, 830 - i * 40, 640, .13, .016);
-      sing(.85, 760, 590, .18, .009); sing(1.05, 800, 620, .14, .008);
-    } else if (kind === 'frog') {
-      // Bullfrogs grunt low. Peepers answer high and quick.
-      if (this.random() < .55) { sing(0, 150, 118, .34, .03); sing(.42, 142, 112, .38, .026); sing(.92, 152, 120, .3, .02); }
-      else for (let i = 0; i < 5; i++) sing(i * .17, 2750, 3050, .07, .009);
-    } else if (kind === 'drip') {
-      sing(0, 1700, 700, .11, .012); sing(.32, 2200, 900, .09, .008);
+    if (profile.rain) this.weather(g, scene, now, mix);
+    this.music.update(g, journey, state.motion, now, mix.music);
+  }
+  // Waves at irregular intervals. Each rises, breaks, then washes out.
+  updateSurf(now) {
+    if (now >= this.nextWave) {
+      const set = this.random() < .2;
+      this.waves.push({ at: now, size: (set ? .85 : .5) + this.random() * .3, rise: 1.3 + this.random() * 1.2 });
+      if (this.waves.length > 4) this.waves.shift();
+      this.nextWave = now + 5.5 + this.random() * 6;
     }
+    let body = 0, foam = 0;
+    for (const { at, size, rise } of this.waves) {
+      const t = now - at;
+      body += size * (t < rise ? (t / rise) ** 2 : Math.exp(-(t - rise) / 1.8));
+      foam += size * (t < rise ? 0 : Math.min(1, (t - rise) / .4) * Math.exp(-Math.max(0, t - rise - .4) / 2.8));
+    }
+    this.surf = { body: Math.min(1.4, body), foam: Math.min(1.4, foam) };
+  }
+  call(g, profile, now, motion) {
+    let pick = this.random() * profile.calls.reduce((sum, [, weight]) => sum + weight, 0), entry = profile.calls[0];
+    for (const candidate of profile.calls) { pick -= candidate[1]; if (pick <= 0) { entry = candidate; break; } }
+    const [kind, , level, near, far] = entry, distance = near + (far - near) * this.random() ** 1.5, pan = this.random() * 1.7 - .85;
+    if (!this.emit(g, kind, level, distance, pan, now, motion, distance > (near + far) / 2 ? 1 : 0) || !ANSWERS.has(kind) || this.random() > .35) return;
+    this.answers.push({ time: now + 1.2 + this.random() * 2.5, kind, level, distance: Math.min(far * 1.4, distance * (1.3 + this.random())), pan: Math.max(-.9, Math.min(.9, -pan * .7 + this.random() * .4 - .2)) });
+  }
+  // Distance sets level and cutoff. Far calls use the wetter variant.
+  emit(g, kind, level, distance, pan, time, motion, variant) {
+    const buffer = g.buffer(kind, variant) ?? g.buffer(kind, 1 - variant);
+    return Boolean(buffer) && g.play('ambience', buffer, {
+      time, pan, rate: .94 + this.random() * .12,
+      level: level * .55 * Math.min(1, 18 / distance) * (1 - motion * .35),
+      cutoff: Math.min(16000, Math.max(1400, 16000 * (25 / distance) ** .55)),
+    });
+  }
+  // Thunder follows lightning after a random delay; longer delays are quieter.
+  // Distant thunder also plays every 50 to 90 seconds.
+  weather(g, scene, now, mix) {
+    if (scene?.lightning > .05 && now - this.lastLightning > 6) {
+      this.lastLightning = now; this.thunderDelay = .6 + this.random() * 2.4; this.nextThunder = now + this.thunderDelay;
+    }
+    if (now >= this.nextRumble && now - this.lastLightning > 15) { this.thunderDelay = 4 + this.random() * 3; this.nextThunder = now; this.nextRumble = now + 50 + this.random() * 40; }
+    if (now < this.nextThunder) return;
+    this.nextThunder = Infinity;
+    const buffer = g.buffer('thunder', Math.floor(this.random() * 2)) ?? g.buffer('thunder', 0), near = Math.max(0, 1 - this.thunderDelay / 7);
+    if (mix.ambience > 0 && buffer) g.play('ambience', buffer, { time: now, level: .12 + near * .3, rate: .88 + this.random() * .2, pan: this.random() * 1.2 - .6, cutoff: 1200 + near * 5000 });
   }
 }
