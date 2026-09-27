@@ -102,10 +102,11 @@ await mobile.waitForTimeout(750);
 assert.equal(await mobile.locator('.touch-controls').isVisible(), false);
 await mobile.screenshot({ path: '.artifacts/coastline-mobile.png' });
 await mobile.getByRole('button', { name: 'Let’s drive' }).tap();
-const accelerate = mobile.getByRole('group', { name: 'Virtual joystick', exact: true });
-const bounds = await accelerate.boundingBox();
+// The stick floats: it anchors where the thumb lands on the scene, and dragging a stick radius up drives.
+const thumb = { x: 270, y: 520 };
 const client = await mobile.context().newCDPSession(mobile);
-await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 - 36 }] });
+await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [thumb] });
+await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ ...thumb, y: thumb.y - 36 }] });
 await mobile.waitForFunction(() => window.__coastline.vehicle.speed > 3);
 await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
 assert.equal(await mobile.evaluate(() => window.__coastline.input.state.forward), false);

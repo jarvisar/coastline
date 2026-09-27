@@ -62,9 +62,11 @@ try {
   await mobile.waitForFunction(() => window.__coastline.journey === 'snow' && !window.__coastline.changingJourney);
   await mobile.click('#start'); await mobile.waitForTimeout(2500);
   await mobile.screenshot({ path: '.artifacts/snow-mobile.png' });
-  const forward = await mobile.getByRole('group', { name: 'Virtual joystick', exact: true }).boundingBox();
+  // The stick floats: it anchors where the thumb lands on the scene, and dragging a stick radius up drives.
+  const thumb = { x: 270, y: 520 };
   const touch = await mobile.context().newCDPSession(mobile);
-  await touch.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: forward.x + forward.width / 2, y: forward.y + forward.height / 2 - 36 }] });
+  await touch.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [thumb] });
+  await touch.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ ...thumb, y: thumb.y - 36 }] });
   await mobile.waitForFunction(() => window.__coastline.vehicle.speed > 4);
   await touch.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
   assert.ok(await mobile.evaluate(() => document.documentElement.scrollWidth <= innerWidth));

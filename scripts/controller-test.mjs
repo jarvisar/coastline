@@ -14,7 +14,13 @@ try {
   await page.goto(process.env.TEST_URL || 'http://127.0.0.1:5173');
   await page.waitForFunction(() => window.__coastline && document.querySelector('#loading.loaded'));
   await page.waitForTimeout(700);
-  assert.equal(await page.locator('.touch-controls').isVisible(), false, 'Driving controls stay hidden on the menu');
+  // The floating stick is hidden until touched, so the controls have no size of
+  // their own. Ask whether a touch would drive, as TouchStick.available() does.
+  const touchReady = () => page.evaluate(() => {
+    const controls = document.querySelector('.touch-controls');
+    return !controls.closest('[inert]') && controls.getClientRects().length > 0 && getComputedStyle(controls).visibility === 'visible';
+  });
+  assert.equal(await touchReady(), false, 'Driving controls stay hidden on the menu');
   const connect = () => page.evaluate(() => {
     window.testPads = [null, { index: 1, mapping: 'standard', connected: true, axes: [0, 0, 0, 0], buttons: Array.from({ length: 17 }, () => ({ pressed: false, value: 0 })) }];
   });
@@ -23,7 +29,7 @@ try {
   const press = async index => { await button(index, 1); await frames(); await button(index, 0); await frames(); };
   await connect();
   await page.waitForFunction(() => document.body.dataset.controller === 'true');
-  assert.equal(await page.locator('.touch-controls').isVisible(), false);
+  assert.equal(await touchReady(), false);
   assert.equal(await page.locator('#welcome .menu-hint').count(), 0, 'the title screen carries no control help');
   assert.equal(await page.locator('.touch-hint').isVisible(), false);
   assert.equal(await page.locator('#fps-counter').isVisible(), false);
@@ -214,7 +220,7 @@ try {
   await page.evaluate(() => { window.testPads = []; });
   await page.waitForFunction(() => document.body.dataset.controller === 'false');
   assert.equal(await page.evaluate(() => window.__coastline.paused), true);
-  assert.equal(await page.locator('.touch-controls').isVisible(), false, 'Driving controls stay hidden while paused');
+  assert.equal(await touchReady(), false, 'Driving controls stay hidden while paused');
   assert.equal(await page.evaluate(() => window.__coastline.input.state.forward), false);
   await connect(); await frames(); await press(9);
   assert.equal(await page.evaluate(() => window.__coastline.paused), false);
@@ -227,7 +233,7 @@ try {
   assert.equal(await page.evaluate(() => window.__coastline.paused), false);
   await page.evaluate(() => { window.testPads = []; }); await frames();
   await page.locator('#resume').tap();
-  assert.equal(await page.locator('.touch-controls').isVisible(), true);
+  assert.equal(await touchReady(), true);
   await page.keyboard.down('w');
   await page.waitForFunction(() => window.__coastline.vehicle.speed > 3);
   await page.keyboard.up('w');

@@ -68,8 +68,10 @@ try {
   await mobile.getByRole('button', { name: 'Volcanic Rift', exact: true }).tap(); await ready(mobile);
   await mobile.click('#start'); await mobile.waitForTimeout(400);
   await mobile.screenshot({ path: '.artifacts/volcanic-mobile.png' });
-  const stick = await mobile.getByRole('group', { name: 'Virtual joystick', exact: true }).boundingBox(), touch = await mobile.context().newCDPSession(mobile);
-  await touch.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: stick.x + stick.width / 2, y: stick.y + stick.height / 2 - 36 }] });
+  // The stick floats: it anchors where the thumb lands on the scene, and dragging a stick radius up drives.
+  const thumb = { x: 270, y: 520 }, touch = await mobile.context().newCDPSession(mobile);
+  await touch.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [thumb] });
+  await touch.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ ...thumb, y: thumb.y - 36 }] });
   await mobile.waitForFunction(() => window.__coastline.vehicle.speed > 4);
   await touch.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
   assert.ok(await mobile.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
