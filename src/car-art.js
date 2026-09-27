@@ -212,6 +212,10 @@ const SPECIAL_ART = {
 function accessories(entry, draw) {
   const { slab, shape2d, disc, px, py, size, l, cz, cabinLength, roofY, radius } = draw;
   const rack = (front, rear) => slab(front, rear, roofY, roofY + .09, '#3a4441', 1);
+  const spare = () => [
+    slab(l / 2 + .02, l / 2 + .32, 1.22 - radius, 1.22 + radius, '#303b36', 6),
+    `<circle cx="${px(l / 2 + .17)}" cy="${py(1.22)}" r="${size(radius * .46)}" fill="#f5e8c8"/>`,
+  ];
   switch (entry.trim ?? entry.shape.name) {
     // Hay bale seen end-on
     case 'plains': return [
@@ -237,9 +241,19 @@ function accessories(entry, draw) {
       rack(cz - .9, cz + .9),
       shape2d([[cz - 1.45, roofY + .09], [cz - 1.2, roofY + .3], [cz + 1.2, roofY + .3], [cz + 1.45, roofY + .09]], '#f5e8c8'),
     ];
-    case 'desert': return [
-      slab(l / 2 + .02, l / 2 + .32, 1.22 - radius, 1.22 + radius, '#303b36', 6),
-      `<circle cx="${px(l / 2 + .17)}" cy="${py(1.22)}" r="${size(radius * .46)}" fill="#f5e8c8"/>`,
+    case 'desert': case 'volcanic': return spare();
+    // Jerrycans on the rack as well as the spare
+    case 'salt': return [
+      ...spare(),
+      rack(cz - .9, cz + .9),
+      slab(cz - .17, cz + .33, roofY + .08, roofY + .52, '#c8412f', 2),
+      slab(cz - .1, cz + .06, roofY + .52, roofY + .58, '#bfc4b9', 1),
+    ];
+    // Upside-down canoe
+    case 'swamp': return [
+      rack(cz - .9, cz + .9),
+      shape2d([[cz - 2.05, roofY + .1], [cz - 2.15, roofY + .22], [cz - 1.4, roofY + .4], [cz + 1.6, roofY + .4], [cz + 2.35, roofY + .22], [cz + 2.25, roofY + .1]], '#3e6a4c'),
+      slab(cz - 2, cz + 2.2, roofY + .09, roofY + .14, '#2d4d38', 1),
     ];
     case 'snow': return [rack(cz - .95, cz + .95), slab(cz - .85, cz + .95, roofY + .06, roofY + .44, '#48545c', 4)];
     case 'jungle': return [

@@ -55,6 +55,18 @@ export const CARS = {
     name: 'Rain Commuter', kind: 'classic', trim: 'city', paint: '#7a3b47', shape: CLASSIC_SHAPE,
     stats: { topSpeed: 26.4, acceleration: 11.8, braking: 20.4, grip: 1.02, offRoad: 17.6 },
   },
+  volcanic: {
+    name: 'Basalt Rover', kind: 'classic', trim: 'volcanic', paint: '#abb5a3', shape: CLASSIC_SHAPE,
+    stats: { topSpeed: 27, acceleration: 11.4, braking: 19.6, grip: .98, offRoad: 18.8 },
+  },
+  salt: {
+    name: 'Mirage Tourer', kind: 'classic', trim: 'salt', paint: '#eeece6', shape: CLASSIC_SHAPE,
+    stats: { topSpeed: 28.8, acceleration: 11, braking: 19.6, grip: .98, offRoad: 18.2 },
+  },
+  swamp: {
+    name: 'Bayou Wagon', kind: 'classic', trim: 'swamp', paint: '#cdb88f', shape: CLASSIC_SHAPE,
+    stats: { topSpeed: 26.8, acceleration: 11.3, braking: 19.8, grip: 1, offRoad: 18.6 },
+  },
   hatchback: {
     name: 'City Hatch', kind: 'built', paint: '#6fa9c2', shape: shape('hatchback'),
     stats: { topSpeed: 26.2, acceleration: 12.1, braking: 20.6, grip: 1.1, offRoad: 16.8 },
