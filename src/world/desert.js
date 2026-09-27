@@ -10,10 +10,13 @@ import { desertDiscoveries, desertDiscoveryClears, desertFuelApronWidth } from '
 import { buildDesertDiscoveries } from './desert-discovery-scenery.js';
 import { solidPost, solidRocks } from './colliders.js';
 
-const groundMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 1 });
-const rockMaterial = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 1, flatShading: true });
-const barkMaterial = new THREE.MeshStandardMaterial({ color: '#745038', roughness: 1, flatShading: true });
-const plantMaterial = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 1, flatShading: true, side: THREE.DoubleSide });
+// Matte scenery uses Lambert shading. It looks the same as physical shading on
+// rough surfaces and costs much less per pixel. Roads keep physical shading for
+// their faint sheen, as do water and metal.
+const groundMaterial = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
+const rockMaterial = new THREE.MeshLambertMaterial({ color: '#ffffff', flatShading: true });
+const barkMaterial = new THREE.MeshLambertMaterial({ color: '#745038', flatShading: true });
+const plantMaterial = new THREE.MeshLambertMaterial({ color: '#ffffff', flatShading: true, side: THREE.DoubleSide });
 const asphaltMaterial = new THREE.MeshStandardMaterial({ color: '#797669', roughness: 1 });
 const sandMaterial = new THREE.MeshStandardMaterial({ color: '#dcb07a', roughness: 1 });
 const edgeMaterial = new THREE.MeshStandardMaterial({ color: '#f6dfac', roughness: 1 });

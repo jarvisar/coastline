@@ -66,17 +66,21 @@ function cloudShaded(material, key, compile = null) {
   return material;
 }
 const standard = (options, key) => cloudShaded(new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 1, flatShading: true, ...options }), key);
+// Matte scenery uses Lambert shading. It looks the same as physical shading on
+// rough surfaces and costs much less per pixel. Roads keep physical shading for
+// their faint sheen, as do water and metal.
+const matte = (options, key) => cloudShaded(new THREE.MeshLambertMaterial({ color: '#ffffff', flatShading: true, ...options }), key);
 
 // Crust, causeway and far field share one faceted batch.
-export const crustMaterial = standard({ vertexColors: true, roughness: .86 }, 'salt-crust-v1');
+export const crustMaterial = matte({ vertexColors: true }, 'salt-crust-v1');
 // Asphalt, gravel and paint in one vertex-coloured ribbon batch.
 export const roadMaterial = standard({ vertexColors: true, roughness: .93, flatShading: false }, 'salt-road-v1');
-export const rockMaterial = standard({ vertexColors: true, roughness: .95 }, 'salt-rock-v1');
-export const plantMaterial = standard({ vertexColors: true, side: THREE.DoubleSide }, 'salt-plant-v1');
-export const pileMaterial = standard({ vertexColors: true, roughness: .8 }, 'salt-pile-v1');
+export const rockMaterial = matte({ vertexColors: true }, 'salt-rock-v1');
+export const plantMaterial = matte({ vertexColors: true, side: THREE.DoubleSide }, 'salt-plant-v1');
+export const pileMaterial = matte({ vertexColors: true }, 'salt-pile-v1');
 // Landmarks. Instance colours repaint the lodge's roof, door and shutters.
-export const discoveryMaterial = standard({ vertexColors: true, roughness: .88 }, 'salt-discovery-v1');
-export const birdMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .9, flatShading: true });
+export const discoveryMaterial = matte({ vertexColors: true }, 'salt-discovery-v1');
+export const birdMaterial = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
 export const postMaterial = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: .8 });
 
 // Transparent film over the mirror beneath each pool: pale where it runs over

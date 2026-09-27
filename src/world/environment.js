@@ -15,7 +15,10 @@ import { buildCoastalSea } from './coastal-sea.js';
 import { CoastalSky } from './coastal-sky.js';
 import { solidModel, solidPost, solidRocks, solidSpan } from './colliders.js';
 
-const terrainMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 1 });
+// Matte scenery uses Lambert shading. It looks the same as physical shading on
+// rough surfaces and costs much less per pixel. Roads keep physical shading for
+// their faint sheen, as do water and metal.
+const terrainMaterial = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
 const waterMaterial = createWaterMaterial();
 const roadMaterial = new THREE.MeshStandardMaterial({ color: '#424e58', roughness: 1 });
 const shoulderMaterial = new THREE.MeshStandardMaterial({ color: '#b9b9a7', roughness: 1 });
@@ -24,10 +27,10 @@ const centerMaterial = new THREE.MeshStandardMaterial({ color: '#ecc967', roughn
 const foamMaterial = createSurfMaterial();
 const rollingSurfMaterial = createSurfMaterial(true);
 const rockWashMaterial = createRockWashMaterial();
-const pineMaterial = new THREE.MeshStandardMaterial({ color: '#ffffff', vertexColors: true, flatShading: true, roughness: 1 });
-const trunkMaterial = new THREE.MeshStandardMaterial({ color: '#78664a', roughness: 1 });
-const rockMaterial = new THREE.MeshStandardMaterial({ color: '#ffffff', flatShading: true, roughness: 1 });
-const cragMaterial = new THREE.MeshStandardMaterial({ color: '#ffffff', vertexColors: true, flatShading: true, roughness: .92 });
+const pineMaterial = new THREE.MeshLambertMaterial({ color: '#ffffff', vertexColors: true, flatShading: true });
+const trunkMaterial = new THREE.MeshLambertMaterial({ color: '#78664a' });
+const rockMaterial = new THREE.MeshLambertMaterial({ color: '#ffffff', flatShading: true });
+const cragMaterial = new THREE.MeshLambertMaterial({ color: '#ffffff', vertexColors: true, flatShading: true });
 cragMaterial.onBeforeCompile = shader => {
   shader.vertexShader = 'varying float vStoneHeight;\n' + shader.vertexShader;
   shader.vertexShader = shader.vertexShader.replace('#include <project_vertex>', `
@@ -45,13 +48,13 @@ cragMaterial.onBeforeCompile = shader => {
   `);
 };
 cragMaterial.customProgramCacheKey = () => 'coastal-tidal-stone-v1';
-const postMaterial = new THREE.MeshStandardMaterial({ color: '#f4e9cd', roughness: 1 });
-const blossomMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 1 });
+const postMaterial = new THREE.MeshLambertMaterial({ color: '#f4e9cd' });
+const blossomMaterial = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
 const trunkGeometry = new THREE.CylinderGeometry(.16, .25, 1, 5);
 const rockGeometry = new THREE.DodecahedronGeometry(1, 0);
 const postGeometry = new THREE.BoxGeometry(.22, 1.25, .25);
 const capGeometry = new THREE.BoxGeometry(.235, .18, .265);
-const capMaterial = new THREE.MeshStandardMaterial({ color: '#466050' });
+const capMaterial = new THREE.MeshLambertMaterial({ color: '#466050' });
 const railGeometry = new THREE.BoxGeometry(1, 1, 1);
 const railMaterial = new THREE.MeshStandardMaterial({ color: '#aeb9b8', roughness: .72, metalness: .18 });
 const matrix = new THREE.Object3D();

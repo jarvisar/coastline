@@ -81,7 +81,7 @@ const sloopGeometries = [
   sloop({ topsides: '#f3f1ea', bottom: '#2d4a66', stripe: '#b8483c', deck: '#e4ded0', sailColor: '#f8f5ec', jibColor: '#f1ebdc' }),
   sloop({ topsides: '#2f4a63', bottom: '#8d3b35', stripe: '#f1efe6', deck: '#ddd6c6', sailColor: '#e8d9b5', jibColor: '#d9c197' }),
 ];
-const sloopMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: .9, side: THREE.DoubleSide });
+const sloopMaterial = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, side: THREE.DoubleSide });
 sloopMaterial.onBeforeCompile = shader => {
   shader.uniforms.coastTime = waterClock.time;
   shader.vertexShader = 'uniform float coastTime;\n' + shader.vertexShader;

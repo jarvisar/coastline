@@ -164,8 +164,10 @@ function cattleSkull() {
 }
 
 export const desertDiscoveryAssets = {fuelStop: fuelStop(), windTower: windTower(), windRotor: windRotor(), trough: trough(), skull: cattleSkull(), box: new THREE.BoxGeometry(1,1,1)};
-export const desertDiscoveryMaterial = new THREE.MeshStandardMaterial({vertexColors: true, flatShading: true, roughness: 1});
-export const desertFoundationMaterial = new THREE.MeshStandardMaterial({color: '#b49c76', roughness: 1, flatShading: true});
+// Lambert shading looks the same as physical shading on these rough surfaces
+// and costs much less per pixel.
+export const desertDiscoveryMaterial = new THREE.MeshLambertMaterial({vertexColors: true, flatShading: true});
+export const desertFoundationMaterial = new THREE.MeshLambertMaterial({color: '#b49c76', flatShading: true});
 export const desertApronMaterial = new THREE.MeshStandardMaterial({color: '#797669', roughness: 1, side: THREE.DoubleSide});
 export const desertRotorMaterial = desertDiscoveryMaterial.clone();
 desertRotorMaterial.onBeforeCompile = shader => {

@@ -246,8 +246,8 @@ function turbineRotor() {
 
 export const plainsDiscoveryAssets = { barn: barn(), silo: silo(), farmhouse: farmhouse(), windmillTower: windmillTower(), windmillRotor: windmillRotor(),
   tractor: tractor(), grainElevator: grainElevator(), turbineTower: turbineTower(), turbineRotor: turbineRotor(), shed: fieldShed(), box: new THREE.BoxGeometry(1, 1, 1) };
-export const plainsDiscoveryMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 1 });
-export const plainsFoundationMaterial = new THREE.MeshStandardMaterial({ color: '#b1a892', roughness: 1, flatShading: true });
+export const plainsDiscoveryMaterial = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
+export const plainsFoundationMaterial = new THREE.MeshLambertMaterial({ color: '#b1a892', flatShading: true });
 // Rotors spin about local z in the vertex shader, off the shared water clock,
 // so a whole row animates in one draw call.
 function rotorMaterial(rate, key) {

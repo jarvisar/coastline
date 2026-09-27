@@ -124,10 +124,12 @@ export const discoveryAssets = {
   box: new THREE.BoxGeometry(1, 1, 1),
   foundation: new THREE.CylinderGeometry(1, 1.05, 1, 8),
 };
-export const discoveryMaterial = new THREE.MeshStandardMaterial({vertexColors: true, flatShading: true, roughness: .95});
-export const timberMaterial = new THREE.MeshStandardMaterial({color: '#a49678', flatShading: true, roughness: 1});
-export const footingMaterial = new THREE.MeshStandardMaterial({color: '#b7b6a5', flatShading: true, roughness: 1});
-export const pathMaterial = new THREE.MeshStandardMaterial({color: '#c4c5b6', roughness: 1, side: THREE.DoubleSide});
+// Lambert shading looks the same as physical shading on these rough surfaces
+// and costs much less per pixel.
+export const discoveryMaterial = new THREE.MeshLambertMaterial({vertexColors: true, flatShading: true});
+export const timberMaterial = new THREE.MeshLambertMaterial({color: '#a49678', flatShading: true});
+export const footingMaterial = new THREE.MeshLambertMaterial({color: '#b7b6a5', flatShading: true});
+export const pathMaterial = new THREE.MeshLambertMaterial({color: '#c4c5b6', side: THREE.DoubleSide});
 function swimmingMaterial(whale = false) {
   const material = discoveryMaterial.clone();
   material.onBeforeCompile = shader => {

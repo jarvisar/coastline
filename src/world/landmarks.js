@@ -3,9 +3,9 @@ import { registerChunkResources } from './chunk-resources.js';
 import { bridgeAt, pondAt, pondRadius, roadHeight, groundHeight, positionAt, terrainCell, terrainColumns, randomAt, smoothstep, TERRAIN_STEP, CHUNK_LENGTH } from './route.js';
 import { createPondMaterial } from './water.js';
 
-const bridgeMaterial = new THREE.MeshStandardMaterial({ color: '#d8c9ab', emissive: '#766b54', emissiveIntensity: .08, roughness: 1, flatShading: true, side: THREE.DoubleSide });
+const bridgeMaterial = new THREE.MeshLambertMaterial({ color: '#d8c9ab', emissive: '#766b54', emissiveIntensity: .08, flatShading: true, side: THREE.DoubleSide });
 const lakeMaterial = createPondMaterial();
-const bankMaterial = new THREE.MeshStandardMaterial({vertexColors: true, flatShading: true, roughness: 1, transparent: true, depthWrite: false});
+const bankMaterial = new THREE.MeshLambertMaterial({vertexColors: true, flatShading: true, transparent: true, depthWrite: false});
 registerChunkResources('landmarks', { bridgeMaterial, lakeMaterial, bankMaterial });
 
 function geometry(vertices, colors, colorSize = 3) {

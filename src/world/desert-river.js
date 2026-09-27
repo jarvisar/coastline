@@ -6,9 +6,9 @@ import { registerChunkResources } from './chunk-resources.js';
 export const desertWaterClock = { value: 0 };
 const waterMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .38, metalness: .025,
   emissive: '#697c88', emissiveIntensity: .1 });
-const shoreMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, flatShading: true });
+const shoreMaterial = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
 const shallowWater = new THREE.Color('#bbb9ac'), shelfWater = new THREE.Color('#91a0a3'), deepWater = new THREE.Color('#6c7f8a');
-const timberMaterial = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 1 });
+const timberMaterial = new THREE.MeshLambertMaterial({ color: '#ffffff' });
 const ironMaterial = new THREE.MeshStandardMaterial({ color: '#574c3e', roughness: .85 });
 const boxGeometry = new THREE.BoxGeometry(1, 1, 1);
 const up = new THREE.Vector3(0, 1, 0);

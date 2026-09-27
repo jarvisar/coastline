@@ -16,8 +16,12 @@ import { buildPlainsDiscoveries } from './plains-discovery-scenery.js';
 import { PLAINS_RAIL_REACH } from './plains-railway.js';
 import { solidModel, solidPost, solidSpan } from './colliders.js';
 
+// Matte scenery uses Lambert shading. It looks the same as physical shading on
+// rough surfaces and costs much less per pixel. Roads keep physical shading for
+// their faint sheen, as do water and metal.
 const material = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: 1, flatShading: true, ...extra });
-const terrainMaterial = material('#ffffff', { vertexColors: true });
+const matte = (color, extra = {}) => new THREE.MeshLambertMaterial({ color, flatShading: true, ...extra });
+const terrainMaterial = matte('#ffffff', { vertexColors: true });
 // Furrows and headlands are drawn in the fragment shader from the per-vertex
 // `furrow` attribute (see facetShade). Rows fade to flat colour where they would alias.
 const headlandTint = new THREE.Color('#c4ac7d');
@@ -38,27 +42,27 @@ const edgeMaterial = material('#f0e9d4', { flatShading: false });
 const centerMaterial = material('#e6c04a', { flatShading: false });
 const dirtMaterial = material('#ffffff', { vertexColors: true, flatShading: false, side: THREE.DoubleSide });
 // Flat shaded so the light shows the bank's relief.
-const bankMaterial = material('#ffffff', { vertexColors: true, side: THREE.DoubleSide });
+const bankMaterial = matte('#ffffff', { vertexColors: true, side: THREE.DoubleSide });
 const waterMaterial = createWaterMaterial(true);
 const pondMaterial = createPondMaterial();
-const leavesMaterial = material('#ffffff', { vertexColors: true });
-const barkMaterial = material('#6a563f');
-const shrubMaterial = material('#ffffff');
-const strawMaterial = material('#ffffff', { vertexColors: true });
-const timberMaterial = material('#74603f');
-const poleMaterial = material('#6e5c45');
+const leavesMaterial = matte('#ffffff', { vertexColors: true });
+const barkMaterial = matte('#6a563f');
+const shrubMaterial = matte('#ffffff');
+const strawMaterial = matte('#ffffff', { vertexColors: true });
+const timberMaterial = matte('#74603f');
+const poleMaterial = matte('#6e5c45');
 const wireMaterial = material('#3f3c36', { flatShading: false });
 // Lighter than the wire colour so fences don't read as dark specks from the car.
-const railMaterial = material('#7f6946', { flatShading: false });
+const railMaterial = matte('#7f6946', { flatShading: false });
 const metalMaterial = material('#8e948f', { metalness: .15 });
-const concreteMaterial = material('#bcb7a8');
+const concreteMaterial = matte('#bcb7a8');
 // Signs, rails and field stones carry their own instance colours.
-const paintedMaterial = material('#ffffff');
-const hideMaterial = material('#ffffff', { vertexColors: true });
-const rushMaterial = material('#ffffff', { side: THREE.DoubleSide });
+const paintedMaterial = matte('#ffffff');
+const hideMaterial = matte('#ffffff', { vertexColors: true });
+const rushMaterial = matte('#ffffff', { side: THREE.DoubleSide });
 // Shading is in vertex colours, multiplied by the instance tint.
 // Blades are modelled on both sides, so single sided is enough.
-const fringeMaterial = material('#ffffff', { vertexColors: true });
+const fringeMaterial = matte('#ffffff', { vertexColors: true });
 const boxGeometry = new THREE.BoxGeometry(1, 1, 1);
 const poleGeometry = new THREE.CylinderGeometry(.85, 1, 1, 6);
 const shrubGeometry = new THREE.IcosahedronGeometry(1, 0);
