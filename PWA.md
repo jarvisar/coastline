@@ -24,7 +24,7 @@ Serve `sw.js` from the same URL every time with `Cache-Control: no-cache`. The o
 
 ## Icons and tests
 
-`node scripts/pwa-icons.mjs` regenerates the icons from the favicon and `node scripts/pwa-screenshots.mjs` updates the install screenshots.
+`node scripts/pwa-icons.mjs` regenerates the icons from the favicon and `node scripts/pwa-screenshots.mjs` updates the phone install screenshot. The wide install screenshot comes from `npm run showcase:slices`.
 
 ```sh
 node scripts/pwa-test.mjs

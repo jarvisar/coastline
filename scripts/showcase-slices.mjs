@@ -13,6 +13,9 @@ const saltPosition = Number(process.env.SALT_POSITION ?? position + 80);
 if (!Number.isFinite(saltPosition)) throw new Error('SALT_POSITION must be a finite road distance.');
 const root = fileURLToPath(new URL('../', import.meta.url));
 const output = resolve(root, process.env.OUTPUT ?? 'showcase/scene-slices.png');
+// The preview doubles as the website's wide install screenshot. A run sent
+// elsewhere with OUTPUT leaves it alone.
+const installScreenshot = process.env.OUTPUT ? null : resolve(root, 'public/screenshots/scene-slices.jpg');
 const seed = process.env.SEED ?? '4817';
 if (!/^\d+$/.test(seed) || Number(seed) > 0xffffffff) throw new Error('SEED must be an unsigned 32-bit integer.');
 const width = 4032, height = 2268, sliceWidth = width / routes.length;
@@ -128,11 +131,17 @@ try {
     }
     const preview = document.createElement('canvas'); preview.width = 1792; preview.height = 1008;
     preview.getContext('2d').drawImage(canvas, 0, 0, preview.width, preview.height);
-    return { png: canvas.toDataURL('image/png').split(',')[1], preview: preview.toDataURL('image/png').split(',')[1], maxShift };
+    return { png: canvas.toDataURL('image/png').split(',')[1], preview: preview.toDataURL('image/png').split(',')[1],
+      screenshot: preview.toDataURL('image/jpeg', .85).split(',')[1], maxShift };
   }, { images, width, height, sliceWidth, padding });
   await mkdir(dirname(output), { recursive: true });
   await writeFile(output, Buffer.from(result.png, 'base64'));
   await writeFile(output.replace(/\.png$/i, '') + '-preview.png', Buffer.from(result.preview, 'base64'));
+  if (installScreenshot) {
+    await mkdir(dirname(installScreenshot), { recursive: true });
+    await writeFile(installScreenshot, Buffer.from(result.screenshot, 'base64'));
+    console.log(`Saved install screenshot: ${installScreenshot}`);
+  }
   console.log(`Maximum elevation correction: ${result.maxShift.toFixed(1)} px`);
   console.log(`Saved ${width}×${height} image: ${output}`);
 } finally {

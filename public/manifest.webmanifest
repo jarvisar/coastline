@@ -10,7 +10,7 @@
   "background_color": "#d5e7d9",
   "theme_color": "#c2e7e8",
   "screenshots": [
-    { "src": "screenshots/desktop.jpg", "sizes": "1280x800", "type": "image/jpeg", "form_factor": "wide", "label": "A scenic drive along the Pacific Coast on desktop" },
+    { "src": "screenshots/scene-slices.jpg", "sizes": "1792x1008", "type": "image/jpeg", "form_factor": "wide", "label": "Eight Coastline routes side by side, from the Pacific Coast to the cypress swamp" },
     { "src": "screenshots/mobile.jpg", "sizes": "540x960", "type": "image/jpeg", "form_factor": "narrow", "label": "Coastline with touch driving controls on mobile" }
   ],
   "icons": [

@@ -84,7 +84,7 @@ To play on your phone, open the Network URL that Vite prints while on the same W
 
 Scenery is in [src/world/](src/world/), driving is in [vehicle.js](src/vehicle.js) and scene setup is in [main.js](src/main.js). Most browser tests need the dev server running, e.g. `npm run test:browser`. The rest are listed in [package.json](package.json). They use Chrome at its default Windows path; set `CHROME_PATH` or `TEST_URL` to change that. Reports go to `.artifacts/`.
 
-`npm run showcase:slices` regenerates the image at the top of this page. Set `SEED`, `POSITION` or `OUTPUT` to change it; `SALT_POSITION` frames the salt slice independently.
+`npm run showcase:slices` regenerates the image at the top of this page and the wide screenshot shown when installing the website. Set `SEED`, `POSITION` or `OUTPUT` to change it; `SALT_POSITION` frames the salt slice independently. A run with `OUTPUT` set leaves the install screenshot alone.
 
 More docs:
 
