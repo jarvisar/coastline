@@ -7,7 +7,7 @@ import { CHUNK_LENGTH, randomAt, seededRandom, smoothstep, lerp, positionAt } fr
 import { SWAMP_STEP, SWAMP_COLUMN_COUNT, WATER_LEVEL, swampVertex, swampGround, swampRoadHeight as roadHeight, swampBridgeAt, onBridge,
   bayouAmount, bankEdge, swampNoise, islandField, ISLAND_THRESHOLD } from './swamp-route.js';
 import { swampDiscoveries, swampDiscoveryNear as nearCamp, swampPad, swampDriveway } from './swamp-discoveries.js';
-import { material, createWaterMaterial, createReflectionMaterial, createMistMaterial, createFireflyMaterial } from './swamp-materials.js';
+import { material, bakeLantern, lanternLit, createWaterMaterial, createReflectionMaterial, createMistMaterial, createFireflyMaterial } from './swamp-materials.js';
 import { SwampSky } from './swamp-sky.js';
 import { cypressTrees, oakTrees, snagTrees, palmettoGeometry, reedTufts, lilyClusters, swampRocks, swampLogs, egretGeometry, heronGeometry,
   gatorGeometry, baskingGatorGeometry, Parts } from './swamp-assets.js';
@@ -20,18 +20,19 @@ import { solidSpan } from './colliders.js';
 import { CarHeadlights } from './headlights.js';
 
 const terrainMaterial = material('#ffffff', { vertexColors: true });
-const roadMaterial = material('#3b4046', { roughness: .8, flatShading: false });
+const roadMaterial = material('#3b4046', { flatShading: false });
 const shoulderMaterial = material('#8b8676', { flatShading: false });
 const edgeMaterial = material('#dcdbd2', { flatShading: false });
 const centerMaterial = material('#d8b03c', { flatShading: false });
 const barkMaterial = material('#ffffff', { vertexColors: true, side: THREE.DoubleSide });
 const canopyMaterial = material('#ffffff', { vertexColors: true });
 const frondMaterial = material('#ffffff', { vertexColors: true, side: THREE.DoubleSide });
-const stoneMaterial = material('#ffffff', { vertexColors: true, roughness: .95 });
-const wildlifeMaterial = material('#ffffff', { vertexColors: true, roughness: .8 });
-const campMaterial = material('#ffffff', { vertexColors: true, roughness: .9 });
-const concreteMaterial = material('#a9a8a1', { roughness: .95 });
-const railMaterial = material('#ffffff', { roughness: .6, metalness: .25 });
+const stoneMaterial = material('#ffffff', { vertexColors: true });
+const wildlifeMaterial = material('#ffffff', { vertexColors: true });
+// Lit by the camp and landmark lanterns baked into their models.
+const campMaterial = lanternLit(material('#ffffff', { vertexColors: true }));
+const concreteMaterial = material('#a9a8a1');
+const railMaterial = material('#ffffff');
 // Unlit so windows and lanterns read as light from inside.
 const glowMaterial = new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false });
 const waterMaterial = createWaterMaterial();
@@ -49,8 +50,8 @@ registerChunkResources('swamp', { terrainMaterial, roadMaterial, shoulderMateria
 // Fireflies each discovery gathers, and how far they wander from it.
 const SWARMS = { 'fishing-camp': [14, 15], 'hollow-cypress': [34, 17], chapel: [16, 22], riverboat: [8, 22] };
 
-// Fireflies draw over the mist.
-const ORDER = { water: 1, mist: 2, fireflies: 3 };
+// Lantern light lies on the water, under the mist. Fireflies draw over both.
+const ORDER = { water: 1, pools: 2, mist: 3, fireflies: 4 };
 
 function geometryFrom(vertices, colors, extra = {}) {
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
@@ -431,7 +432,8 @@ export class SwampChunk {
     for (const site of this.discoveries) {
       if (site.s < this.start || site.s >= this.start + CHUNK_LENGTH) continue;
       if (site.kind === 'fishing-camp') {
-        const { body, glow } = buildSwampCamp(site, this.start);
+        const { body, glow } = buildSwampCamp(site, this.start), lamp = swampDiscoveryLight(site);
+        bakeLantern(body, { ...lamp, position: lamp.position.clone().setZ(lamp.position.z + this.start) });
         const camp = this.addMesh(body, campMaterial, 'fishing-camp', true), windows = this.addMesh(glow, glowMaterial, 'camp-windows');
         windows.receiveShadow = false;
         this.reflect(camp); this.reflect(windows, glow, litReflectionMaterial);
@@ -461,12 +463,13 @@ export class SwampChunk {
     if (!ambientOcclusion) mesh.userData.ambientOcclusion = false;
     computeInstanceBounds(mesh); this.group.add(mesh); return mesh;
   }
-  // Three drifting layers of low mist, thin over the road so the car stays clear.
+  // One drifting sheet of low mist, thin over the road so the car stays clear.
+  // Each stacked sheet shaded every pixel again, so one denser sheet stands in for three.
   buildMist() {
     const vertices = [], coords = [];
     const rows = Array.from({ length: CHUNK_LENGTH / 16 + 1 }, (_, i) => this.start + i * 16);
     const columns = [-440, -370, -300, -240, -190, -150, -115, -85, -60, -40, -26, -16, -10, 0, 10, 16, 26, 40, 60, 85, 115, 150, 190, 240, 300, 370, 440, 500];
-    for (const [height, strength, offset] of [[.8, 1, 0], [2, .75, 37.3], [3.6, .5, 91.7]]) {
+    for (const [height, strength, offset] of [[1.4, 1.5, 0]]) {
       for (let i = 0; i < rows.length - 1; i++) for (let j = 0; j < columns.length - 1; j++) {
         const at = (s, u) => {
           const p = positionAt(s, u, WATER_LEVEL + height), a = Math.abs(u), land = smoothstep(.2, 1.2, swampGround(s, u) - height * .2);
@@ -502,6 +505,36 @@ export class SwampChunk {
   }
 }
 
+// A lantern's light on the water or lawn around it: an additive glow with the
+// falloff and angle a point light at that height would give, over surfaces
+// about as dark as the water. Only the discoveries' own models are lit, baked.
+const POOL_ALBEDO = .1, poolGeometry = new THREE.CircleGeometry(1, 40).rotateX(-Math.PI / 2);
+function lanternPool() {
+  const pool = new THREE.Mesh(poolGeometry, new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false,
+    uniforms: { light: { value: new THREE.Color() }, height: { value: 1 }, range: { value: 1 } },
+    vertexShader: /* glsl */`
+      varying vec2 vOffset;
+      void main() {
+        vOffset = position.xz;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: /* glsl */`
+      uniform vec3 light; uniform float height; uniform float range; varying vec2 vOffset;
+      void main() {
+        float r = length(vOffset) * range, d2 = r * r + height * height, d = sqrt(d2);
+        float falloff = pow(clamp(1.0 - pow(d / range, 4.0), 0.0, 1.0), 2.0) / d2;
+        gl_FragColor = vec4(light * falloff * height / d, 1.0);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }
+    `,
+  }));
+  pool.name = 'lantern-pool'; pool.renderOrder = ORDER.pools; pool.visible = false; pool.userData.ambientOcclusion = false;
+  return pool;
+}
+
 export class SwampWorld {
   constructor(scene, chunkSource = null) {
     this.scene = scene; this.chunkSource = chunkSource; this.chunks = new Map(); this.origin = 0; this.center = null;
@@ -513,8 +546,9 @@ export class SwampWorld {
     // expose holes beside islands when viewed at an oblique angle.
     this.basin = new THREE.Mesh(new THREE.PlaneGeometry(2400, 2400).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: '#142735', toneMapped: false }));
     this.basin.name = 'swamp-basin'; this.basin.userData.ambientOcclusion = false; this.effects.add(this.basin);
-    // Two shadowless lights follow the nearest discoveries, each tinted to match.
-    this.lights = Array.from({ length: 2 }, () => { const light = new THREE.PointLight('#ffbf6e', 90, 26, 2); this.effects.add(light); return light; });
+    // Glows follow the two nearest discoveries. Real point lights would cost
+    // every lit pixel all the way between discoveries.
+    this.pools = Array.from({ length: 2 }, () => { const pool = lanternPool(); this.effects.add(pool); return pool; });
     this.glowGeometry = new THREE.BufferGeometry();
     this.glowGeometry.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(6), 3));
     this.glowGeometry.setAttribute('color', new THREE.Float32BufferAttribute(new Float32Array(6), 3));
@@ -546,21 +580,26 @@ export class SwampWorld {
     const sites = swampDiscoveries(s - 300, s + 300), key = sites.map(site => site.index).join(',');
     if (key !== this.siteKey || this.origin !== this.lightOrigin) {
       const tint = new THREE.Color();
-      this.lamps = this.lights.map((light, i) => {
+      this.lamps = this.pools.map((pool, i) => {
         const site = sites[i], lamp = site ? swampDiscoveryLight(site) : null, p = lamp?.position ?? { x: 0, y: -1000, z: 0 };
-        light.position.set(p.x, p.y, p.z + this.origin);
-        if (lamp) { light.color.set(lamp.color); light.distance = lamp.distance; }
+        if (lamp) {
+          // The chapel's lamps light its lawn. The others stand over water.
+          const floor = site.kind === 'chapel' ? site.level : WATER_LEVEL, { uniforms } = pool.material;
+          pool.position.set(p.x, floor + .03, p.z + this.origin); pool.scale.setScalar(lamp.distance);
+          uniforms.height.value = p.y - floor; uniforms.range.value = lamp.distance;
+        }
         this.glowGeometry.attributes.position.setXYZ(i, p.x, p.y, p.z + this.origin);
         tint.set(lamp?.color ?? '#000000').lerp(new THREE.Color('#ffffff'), .12);
         this.glowGeometry.attributes.color.setXYZ(i, tint.r, tint.g, tint.b);
-        return lamp && { site, ...lamp };
+        return lamp && { site, ...lamp, glow: new THREE.Color(lamp.color).multiplyScalar(lamp.intensity * POOL_ALBEDO / Math.PI) };
       });
       this.siteKey = key; this.lightOrigin = this.origin;
       this.glowGeometry.attributes.position.needsUpdate = true; this.glowGeometry.attributes.color.needsUpdate = true;
     }
-    this.lights.forEach((light, i) => {
+    this.pools.forEach((pool, i) => {
       const lamp = this.lamps[i], strength = lamp ? 1 - smoothstep(160, 260, Math.abs(lamp.site.s - s)) : 0;
-      light.intensity = (lamp?.intensity ?? 0) * strength;
+      pool.visible = strength > 0;
+      if (lamp) pool.material.uniforms.light.value.copy(lamp.glow).multiplyScalar(strength);
       this.glowGeometry.attributes.strength.setX(i, strength * (lamp?.halo ?? 0));
     });
     this.glowGeometry.attributes.strength.needsUpdate = true;
@@ -574,5 +613,6 @@ export class SwampWorld {
     for (const chunk of this.chunks.values()) chunk.dispose(); this.chunks.clear(); this.effects.removeFromParent();
     this.headlights.dispose(); this.sky.dispose(); this.glowGeometry.dispose(); this.glowMaterial.dispose();
     this.basin.geometry.dispose(); this.basin.material.dispose();
+    for (const pool of this.pools) pool.material.dispose();
   }
 }

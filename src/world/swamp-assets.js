@@ -132,14 +132,14 @@ const MOSS = ['#929c87', '#a2ac98', '#818f7c'].map(hex);
 const LEAF = hex('#f2f4ea');
 
 // Bald cypress: fluted buttress, knees in the water, limbs holding flat clumps high up.
-function cypress(seed, { lean = 0, limbs = 7, spread = .27, low = .64, mossy = 1, knees = 7 } = {}) {
+function cypress(seed, { lean = 0, limbs = 7, spread = .27, low = .64, mossy = 1, knees = 4 } = {}) {
   const bark = new Parts(), crown = new Parts(), reflection = new Parts(), r = i => randomAt(seed * 37 + i, 3501);
   const shade = barkShade(hex('#3a2e26'), hex('#6f5341'), hex('#8a7361'));
   const offset = y => lean * Math.max(0, y) ** 1.6;
   const rings = [[-.06, .065], [0, .063], [.028, .046], [.085, .031], [.19, .025], [.38, .02], [.6, .016], [.78, .012], [.95, .006]]
     .map(([y, radius]) => [y, radius, offset(y), 0]);
   const phase = r(1) * TAU;
-  bark.lathe(rings, 10, shade, (a, y) => 1 + .42 * (1 - smoothstep(0, .13, y)) * (.5 + .5 * Math.cos(a * 5 + phase)) + (1 - smoothstep(0, .05, y)) * .12 * Math.cos(a * 3 + phase));
+  bark.lathe(rings, 8, shade, (a, y) => 1 + .42 * (1 - smoothstep(0, .13, y)) * (.5 + .5 * Math.cos(a * 5 + phase)) + (1 - smoothstep(0, .05, y)) * .12 * Math.cos(a * 3 + phase));
   // Long buttress ridges continue up the trunk; roots spread into the shallows.
   for (let i = 0; i < 6; i++) {
     const a = phase + i / 6 * TAU, d = .075 + r(400 + i) * .04;
@@ -159,17 +159,17 @@ function cypress(seed, { lean = 0, limbs = 7, spread = .27, low = .64, mossy = 1
     const from = [offset(y), y, 0], to = [offset(y) + Math.cos(angle) * reach, y + .05 + r(30 + i) * .05, Math.sin(angle) * reach];
     bark.limb(from, to, .0075 - t * .003, .003, shade(.5));
     const size = .135 + r(40 + i) * .06 - t * .012;
-    crown.lobe(to, [size * 1.15, size * (.7 + r(50 + i) * .2), size], seed * 13 + i, greens, 1);
+    crown.lobe(to, [size * 1.15, size * (.7 + r(50 + i) * .2), size], seed * 13 + i, greens);
     reflection.lobe(to, [size * 1.15, size * .8, size], seed * 13 + i, hex('#526948'), -1);
     if (r(60 + i) < .65) crown.lobe([to[0] * .5 + offset(y) * .5, to[1] + .04, to[2] * .5], [size * .95, size * .65, size * .95], seed * 13 + i + 50, greens);
     // Hung past the clump's edge so it shows from above.
-    for (let k = 0; k < 5; k++) {
+    for (let k = 0; k < 3; k++) {
       const a = angle + (r(70 + i * 5 + k) - .5) * 2.6, d = size * (.62 + r(80 + i * 5 + k) * .2);
       moss([to[0] + Math.cos(a) * d, to[1] - size * .25, to[2] + Math.sin(a) * d], .1 + r(90 + i * 5 + k) * .17, i * 5 + k);
     }
     moss([(from[0] + to[0]) / 2, (from[1] + to[1]) / 2, (from[2] + to[2]) / 2], .04 + r(120 + i) * .05, 40 + i);
   }
-  crown.lobe([offset(.95), .95, 0], [.16, .1, .16], seed * 13 + 99, greens, 1);
+  crown.lobe([offset(.95), .95, 0], [.16, .1, .16], seed * 13 + 99, greens);
   const kneeColor = hex('#6e5a48');
   for (let i = 0; i < knees; i++) {
     const a = r(140 + i) * TAU, d = .08 + r(150 + i) * .1;
@@ -199,7 +199,7 @@ function oak(seed, { width = .5, lobes = 11, mossy = 1 } = {}) {
     crown.lobe([Math.cos(angle) * d, y, Math.sin(angle) * d], [size, size * .72, size], seed * 17 + i, greens);
     reflection.lobe([Math.cos(angle) * d, y, Math.sin(angle) * d], [size, size * .72, size], seed * 17 + i, hex('#596c45'), -1);
   }
-  for (let i = 0; i < 30 * mossy; i++) {
+  for (let i = 0; i < 18 * mossy; i++) {
     const angle = r(100 + i) * TAU, d = width * (.55 + r(130 + i) * .6);
     bark.moss([Math.cos(angle) * d, .6 - d * .1 + r(160 + i) * .05, Math.sin(angle) * d], .06 + r(190 + i) * .13, .008 + r(220 + i) * .006, seed * 131 + i, MOSS[i % 3]);
   }
@@ -277,8 +277,8 @@ function palmetto(seed) {
 function reeds(seed, cattails = 0) {
   const blades = new Parts(), r = i => randomAt(seed * 59 + i, 3901);
   const base = hex('#5e7350'), tip = hex('#b7b183');
-  for (let i = 0; i < 26; i++) {
-    const angle = i * 2.399963 + seed, height = .55 + r(i) * .45, bend = .12 + r(10 + i) * .32, width = .03 + r(20 + i) * .018;
+  for (let i = 0; i < 16; i++) {
+    const angle = i * 2.399963 + seed, height = .55 + r(i) * .45, bend = .12 + r(10 + i) * .32, width = .036 + r(20 + i) * .022;
     const dir = [Math.cos(angle), Math.sin(angle)], side = [-dir[1] * width, dir[0] * width];
     const foot = [dir[0] * .14 * r(30 + i), 0, dir[1] * .14 * r(30 + i)];
     const knee = [foot[0] + dir[0] * bend * .3, height * .6, foot[2] + dir[1] * bend * .3];
@@ -305,7 +305,7 @@ function lilies(seed, flowers = 1) {
   for (let i = 0; i < 8; i++) {
     const angle = i * 2.399963 + seed, d = Math.sqrt(r(i)) * .8, radius = .12 + r(10 + i) * .16;
     const cx = Math.cos(angle) * d, cz = Math.sin(angle) * d, notch = r(20 + i) * TAU, color = greens[i % 4].clone().multiplyScalar(.9 + r(30 + i) * .2);
-    const segments = 8, y = .005 + i * .0015;
+    const segments = 6, y = .005 + i * .0015;
     for (let k = 0; k < segments - 1; k++) {
       const a = notch + (k + .5) / segments * TAU, b = notch + (k + 1.5) / segments * TAU;
       pads.face([cx, y + .004, cz], [cx + Math.cos(b) * radius, y, cz + Math.sin(b) * radius], [cx + Math.cos(a) * radius, y, cz + Math.sin(a) * radius], color.clone().multiplyScalar(k % 2 ? 1 : .93), [cx, y - 1, cz]);
@@ -405,15 +405,14 @@ function gator(seed, basking = false) {
   return hide.build();
 }
 
-export const cypressTrees = [
-  cypress(1), cypress(2, { lean: .065, limbs: 6, spread: .25, low: .68 }), cypress(3, { limbs: 5, spread: .18, low: .52 }),
-  cypress(4, { lean: -.055, limbs: 8, spread: .32, low: .68, mossy: 1.4 }),
-];
-export const oakTrees = [oak(1), oak(2, { width: .58, lobes: 13, mossy: 1.3 }), tupelo(3)];
-export const snagTrees = [snag(1), snag(2, { tall: 1, limbs: 4 }), snag(3, { tall: .6, limbs: 2, mossy: 0 })];
+// Two variants of each kind. Every variant costs a draw per chunk for its
+// trunk, crown, reflection and shadow; random turns and sizes hide the repeats.
+export const cypressTrees = [cypress(1), cypress(4, { lean: -.055, limbs: 6, spread: .3, low: .66, mossy: 1.2 })];
+export const oakTrees = [oak(1), tupelo(3)];
+export const snagTrees = [snag(1), snag(3, { tall: .6, limbs: 2, mossy: 0 })];
 export const palmettoGeometry = palmetto(1);
 export const reedTufts = [reeds(1), reeds(2, 3)];
-export const lilyClusters = [lilies(1, 1), lilies(2, 0), lilies(3, 2)];
+export const lilyClusters = [lilies(1, 1), lilies(3, 2)];
 export const swampRocks = [rock(1), rock(2, .8), rock(3, .4)];
 export const swampLogs = [log(1), log(2, 2)];
 export const egretGeometry = wader(1, { body: hex('#f1f0e8'), neck: hex('#ecebe2'), beak: hex('#e0b23a'), legs: hex('#2c2c28') });

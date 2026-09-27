@@ -117,11 +117,14 @@ test('swamp chunks keep scenery off the road, clip the ground at the water and d
   chunk.dispose();
 });
 
-test('the swamp world lights the nearest discoveries in their own colours and follows the car with its headlights', () => {
+test('the swamp world glows around the nearest discoveries in their own colours and follows the car with its headlights', () => {
   const scene = new THREE.Scene(), world = new SwampWorld(scene), car = new DrivingController(swampDrivingRoute);
-  let disposed = 0;
+  let disposed = 0, points = 0;
   world.update(24);
   for (const chunk of world.chunks.values()) for (const g of chunk.owned) g.addEventListener('dispose', () => disposed++);
+  // Lantern light is baked and painted on; a point light would cost every lit pixel.
+  scene.traverse(object => { if (object.isPointLight) points++; });
+  assert.equal(points, 0);
   const sites = swampDiscoveries(-20000, 20000);
   assert.equal(new Set(sites.map(site => site.kind)).size, 4, 'every kind is visited');
   assert.equal(world.headlights.parent, world.effects, 'the actual spotlight must be attached to the scene');
@@ -129,12 +132,16 @@ test('the swamp world lights the nearest discoveries in their own colours and fo
     car.s = s; car.reset(); world.update(s); world.animate(12, car);
     assert.equal(world.chunks.size, 9); assert.equal(waterClock.time.value, 12);
     for (const [index, chunk] of world.chunks) assert.equal(chunk.group.position.z, world.origin - index * CHUNK_LENGTH);
-    world.lights.forEach((light, i) => {
-      const site = swampDiscoveries(s - 300, s + 300)[i], lamp = site && swampDiscoveryLight(site), p = lamp?.position ?? { x: 0, y: -1000, z: 0 };
+    world.pools.forEach((pool, i) => {
+      const site = swampDiscoveries(s - 300, s + 300)[i], lamp = site && swampDiscoveryLight(site);
       const strength = site ? 1 - smoothstep(160, 260, Math.abs(site.s - s)) : 0;
-      assert.deepEqual(light.position.toArray(), [p.x, p.y, p.z + world.origin]);
-      assert.equal(light.intensity, (lamp?.intensity ?? 0) * strength);
-      if (lamp) assert.equal(light.color.getHexString(), lamp.color.slice(1));
+      assert.equal(pool.visible, strength > 0);
+      if (lamp) {
+        const floor = site.kind === 'chapel' ? site.level : WATER_LEVEL, { light, height, range } = pool.material.uniforms, color = new THREE.Color(lamp.color);
+        assert.deepEqual(pool.position.toArray(), [lamp.position.x, floor + .03, lamp.position.z + world.origin]);
+        assert.ok(Math.abs(height.value - (lamp.position.y - floor)) < 1e-9 && range.value === lamp.distance && pool.scale.x === lamp.distance);
+        if (strength > 0) assert.ok(Math.abs(light.value.r / light.value.g - color.r / color.g) < 1e-9, 'the glow takes the lantern colour');
+      }
       assert.equal(world.glowGeometry.attributes.strength.getX(i), Math.fround(strength * (lamp?.halo ?? 0)));
     });
     const version = world.glowGeometry.attributes.position.version;

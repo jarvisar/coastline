@@ -98,6 +98,8 @@ test('each discovery has one owning chunk with its meshes, reflections and metad
           assert.equal(mirror.instanceMatrix, body.instanceMatrix, 'reflections reuse the landmark matrix buffer after transfer');
         }
         if (mirror) assert.ok(mirror.scale.y === -1 && mirror.position.y === WATER_LEVEL * 2);
+        // Each lantern lights its own model, baked in.
+        assert.ok(body.geometry.attributes.lantern?.array.some(value => value > .01), `${site.kind} carries its lantern light`);
       }
       chunk.dispose(); restored.dispose();
     }

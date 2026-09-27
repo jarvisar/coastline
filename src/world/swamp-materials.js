@@ -27,7 +27,38 @@ const noise = /* glsl */`
   }
 `;
 
-export const material = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: 1, flatShading: true, ...extra });
+// Lambert shading for everything but the water. At the swamp's night light
+// levels it looks the same as physical shading and costs far less per pixel.
+export const material = (color, extra = {}) => new THREE.MeshLambertMaterial({ color, flatShading: true, ...extra });
+
+// A discovery's lantern baked into its model as emitted light: the diffuse
+// light a point light of the same colour, intensity and range gives each face,
+// with Three.js's inverse-square falloff. Real point lights cost every lit
+// pixel in the swamp, near a discovery or not. `scale` converts model units.
+export function bakeLantern(geometry, { position, color, intensity, distance }, scale = 1) {
+  const points = geometry.attributes.position, normals = geometry.attributes.normal, colors = geometry.attributes.color;
+  const light = new THREE.Color(color).multiplyScalar(intensity / Math.PI), baked = new Float32Array(points.count * 3);
+  const toLight = new THREE.Vector3(), normal = new THREE.Vector3();
+  for (let i = 0; i < points.count; i++) {
+    toLight.set(position.x - points.getX(i), position.y - points.getY(i), position.z - points.getZ(i)).multiplyScalar(scale);
+    const d = Math.max(toLight.length(), .1), falloff = Math.max(0, 1 - (d / distance) ** 4) ** 2 / (d * d);
+    const lit = Math.max(0, normal.fromBufferAttribute(normals, i).dot(toLight) / d) * falloff;
+    baked[i * 3] = colors.getX(i) * light.r * lit; baked[i * 3 + 1] = colors.getY(i) * light.g * lit; baked[i * 3 + 2] = colors.getZ(i) * light.b * lit;
+  }
+  geometry.setAttribute('lantern', new THREE.Float32BufferAttribute(baked, 3));
+  return geometry;
+}
+
+// Adds the baked lantern light. Meshes without it, like the chapel drive, read zero.
+export function lanternLit(lit) {
+  lit.onBeforeCompile = shader => {
+    shader.vertexShader = 'attribute vec3 lantern; varying vec3 vLantern;\n' + shader.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvLantern = lantern;');
+    shader.fragmentShader = 'varying vec3 vLantern;\n' + shader.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vLantern;');
+  };
+  lit.customProgramCacheKey = () => 'swamp-lantern-lit-v1';
+  lit.defaultAttributeValues = { lantern: [0, 0, 0] };
+  return lit;
+}
 
 // swampCoord is (s, u, depth). Still water: a slow sheen, rings where fish rise
 // and duckweed in the shallows.
@@ -89,17 +120,20 @@ export function createReflectionMaterial(strength) {
       // Integer cycles per 4096 m match the water clock's origin wrapping.
       reflected.x += sin((still.z - swampOrigin) * (6.28318530718 * 1173.0 / 4096.0) + still.y * 2.4 + swampTime * 0.8) * 0.16 * distortion;
       reflected.z += sin(still.x * 1.1 + still.y * 3.1 - swampTime * 0.65) * 0.08 * distortion;
+      // Anything buried below the waterline mirrors up above it. It's pressed
+      // flat just under the surface rather than discarded, since discard stops
+      // phone GPUs rejecting hidden pixels early.
+      reflected.y = min(reflected.y, ${(WATER_LEVEL - .02).toFixed(2)});
       vec4 mvPosition = viewMatrix * reflected;
       gl_Position = projectionMatrix * mvPosition;
     `);
     shader.fragmentShader = 'varying float vReflectionDepth;\n' + shader.fragmentShader;
     shader.fragmentShader = shader.fragmentShader.replace('#include <color_fragment>', `
       #include <color_fragment>
-      if (vReflectionDepth < 0.0) discard;
       diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.009, 0.021, 0.034), smoothstep(2.0, 30.0, vReflectionDepth) * 0.72);
     `);
   };
-  reflection.customProgramCacheKey = () => 'swamp-reflections-v2';
+  reflection.customProgramCacheKey = () => 'swamp-reflections-v3';
   return reflection;
 }
 

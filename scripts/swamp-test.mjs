@@ -27,7 +27,7 @@ const renderAt = (page, s, view = 'Medium view') => page.evaluate(async ({ s, vi
     layers: Object.fromEntries(names.map(name => [name, chunks.filter(chunk => chunk.group.getObjectByName(name)).length])),
     discoveries: chunks.flatMap(chunk => chunk.features.discoveries), sky: !!a.rendering.scene.getObjectByName('swamp-sky'),
     headlights: a.world.headlights.parent === a.world.effects && a.world.headlights.light.intensity > 0,
-    activeLanterns: a.world.lights.filter(light => light.intensity > 0).length,
+    activeLanterns: a.world.pools.filter(pool => pool.visible).length,
     render: { ...info.render }, memory: { ...info.memory } };
 }, { s, view });
 

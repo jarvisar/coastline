@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { Parts } from './swamp-assets.js';
 import { randomAt, smoothstep, lerp } from './route.js';
 import { waterClock } from './water.js';
-import { material } from './swamp-materials.js';
+import { material, bakeLantern } from './swamp-materials.js';
 import { CHAPEL_DRIVE } from './swamp-discoveries.js';
 
 // Landmark models stand on the water at y = 0, facing the isometric camera
@@ -842,7 +842,7 @@ function paddlewheel() {
 }
 
 // Wheels turn together off the shared water clock, top toward the bow.
-export const wheelMaterial = material('#ffffff', { vertexColors: true, roughness: .8 });
+export const wheelMaterial = material('#ffffff', { vertexColors: true });
 wheelMaterial.onBeforeCompile = shader => {
   shader.uniforms.swampTime = waterClock.time;
   shader.vertexShader = 'uniform float swampTime;\n' + shader.vertexShader;
@@ -864,3 +864,7 @@ export const SWAMP_LANDMARKS = {
   chapel: { scale: 1, light: { position: [-8, 7.5, 0], color: '#ffd08a', intensity: 130, distance: 34, halo: 0 } },
   riverboat: { scale: 1.12, wheel: [0, 2.9, 18.2], light: { position: [0, 2.6, -13.4], color: '#ffc47a', intensity: 120, distance: 34, halo: .7 } },
 };
+// Each light is baked into its own model rather than cast by a point light.
+for (const [kind, { scale, light }] of Object.entries(SWAMP_LANDMARKS)) {
+  bakeLantern(swampLandmarkGeometry[kind].body, { ...light, position: new THREE.Vector3(...light.position) }, scale);
+}

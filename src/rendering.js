@@ -51,12 +51,17 @@ export function createRendering(canvas, graphics = new Graphics()) {
   renderer.xr.cameraAutoUpdate = false;
   renderer.xr.addEventListener('sessionend', () => { graphics.suspend(); resizeCanvas(); });
   const ambientOcclusion = new AmbientOcclusion(renderer, scene, camera);
+  let journey = 'coast', quality = graphics.settings;
+  // Soft edges take 16 shadow-map samples on every lit pixel. The swamp's faint
+  // moonlight shadows take one filtered sample instead, to fit phone budgets.
+  function applyShadowSoftness() { sun.shadow.radius = quality.id === 'basic' || journey === 'swamp' ? 0 : 2; }
   // AO on or off is the player's choice. The quality level sets everything else.
   // A new shadow map size only takes effect once the old texture is released.
   function applyQuality(settings) {
+    quality = settings;
     ambientOcclusion.enabled = settings.ambientOcclusion;
     ambientOcclusion.setQuality(settings.aoQuality);
-    sun.shadow.radius = settings.id === 'basic' ? 0 : 2;
+    applyShadowSoftness();
     if (sun.shadow.mapSize.x !== settings.shadowMap) {
       sun.shadow.mapSize.set(settings.shadowMap, settings.shadowMap);
       sun.shadow.map?.dispose(); sun.shadow.map = null;
@@ -75,7 +80,6 @@ export function createRendering(canvas, graphics = new Graphics()) {
   const activeCamera = () => views[view].firstPerson ? firstPerson.camera : views[view].thirdPerson ? thirdPerson.camera : camera;
   let initialized = false; let view = touchScreen.matches ? 2 : 1; let viewHeight = views[view].height; let previousOrigin = 0;
   let snowy = false;
-  let journey = 'coast';
   const fogProfiles = {
     // The coast range is 100-250 m inland and should show through the haze.
     // Resident chunks always extend past thirdFar. The sea mesh reaches 420 m offshore.
@@ -150,6 +154,7 @@ export function createRendering(canvas, graphics = new Graphics()) {
   function setJourney(id) {
     journey = fogProfiles[id] ? id : 'coast';
     snowy = id === 'snow';
+    applyShadowSoftness();
     resize();
     if (id === 'snow') {
       scene.background.set('#111f2b'); updateFog();
