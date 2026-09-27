@@ -67,8 +67,11 @@ body[data-journey] .paint-custom[data-active=true] { border-color: var(--ink); }
 body[data-journey] .car-meter-track { background: color-mix(in srgb, var(--ink) 25%, var(--surface-card)); }
 
 body[data-journey] .pause-overlay { color: var(--ink); }
-body[data-journey] .pause-header :is(h2, .location-copy),
-body[data-journey] .pause-settings h3 { text-shadow: none; }
+/* The scene shows through the pause screen, so text outside the panels gets
+   the same see-through surface as the driving overlays. */
+body[data-journey] :is(.pause-header, .pause-settings h3, #pause-overlay .pwa-install-button) { background: var(--surface-hud); }
+body[data-journey] #pause-overlay .pwa-install-button:hover { background: var(--surface-hover); }
+body[data-journey] .pause-settings :is(.controller-hint, .pwa-install-help) { background: var(--surface-glass); }
 body[data-journey] :is(.panel-button, .panel-toggle, .graphics-levels button) {
   color: var(--ink); background: var(--surface-control); border-color: var(--line);
 }

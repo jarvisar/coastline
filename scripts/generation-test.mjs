@@ -12,7 +12,17 @@ try {
   const page = await browser.newPage({ viewport: { width: 1280, height: 900 }, deviceScaleFactor: 1 });
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
-  const ready = () => page.waitForFunction(() => window.__coastline && document.querySelector('#loading').classList.contains('loaded'));
+  // The title screen cruises on autodrive from the first frame. Pause it and put
+  // the car back on the seeded spawn point before reading anything.
+  const ready = async () => {
+    await page.waitForFunction(() => window.__coastline && document.querySelector('#loading').classList.contains('loaded'));
+    await page.evaluate(async () => {
+      const a = window.__coastline, { journeyStart } = await import('/src/world/route.js'), { JOURNEYS } = await import('/src/journeys.js');
+      if (!a.paused) a.action('pause');
+      a.vehicle.setRoute(a.vehicle.route, journeyStart(Number(JOURNEYS[a.journey].routeNumber)));
+      a.world.update(a.vehicle.s); a.vehicle.render(1, a.world.origin);
+    });
+  };
   const select = async id => {
     await page.evaluate(id => window.__coastline.changeJourney(id), id);
     await page.waitForFunction(id => window.__coastline.journey === id && !window.__coastline.changingJourney, id);
@@ -30,8 +40,11 @@ try {
       carZ: a.vehicle.car.position.z, origin: a.world.origin, road: roadFrame(0), terrain,
       resident: a.graphics.settings.chunks.behind + a.graphics.settings.chunks.ahead + 1 };
   });
+  // Routes loaded before the drive starts are primed at the menu's cruising speed.
+  const MENU_SPEED = 22.4;
+  const position = ({ speed, ...state }) => state;
   function checkSpawn(state) {
-    assert.equal(state.distance, 0); assert.equal(state.speed, 0); assert.equal(state.u, 2.4);
+    assert.equal(state.distance, 0); assert.ok(state.speed === 0 || Math.abs(state.speed - MENU_SPEED) < 1e-9); assert.equal(state.u, 2.4);
     assert.ok(Math.abs(state.y - state.ground) < .0001);
     // One terrain mesh per resident chunk at the current quality level.
     assert.ok(Math.abs(state.carZ) < 1030); assert.equal(state.terrain.length, state.resident);
@@ -51,37 +64,37 @@ try {
   console.log('Fresh reloads produce different seeds, road bends, terrain and starting positions.');
 
   url.searchParams.set('seed', '4817');
+  const routes = await page.evaluate(async () => Object.keys((await import('/src/journeys.js')).JOURNEYS));
   for (let visit = 0; visit < 2; visit++) {
     if (visit === 0) await page.goto(url.href, { waitUntil: 'networkidle' });
     else await page.reload({ waitUntil: 'networkidle' });
     await ready();
-    for (const id of ['coast', 'desert', 'snow', 'jungle', 'plains', 'city']) {
+    for (const id of routes) {
       await select(id);
       const state = await snapshot(); checkSpawn(state); assert.equal(state.seed, 4817);
       if (visit === 0) {
         pinned[id] = state;
         await page.waitForTimeout(700);
         await page.screenshot({ path: `.artifacts/generation/seeded-${id}.png` });
-      } else assert.deepEqual(state, pinned[id]);
+      } else assert.deepEqual(position(state), position(pinned[id]));
     }
   }
-  console.log('An explicit seed reproduces all four routes, including their actual terrain meshes.');
+  console.log('An explicit seed reproduces every route, including its actual terrain meshes.');
 
   // Stream far enough to evict every starting chunk, then return.
-  await page.evaluate(() => window.__coastline.action('pause'));
   const placeCar = s => page.evaluate(s => {
     const a = window.__coastline;
     a.vehicle.s = s; a.vehicle.reset(); a.world.update(s); a.vehicle.render(1, a.world.origin);
     a.rendering.snap(); a.rendering.update(a.vehicle.car, 1, a.world.origin); a.world.animate(0, a.vehicle);
     a.rendering.renderer.render(a.rendering.scene, a.rendering.camera);
   }, s);
-  for (const id of ['coast', 'desert', 'snow', 'jungle', 'plains', 'city']) {
+  for (const id of routes) {
     await select(id);
     for (const s of [pinned[id].s + 4096, -pinned[id].s - 4096, pinned[id].s]) {
       await placeCar(s);
       const state = await snapshot(); checkSpawn(state);
     }
-    assert.deepEqual(await snapshot(), pinned[id]);
+    assert.deepEqual(position(await snapshot()), position(pinned[id]));
     await page.evaluate(() => {
       const a = window.__coastline;
       for (let i = 0; i < 1200; i++) a.vehicle.update(1 / 60, { forward: true });
@@ -90,7 +103,7 @@ try {
     const saved = await snapshot(); assert.ok(saved.distance > 300);
     await select(id === 'coast' ? 'desert' : 'coast');
     await select(id);
-    assert.deepEqual(await snapshot(), saved);
+    assert.deepEqual(position(await snapshot()), position(saved));
     const cleanup = await page.evaluate(async () => {
       const a = window.__coastline, oldWorld = a.world;
       const groups = [...oldWorld.chunks.values()].map(chunk => chunk.group);
@@ -111,7 +124,7 @@ try {
     assert.notDeepEqual(reset.terrain, saved.terrain);
     await select(id === 'coast' ? 'desert' : 'coast');
     await select(id);
-    assert.deepEqual(await snapshot(), reset);
+    assert.deepEqual(position(await snapshot()), position(reset));
     // Keep later routes at their original start until their own check runs.
     await placeCar(pinned[id].s);
     await page.evaluate(() => { window.__coastline.vehicle.distance = 0; });

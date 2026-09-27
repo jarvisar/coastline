@@ -38,9 +38,11 @@ try {
     records.push(result);
     if (s >= 0 && s < 1000) await page.screenshot({ path: `.artifacts/snow-${s}.png` });
   }
-  const snowState = () => page.evaluate(() => Array.from(window.__coastline.world.flakeGeometry.attributes.position.array.slice(0, 12)));
-  const moving = await snowState(); await page.waitForTimeout(500); assert.notDeepEqual(await snowState(), moving);
-  await page.keyboard.press('KeyP'); const stopped = await snowState(); await page.waitForTimeout(500); assert.deepEqual(await snowState(), stopped);
+  // Flakes move in the shader, so watch its clock. Software rendering can go
+  // longer than a fixed wait between frames, so wait for the next tick.
+  const snowClock = () => window.__coastline.world.snowfall.motion.uniforms.weatherTime.value;
+  const moving = await page.evaluate(snowClock); await page.waitForFunction(`(${snowClock})() !== ${moving}`);
+  await page.keyboard.press('KeyP'); const stopped = await page.evaluate(snowClock); await page.waitForTimeout(500); assert.equal(await page.evaluate(snowClock), stopped);
   const saved = await page.evaluate(() => ({ s: window.__coastline.vehicle.s, distance: window.__coastline.vehicle.distance }));
   for (const id of ['desert', 'coast', 'snow', 'coast', 'snow']) {
     await page.evaluate(id => window.__coastline.changeJourney(id), id);

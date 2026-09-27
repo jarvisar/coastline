@@ -29,9 +29,10 @@ try {
   await page.keyboard.down('KeyW'); await page.waitForFunction(() => window.__coastline.vehicle.speed > 8); await page.keyboard.up('KeyW');
   await page.keyboard.press('KeyR'); await page.waitForFunction(() => !window.__coastline.changingJourney);
   await page.keyboard.down('ArrowDown'); await page.waitForFunction(() => window.__coastline.vehicle.speed < -2); await page.keyboard.up('ArrowDown');
-  // Steering into the kerb stops at it.
+  // Free driving lets the car climb the kerb onto the pavement. The collision
+  // test checks that the buildings beyond it stop the car.
   await page.keyboard.down('KeyW'); await page.keyboard.down('KeyD'); await page.waitForTimeout(2500); await page.keyboard.up('KeyD'); await page.keyboard.up('KeyW');
-  assert.ok(await page.evaluate(() => Math.abs(window.__coastline.vehicle.u) <= 5.9001));
+  assert.ok(await page.evaluate(() => window.__coastline.vehicle.u > 5.9));
   for (const s of [24, 180, 498, 1025, 10000, -300]) {
     await page.evaluate(s => { const a = window.__coastline; a.vehicle.s = s; a.vehicle.reset(); a.rendering.snap(); }, s);
     await page.waitForTimeout(500);
@@ -53,10 +54,11 @@ try {
     records.push(result);
     if (s >= 0 && s < 1000) await page.screenshot({ path: `.artifacts/city-${s}.png` });
   }
-  // Rain animates while driving and freezes when paused.
-  const rainState = () => page.evaluate(() => Array.from(window.__coastline.world.dropGeometry.attributes.position.array.slice(0, 12)));
-  const moving = await rainState(); await page.waitForTimeout(500); assert.notDeepEqual(await rainState(), moving);
-  await page.keyboard.press('KeyP'); const stopped = await rainState(); await page.waitForTimeout(500); assert.deepEqual(await rainState(), stopped);
+  // Rain animates while driving and freezes when paused. Drops move in the
+  // shader, so watch its clock and wait for the next tick rather than a fixed time.
+  const rainClock = () => window.__coastline.world.rainfall.motion.uniforms.weatherTime.value;
+  const moving = await page.evaluate(rainClock); await page.waitForFunction(`(${rainClock})() !== ${moving}`);
+  await page.keyboard.press('KeyP'); const stopped = await page.evaluate(rainClock); await page.waitForTimeout(500); assert.equal(await page.evaluate(rainClock), stopped);
   const saved = await page.evaluate(() => ({ s: window.__coastline.vehicle.s, distance: window.__coastline.vehicle.distance }));
   for (const id of ['coast', 'city', 'snow', 'city', 'plains', 'coast']) {
     await page.evaluate(id => window.__coastline.changeJourney(id), id);

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { chromium } from '@playwright/test';
 import { mkdir, writeFile } from 'node:fs/promises';
 
+const url = process.env.TEST_URL ?? 'http://127.0.0.1:5173';
 await mkdir('.artifacts', { recursive: true });
 const browser = await chromium.launch({ executablePath: 'C:/Program Files/Google/Chrome/Application/chrome.exe', headless: true, args: ['--enable-webgl', '--ignore-gpu-blocklist', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
 try {
@@ -9,15 +10,17 @@ try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, deviceScaleFactor: 1 });
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', msg => { if (msg.type() === 'error') errors.push(msg.text()); });
-  await page.goto('http://127.0.0.1:5173', { waitUntil: 'networkidle' });
+  await page.goto(url, { waitUntil: 'networkidle' });
   await page.waitForFunction(() => window.__coastline && document.querySelector('#loading').classList.contains('loaded'));
   await page.waitForTimeout(700);
   const camera = await page.evaluate(() => ({ quaternion: window.__coastline.rendering.camera.quaternion.toArray(), top: window.__coastline.rendering.camera.top, carScale: window.__coastline.vehicle.car.scale.toArray() }));
   await page.locator('#change-journey').click();
   assert.equal(await page.locator('#journey-dialog').isVisible(), true);
   await page.screenshot({ path: '.artifacts/journey-chooser.png' });
+  // The menu drive cruises behind the chooser, which pauses it. Keys must not move the car.
+  const menuSpeed = await page.evaluate(() => window.__coastline.vehicle.speed);
   await page.keyboard.down('KeyW'); await page.waitForTimeout(150); await page.keyboard.up('KeyW');
-  assert.equal(await page.evaluate(() => window.__coastline.vehicle.speed), 0);
+  assert.equal(await page.evaluate(() => window.__coastline.vehicle.speed), menuSpeed);
   await page.keyboard.press('Escape');
   await page.waitForFunction(() => !window.__coastline.paused);
   assert.equal(await page.locator('#journey-dialog').isVisible(), false);
@@ -75,7 +78,7 @@ try {
   assert.ok(finalState.geometry < 180); assert.ok(Math.abs(finalState.top - zoom) < 1); assert.equal(finalState.speed, 0); assert.equal(finalState.chunks, finalState.resident);
   const mobile = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
   mobile.on('pageerror', error => errors.push(error.message));
-  await mobile.goto('http://127.0.0.1:5173', { waitUntil: 'networkidle' });
+  await mobile.goto(url, { waitUntil: 'networkidle' });
   await mobile.waitForFunction(() => window.__coastline && document.querySelector('#loading').classList.contains('loaded'));
   await mobile.waitForTimeout(650);
   await mobile.locator('#change-journey').tap();

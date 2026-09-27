@@ -61,7 +61,24 @@ try {
   assert.ok(stopped.u > 7 && stopped.u < 16, `the car should stand against the building line, u=${stopped.u}`);
   assert.ok(Math.abs(stopped.speed) < 3 && stopped.impacts > 0);
   await page.screenshot({ path: '.artifacts/collision-city.png' });
-  await page.evaluate(() => { const v = window.__coastline.vehicle; v.reset(); v.heading = v.route.frame(v.s).angle - Math.PI / 2; });
+  // Head for the river where nothing stands between the road and the quay, since
+  // benches, trees and lamps along the promenade stop the car too.
+  const clearRun = await page.evaluate(async () => {
+    const a = window.__coastline, v = a.vehicle, { quayOffset } = await import('/src/world/city-route.js');
+    const solids = [...a.world.chunks.values()].flatMap(chunk => chunk.features?.colliders ?? []);
+    const clear = s => {
+      for (let u = -4; u > quayOffset(s); u--) for (const ds of [-4, 0, 4]) {
+        const p = v.route.position(s + ds, u);
+        if (solids.some(solid => Math.hypot(solid.x - p.x, solid.z - p.z) < solid.reach + 3)) return false;
+      }
+      return true;
+    };
+    for (let step = 0; step < 75; step++) for (const s of [v.s + step * 4, v.s - step * 4]) {
+      if (clear(s)) { v.s = s; v.reset(); v.heading = v.route.frame(s).angle - Math.PI / 2; return s; }
+    }
+    return null;
+  });
+  assert.ok(clearRun !== null, 'no clear run to the quay near the city start');
   await page.keyboard.down('KeyW'); await page.waitForTimeout(6000);
   const quay = await page.evaluate(async () => {
     const v = window.__coastline.vehicle, { quayOffset } = await import('/src/world/city-route.js');
