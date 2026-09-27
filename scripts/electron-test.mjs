@@ -169,15 +169,19 @@ try {
   state = await windowState();
   fullscreenCheck('F11 restores the window', !state.fullscreen, state.bounds);
 
-  // Cycling routes exercises worker streaming for every journey.
+  // Cycling routes exercises worker streaming for every journey. N follows the
+  // JOURNEYS order in src/journeys.js, which must match the chooser's order.
   const journeys = await page.evaluate(() => [...document.querySelectorAll('button[data-journey]')].map(button => button.dataset.journey));
   check('journeys listed', journeys.length >= 3, journeys);
+  let previous = journeys[0];
   for (const expected of [...journeys.slice(1), journeys[0]]) {
     await page.keyboard.press('KeyN');
-    await page.waitForFunction(id => document.body.dataset.journey === id && !document.querySelector('#journey-transition').classList.contains('active'), expected, { timeout: 60_000 });
+    const reached = await (await page.waitForFunction(id => document.body.dataset.journey !== id && !document.querySelector('#journey-transition').classList.contains('active') && document.body.dataset.journey, previous, { timeout: 60_000 })).jsonValue();
     await page.waitForTimeout(700);
-    await page.screenshot({ path: path.join(out, `${expected}.png`) });
-    check(`switched to ${expected}`, true);
+    await page.screenshot({ path: path.join(out, `${reached}.png`) });
+    check(`switched to ${expected}`, reached === expected, reached === expected ? undefined : { reached, chooserOrder: journeys });
+    if (reached !== expected) break;
+    previous = reached;
   }
   await page.keyboard.press('KeyP');
   await page.waitForTimeout(300);

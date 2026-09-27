@@ -12,8 +12,8 @@ Play it [here](https://jarvisar.github.io/coastline/), or download the [desktop 
 2. Red Rock Desert
 3. Midnight Alpine
 4. Emerald Jungle
-5. Golden Plains
-6. Rainy Downtown
+5. Rainy Downtown
+6. Golden Plains
 7. Volcanic Rift
 8. Salt Plains
 9. Cypress Swamp

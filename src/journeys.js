@@ -33,17 +33,17 @@ export const JOURNEYS = {
     sound: 'Jungle insects, birdsong and engine sounds on',
     canvas: 'A humid jungle road beneath tall emergent trees, beside a turquoise river with cascades and mossy boulders, with misty green mountains beyond. Drive with WASD or the arrow keys.',
   },
-  plains: {
-    title: 'Golden Plains', label: 'GOLDEN PLAINS', routeNumber: '5', route: plainsDrivingRoute,
-    introduction: 'Roll through harvest-gold farmland under a low evening sun.',
-    sound: 'Prairie wind, crickets and engine sounds on',
-    canvas: 'A country road across open farmland at golden hour, between wheat fields, hay bales, fences and shelterbelts, with a creek, red barns and wind turbines. Drive with WASD or the arrow keys.',
-  },
   city: {
-    title: 'Rainy Downtown', label: 'RAINY DOWNTOWN', routeNumber: '6', route: cityDrivingRoute,
+    title: 'Rainy Downtown', label: 'RAINY DOWNTOWN', routeNumber: '5', route: cityDrivingRoute,
     introduction: 'Follow a riverside boulevard through a city in a daytime storm.',
     sound: 'Rain, traffic and engine sounds on',
     canvas: 'A wet city boulevard beside a grey river in heavy daytime rain, between rows of buildings under a stormy sky, with a skyline fading into the mist. Drive with WASD or the arrow keys.',
+  },
+  plains: {
+    title: 'Golden Plains', label: 'GOLDEN PLAINS', routeNumber: '6', route: plainsDrivingRoute,
+    introduction: 'Roll through harvest-gold farmland under a low evening sun.',
+    sound: 'Prairie wind, crickets and engine sounds on',
+    canvas: 'A country road across open farmland at golden hour, between wheat fields, hay bales, fences and shelterbelts, with a creek, red barns and wind turbines. Drive with WASD or the arrow keys.',
   },
   volcanic: {
     title: 'Volcanic Rift', label: 'VOLCANIC RIFT', routeNumber: '7', route: volcanicDrivingRoute,

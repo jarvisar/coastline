@@ -8,8 +8,8 @@ Discoveries are the landmarks that show up along each route. To change how often
 | Red Rock Desert | [desert-discoveries.js](../src/world/desert-discoveries.js) |
 | Midnight Alpine | [snow-discoveries.js](../src/world/snow-discoveries.js) |
 | Emerald Jungle | [jungle-discoveries.js](../src/world/jungle-discoveries.js) |
-| Golden Plains | [plains-discoveries.js](../src/world/plains-discoveries.js) |
 | Rainy Downtown | [city-discoveries.js](../src/world/city-discoveries.js) |
+| Golden Plains | [plains-discoveries.js](../src/world/plains-discoveries.js) |
 | Volcanic Rift | [volcanic-discoveries.js](../src/world/volcanic-discoveries.js) |
 | Salt Plains | [salt-discoveries.js](../src/world/salt-discoveries.js) |
 | Cypress Swamp | [swamp-discoveries.js](../src/world/swamp-discoveries.js) |
