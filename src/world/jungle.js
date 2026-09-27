@@ -15,20 +15,24 @@ import { solidModel, solidPost, solidRocks } from './colliders.js';
 import { jungleCrowns, emergentCrowns, emergentTrunks, junglePalms, fernGeometry, bigLeafGeometry, bananaGeometry, bambooGeometry, lilyGeometry, vineGeometry, tuftGeometry,
   jungleBoulders, cliffBlocks } from './jungle-assets.js';
 
+// Rough scenery uses Lambert shading. It looks the same as physical shading on
+// matte surfaces and costs much less per pixel. Roads keep physical shading for
+// their faint sheen, along with anything glossy or metal.
 const material = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: 1, flatShading: true, ...extra });
-const terrainMaterial = material('#ffffff', { vertexColors: true });
+const matte = (color, extra = {}) => new THREE.MeshLambertMaterial({ color, flatShading: true, ...extra });
+const terrainMaterial = matte('#ffffff', { vertexColors: true });
 const roadMaterial = material('#4a5156', { roughness: .95, flatShading: false });
 const shoulderMaterial = material('#b5a77b', { flatShading: false });
 const edgeMaterial = material('#d9d5c4', { flatShading: false });
 const centerMaterial = material('#d4b03d', { flatShading: false });
-const canopyMaterial = material('#ffffff', { vertexColors: true });
-const frondMaterial = material('#ffffff', { vertexColors: true, side: THREE.DoubleSide });
-const shrubMaterial = material('#ffffff');
-const barkMaterial = material('#6a5644');
+const canopyMaterial = matte('#ffffff', { vertexColors: true });
+const frondMaterial = matte('#ffffff', { vertexColors: true, side: THREE.DoubleSide });
+const shrubMaterial = matte('#ffffff');
+const barkMaterial = matte('#6a5644');
 // Logs have instance colours and trunks don't. Sharing a material recompiles per draw.
-const logMaterial = material('#6a5644');
-const palmBarkMaterial = material('#8b7657', { vertexColors: true });
-const stoneMaterial = material('#ffffff', { vertexColors: true, roughness: .95 });
+const logMaterial = matte('#6a5644');
+const palmBarkMaterial = matte('#8b7657', { vertexColors: true });
+const stoneMaterial = matte('#ffffff', { vertexColors: true });
 const railMaterial = material('#ffffff', { roughness: .7 });
 // Trunk ends are hidden in the crown and the ground, so no caps. Logs need them.
 const trunkGeometry = new THREE.CylinderGeometry(.5, .72, 1, 6, 1, true);

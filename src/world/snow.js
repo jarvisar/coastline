@@ -16,21 +16,25 @@ import { solidPost, solidSpan, solidRocks } from './colliders.js';
 import { buildAlpineLandmarks, nearAlpineRelay } from './alpine-landmarks.js';
 import { CarHeadlights } from './headlights.js';
 
+// Rough scenery uses Lambert shading. It looks the same as physical shading on
+// matte surfaces and costs much less per pixel. Roads keep physical shading for
+// their faint sheen, along with anything glossy or metal.
 const material = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: .95, flatShading: true, ...extra });
-const terrainMaterial = material('#ffffff', { vertexColors: true });
-const snowMaterial = material('#c7d2df');
+const matte = (color, extra = {}) => new THREE.MeshLambertMaterial({ color, flatShading: true, ...extra });
+const terrainMaterial = matte('#ffffff', { vertexColors: true });
+const snowMaterial = matte('#c7d2df');
 // Same settings as snowMaterial but separate. Sharing one material between
 // instanced and plain meshes makes three.js switch programs every draw.
-const snowBankMaterial = material('#c7d2df');
-const stoneMaterial = material('#ffffff');
-const pineMaterial = material('#ffffff', { side: THREE.DoubleSide });
+const snowBankMaterial = matte('#c7d2df');
+const stoneMaterial = matte('#ffffff');
+const pineMaterial = matte('#ffffff', { side: THREE.DoubleSide });
 const metalMaterial = material('#687688', { metalness: .2 });
-const barkMaterial = material('#3a3e49');
+const barkMaterial = matte('#3a3e49');
 const roadMaterial = material('#414a53', { roughness: .72 });
 const lineMaterial = material('#b4ab84');
 const edgeMaterial = material('#b1becf');
 // Slight emissive so the timber stays visible under the blue night ambient.
-const timberMaterial = material('#7d6a5c', { roughness: .9, emissive: '#5a4636', emissiveIntensity: .24 });
+const timberMaterial = matte('#7d6a5c', { emissive: '#5a4636', emissiveIntensity: .24 });
 const glowMaterial = new THREE.MeshBasicMaterial({ color: '#ffe0a0', toneMapped: false });
 const boxGeometry = new THREE.BoxGeometry(1, 1, 1);
 const poleGeometry = new THREE.CylinderGeometry(1, 1, 1, 6);

@@ -26,25 +26,29 @@ import { TRAFFIC_MODELS } from '../traffic-models.js';
 import { CityPlanting } from './city-planting.js';
 import { Rainfall } from './rainfall.js';
 
+// Rough scenery uses Lambert shading. It looks the same as physical shading on
+// matte surfaces and costs much less per pixel. Roads keep physical shading for
+// their faint sheen, along with anything glossy or metal.
 const material = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: 1, flatShading: true, ...extra });
-const terrainMaterial = material('#ffffff', { vertexColors: true });
+const matte = (color, extra = {}) => new THREE.MeshLambertMaterial({ color, flatShading: true, ...extra });
+const terrainMaterial = matte('#ffffff', { vertexColors: true });
 // Darker and glossier than other routes' roads so the asphalt reads as wet.
 const roadMaterial = material('#4d5155', { roughness: .5, flatShading: false });
 const kerbMaterial = material('#a4a7a9', { flatShading: false });
 const edgeMaterial = material('#c3c6c3', { flatShading: false });
 const centerMaterial = material('#bda041', { flatShading: false });
 const waterMaterial = createRiverMaterial();
-const blocksMaterial = material('#ffffff', { vertexColors: true, roughness: .92 });
+const blocksMaterial = matte('#ffffff', { vertexColors: true });
 const streetsMaterial = material('#ffffff', { vertexColors: true, roughness: .5, flatShading: false });
-const skylineMaterial = material('#ffffff', { vertexColors: true });
+const skylineMaterial = matte('#ffffff', { vertexColors: true });
 // Unlit so windows read as light from inside whatever the weather.
 const litMaterial = new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false });
-const furnitureMaterial = material('#ffffff', { vertexColors: true, roughness: .9 });
-const paintedMaterial = material('#ffffff');
+const furnitureMaterial = matte('#ffffff', { vertexColors: true });
+const paintedMaterial = matte('#ffffff');
 const parkedPaintMaterial = material('#ffffff', { roughness: .6 });
 const parkedTrimMaterial = material('#ffffff', { vertexColors: true, roughness: .76 });
-const leavesMaterial = material('#ffffff', { vertexColors: true });
-const barkMaterial = material('#55483b');
+const leavesMaterial = matte('#ffffff', { vertexColors: true });
+const barkMaterial = matte('#55483b');
 const boxGeometry = new THREE.BoxGeometry(1, 1, 1);
 const dummy = new THREE.Object3D(), up = new THREE.Vector3(0, 1, 0);
 // Furniture that stops the car, mapped to whether its collider is round.
