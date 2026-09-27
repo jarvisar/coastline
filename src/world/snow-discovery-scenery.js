@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { CHUNK_LENGTH, seededRandom, smoothstep, lerp, clamp } from './route.js';
+import { CHUNK_LENGTH, seededRandom, lerp, clamp } from './route.js';
 import { snowPosition, snowGroundHeight } from './snow-route.js';
 import { CABLE_ROPE_OFFSET, CABIN_DROP, CABLE_CYCLE, spanSag, cableTravel } from './snow-discoveries.js';
 import { SnowDiscoveryParts, snowDiscoveryMaterial, cableCabinGeometry } from './snow-discovery-assets.js';

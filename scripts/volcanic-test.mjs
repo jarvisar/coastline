@@ -44,12 +44,14 @@ try {
   }
   // Cycle both road-level cameras and all four overhead distances.
   for (let i = 0; i < 6; i++) { await page.keyboard.press('KeyV'); await page.waitForTimeout(200); }
-  const clock = () => page.evaluate(() => {
+  const smokeTime = () => {
     const shader = { uniforms: {}, vertexShader: '', fragmentShader: '' };
     window.__coastline.rendering.scene.getObjectByName('volcanic-smoke').material.onBeforeCompile(shader);
     return shader.uniforms.volcanicTime.value;
-  });
-  const moving = await clock(); await page.waitForTimeout(200); assert.ok(await clock() > moving);
+  };
+  const clock = () => page.evaluate(smokeTime);
+  // Software rendering can go longer than a fixed wait between frames, so wait for the next tick.
+  const moving = await clock(); await page.waitForFunction(`(${smokeTime})() > ${moving}`);
   await page.keyboard.press('KeyP'); const stopped = await clock(); await page.waitForTimeout(250); assert.equal(await clock(), stopped);
   const saved = await page.evaluate(() => ({ s: window.__coastline.vehicle.s, distance: window.__coastline.vehicle.distance }));
   await page.keyboard.press('Digit1'); await ready(page); assert.equal(await page.evaluate(() => window.__coastline.journey), 'coast');
@@ -59,6 +61,8 @@ try {
   await page.keyboard.press('KeyN'); await ready(page); assert.equal(await page.evaluate(() => window.__coastline.journey), 'salt');
   await page.keyboard.press('Digit7'); await ready(page);
   await page.reload({ waitUntil: 'networkidle' }); await ready(page); assert.equal(await page.evaluate(() => window.__coastline.journey), 'volcanic');
+  // Two software-rendered pages at once starve the phone page's first load.
+  await page.close();
 
   const mobile = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true }); watch(mobile);
   await mobile.goto(`${url}/?seed=4817`, { waitUntil: 'networkidle' }); await ready(mobile);

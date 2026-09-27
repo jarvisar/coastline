@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { clamp, randomAt } from './world/route.js';
 import { createTrafficModels, TRAFFIC_COLORS, TRAFFIC_MODELS } from './traffic-models.js';
 import { collisionImpulse, contactPoint } from './impact.js';
+import { JOURNEYS } from './journeys.js';
 
 export const TRAFFIC_CRUISE_SPEED = 16;
 const LANE = 2.4;
@@ -12,7 +13,8 @@ const RECOIL_GRIP = 8;
 const BEHIND = 380, AHEAD = 620;
 const DENSITY = { coast: 1, snow: .75, desert: .5, jungle: .6, plains: .5, city: 1, volcanic: .35, salt: .4, swamp: .45 };
 const FLEET = { city: 9 };
-const LIGHTS = { snow: 1, city: .35, volcanic: .65, swamp: .9 };
+// Keeps each route's traffic sequence distinct.
+const SALT = { coast: 2100, desert: 2200, snow: 2300, jungle: 2400, plains: 2500, city: 2600, volcanic: 2700, salt: 2800, swamp: 2900 };
 // Routes dark enough for the nearest cars to light the road.
 const BEAMS = new Set(['snow', 'swamp']);
 
@@ -51,7 +53,7 @@ export class Traffic {
     });
     // Six cars by default, three each way over about a kilometre.
     // Extra pool slots are for routes with a larger FLEET.
-    this.pool = Array.from({ length: 9 }, (_, index) => {
+    this.pool = Array.from({ length: Math.max(6, ...Object.values(FLEET)) }, (_, index) => {
       const model = this.models.create(index % TRAFFIC_MODELS.length, TRAFFIC_COLORS[0]);
       this.group.add(model.car);
       return { ...model, index, direction: index % 2 ? -1 : 1, position: new THREE.Vector3(), previousPosition: new THREE.Vector3(), quaternion: new THREE.Quaternion(), previousQuaternion: new THREE.Quaternion() };
@@ -71,7 +73,7 @@ export class Traffic {
     }
   }
   reset(route, s, journey = this.journey) {
-    this.route = route; this.journey = journey; this.salt = { coast: 2100, desert: 2200, snow: 2300, jungle: 2400, plains: 2500, city: 2600, volcanic: 2700, salt: 2800, swamp: 2900 }[journey];
+    this.route = route; this.journey = journey; this.salt = SALT[journey];
     // Unseeded on purpose so traffic differs on each visit to the same scenery.
     this.seed = Math.floor(Math.random() * 4294967296);
     this.spacing = 1 / (DENSITY[journey] ?? 1);
@@ -82,7 +84,7 @@ export class Traffic {
       rig.removeFromParent();
       if (BEAMS.has(journey)) this.group.add(rig);
     }
-    this.lastPlayerS = s; this.models.setLights(LIGHTS[journey] ?? 0);
+    this.lastPlayerS = s; this.models.setLights(JOURNEYS[journey]?.night ?? 0);
     const span = 1080 / Math.ceil(fleet / 2);
     for (const car of this.vehicles) {
       car.generation = 0;

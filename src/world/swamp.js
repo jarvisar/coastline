@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { registerChunkResources } from './chunk-resources.js';
 import { splitBatch, computeInstanceBounds } from './instance-batches.js';
-import { updateResidentChunks, positionResidentChunks } from './resident.js';
+import { LevelChunk, LevelWorld } from './level.js';
 import { finalizeChunkTransforms } from './chunk-transforms.js';
 import { CHUNK_LENGTH, randomAt, seededRandom, smoothstep, lerp, positionAt } from './route.js';
 import { SWAMP_STEP, SWAMP_COLUMN_COUNT, WATER_LEVEL, swampVertex, swampGround, swampRoadHeight as roadHeight, swampBridgeAt, onBridge,
@@ -73,20 +73,16 @@ function batch(group, geometry, mat, items, name, shadows, ambientOcclusion) {
   computeInstanceBounds(mesh); group.add(mesh); return mesh;
 }
 
-export class SwampChunk {
+export class SwampChunk extends LevelChunk {
   constructor(index) {
-    this.index = index; this.start = index * CHUNK_LENGTH; this.group = new THREE.Group(); this.group.name = `swamp-chunk-${index}`;
-    this.owned = []; this.features = { discoveries: [] };
+    super(index, `swamp-chunk-${index}`);
+    this.features = { discoveries: [] };
     this.discoveries = swampDiscoveries(this.start - 40, this.start + CHUNK_LENGTH + 40);
     this.bridge = swampBridgeAt(this.start + CHUNK_LENGTH / 2);
     this.buildTerrain(); this.buildRoad(); this.buildBridge(); this.buildScenery(); this.buildDiscoveries();
     this.buildMist();
     delete this.discoveries;
     finalizeChunkTransforms(this.group);
-  }
-  addMesh(geometry, mat, name, shadows = false) {
-    const mesh = new THREE.Mesh(geometry, mat); mesh.name = name; mesh.castShadow = shadows; mesh.receiveShadow = true;
-    this.group.add(mesh); this.owned.push(geometry); return mesh;
   }
   instances(geometry, mat, items, name, { shadows = true, ambientOcclusion = true, reflection = null } = {}) {
     if (!items.length) return;
@@ -288,7 +284,6 @@ export class SwampChunk {
       const g = ground(s, u);
       list.push({ p: [g.x, Math.max(g.y, WATER_LEVEL) + lift, g.z], scale: [size, size * stretch, size], r: [0, random() * Math.PI * 2, 0], color });
     };
-    const span = (from, to) => from + random() * (to - from);
     const side = () => random() < .5 ? -1 : 1;
 
     // Moss-hung oaks and tupelos on dry ground.
@@ -499,10 +494,6 @@ export class SwampChunk {
     reflectedSwarm.userData.ambientOcclusion = false; this.group.add(reflectedSwarm);
     delete this.fireflies;
   }
-  dispose() {
-    this.group.removeFromParent(); for (const g of this.owned) g.dispose();
-    this.group.traverse(object => { if (object.isInstancedMesh) object.dispose(); });
-  }
 }
 
 // A lantern's light on the water or lawn around it: an additive glow with the
@@ -535,9 +526,9 @@ function lanternPool() {
   return pool;
 }
 
-export class SwampWorld {
+export class SwampWorld extends LevelWorld {
   constructor(scene, chunkSource = null) {
-    this.scene = scene; this.chunkSource = chunkSource; this.chunks = new Map(); this.origin = 0; this.center = null;
+    super(scene, chunkSource, SwampChunk);
     this.effects = new THREE.Group(); this.effects.name = 'swamp-night-effects'; scene.add(this.effects);
     this.sky = new SwampSky(this.effects);
     // Deep water seen through the translucent surface. One sheet follows the
@@ -573,9 +564,7 @@ export class SwampWorld {
     this.headlights.light.intensity = 260; this.headlights.light.distance = 34; this.headlights.light.angle = .42;
   }
   update(s) {
-    this.s = s; this.origin = Math.floor(s / 1024) * 1024;
-    updateResidentChunks(this, Math.floor(s / CHUNK_LENGTH), SwampChunk);
-    positionResidentChunks(this);
+    super.update(s);
     const center = positionAt(s, 0); this.basin.position.set(center.x, -48, center.z + this.origin);
     const sites = swampDiscoveries(s - 300, s + 300), key = sites.map(site => site.index).join(',');
     if (key !== this.siteKey || this.origin !== this.lightOrigin) {
@@ -609,8 +598,7 @@ export class SwampWorld {
     if (vehicle) this.headlights.follow(vehicle);
   }
   dispose() {
-    this.chunkSource?.dispose();
-    for (const chunk of this.chunks.values()) chunk.dispose(); this.chunks.clear(); this.effects.removeFromParent();
+    super.dispose(); this.effects.removeFromParent();
     this.headlights.dispose(); this.sky.dispose(); this.glowGeometry.dispose(); this.glowMaterial.dispose();
     this.basin.geometry.dispose(); this.basin.material.dispose();
     for (const pool of this.pools) pool.material.dispose();

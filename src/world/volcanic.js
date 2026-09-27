@@ -11,7 +11,7 @@ import { COLD, basaltMaterial, lavaMaterial, glowMaterial, smokeMaterial, volcan
 import { terrainSampler } from './coastal-assets.js';
 import { registerChunkResources } from './chunk-resources.js';
 import { finalizeChunkTransforms } from './chunk-transforms.js';
-import { updateResidentChunks, positionResidentChunks } from './resident.js';
+import { LevelChunk, LevelWorld } from './level.js';
 import { solidPost, solidSpan, solidRocks } from './colliders.js';
 import { VolcanicAtmosphere } from './volcanic-atmosphere.js';
 import { volcanicDiscoveries, volcanicDiscoveryClears } from './volcanic-discoveries.js';
@@ -250,10 +250,10 @@ function facet(outline, span, random) {
   return points;
 }
 
-export class VolcanicChunk {
+export class VolcanicChunk extends LevelChunk {
   constructor(index) {
-    this.index = index; this.start = index * CHUNK_LENGTH; this.owned = []; this.features = { vents: [], colliders: [], lavafalls: [], columns: [], bridges: [] };
-    this.group = new THREE.Group(); this.group.name = `volcanic-chunk-${index}`;
+    super(index, `volcanic-chunk-${index}`);
+    this.features = { vents: [], colliders: [], lavafalls: [], columns: [], bridges: [] };
     this.discoveries = volcanicDiscoveries(this.start - 128, this.start + CHUNK_LENGTH + 128);
     // Rock, lava and glow each merge into one mesh per chunk.
     this.rock = surface(); this.lava = { ...surface(), flow: [], flowCoordinates: [] }; this.glow = { ...surface(), haze: [] }; this.rocks = []; this.pebbles = []; this.tops = [];
@@ -1518,25 +1518,16 @@ export class VolcanicChunk {
       }
     }
   }
-  dispose() {
-    this.group.removeFromParent(); for (const g of this.owned) g.dispose();
-    this.group.traverse(object => { if (object.isInstancedMesh) object.dispose(); });
-  }
 }
 
-export class VolcanicWorld {
+export class VolcanicWorld extends LevelWorld {
   constructor(scene, chunkSource = null) {
-    this.scene = scene; this.chunkSource = chunkSource; this.chunks = new Map(); this.origin = 0; this.center = null;
+    super(scene, chunkSource, VolcanicChunk);
     this.atmosphere = new VolcanicAtmosphere(scene);
-  }
-  update(s) {
-    this.s = s; this.origin = Math.floor(s / 1024) * 1024;
-    updateResidentChunks(this, Math.floor(s / CHUNK_LENGTH), VolcanicChunk);
-    positionResidentChunks(this);
   }
   animate(time) {
     volcanicClock.value = time;
     this.atmosphere.update(time, this.s, this.origin, this.chunks);
   }
-  dispose() { this.chunkSource?.dispose(); for (const chunk of this.chunks.values()) chunk.dispose(); this.chunks.clear(); this.atmosphere.dispose(); }
+  dispose() { super.dispose(); this.atmosphere.dispose(); }
 }

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { registerChunkResources } from './chunk-resources.js';
 import { splitBatch, computeInstanceBounds } from './instance-batches.js';
-import { updateResidentChunks, positionResidentChunks } from './resident.js';
+import { LevelChunk, LevelWorld, geometryFrom, triangle, material, matte } from './level.js';
 import { finalizeChunkTransforms } from './chunk-transforms.js';
 import { CHUNK_LENGTH, randomAt, seededRandom, smoothstep, lerp, positionAt } from './route.js';
 import { JUNGLE_STEP, JUNGLE_COLUMN_COUNT, RIVER_STEP, jungleColumns, jungleRows, jungleVertex, jungleHeight, jungleRoadHeight as roadHeight, riverCenter, riverHalfWidth, riverLevel, riverLips, riverLipOffset, riverRocks, riverTurbulence,
@@ -15,11 +15,6 @@ import { solidModel, solidPost, solidRocks } from './colliders.js';
 import { jungleCrowns, emergentCrowns, emergentTrunks, junglePalms, fernGeometry, bigLeafGeometry, bananaGeometry, bambooGeometry, lilyGeometry, vineGeometry, tuftGeometry,
   jungleBoulders, cliffBlocks } from './jungle-assets.js';
 
-// Rough scenery uses Lambert shading. It looks the same as physical shading on
-// matte surfaces and costs much less per pixel. Roads keep physical shading for
-// their faint sheen, along with anything glossy or metal.
-const material = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: 1, flatShading: true, ...extra });
-const matte = (color, extra = {}) => new THREE.MeshLambertMaterial({ color, flatShading: true, ...extra });
 const terrainMaterial = matte('#ffffff', { vertexColors: true });
 const roadMaterial = material('#4a5156', { roughness: .95, flatShading: false });
 const shoulderMaterial = material('#b5a77b', { flatShading: false });
@@ -64,15 +59,6 @@ function frameAt(s, u) {
   return { along: new THREE.Vector3(b.x - a.x, 0, b.z - a.z).normalize(), across: new THREE.Vector3(c.x - a.x, 0, c.z - a.z).normalize() };
 }
 
-function geometryFrom(vertices, colors) {
-  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
-  if (colors) g.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-  g.computeVertexNormals(); g.computeBoundingSphere(); return g;
-}
-function triangle(vertices, colors, a, b, c, color, start) {
-  if ((b.z - a.z) * (c.x - a.x) - (b.x - a.x) * (c.z - a.z) < 0) [b, c] = [c, b];
-  for (const p of [a, b, c]) { vertices.push(p.x, p.y, p.z + start); if (colors) colors.push(color.r, color.g, color.b); }
-}
 function batch(group, geometry, mat, items, name, shadows, ambientOcclusion) {
   const mesh = new THREE.InstancedMesh(geometry, mat, items.length); mesh.name = name;
   items.forEach((item, i) => {
@@ -125,9 +111,9 @@ function spray(water, center, out, across, width, height, seed) {
     coord: [h * 3 + seed, f * 1.5 + seed, Math.sin(h * Math.PI) * (1 - Math.abs(f)) * .95] }));
 }
 
-export class JungleChunk {
+export class JungleChunk extends LevelChunk {
   constructor(index) {
-    this.index = index; this.start = index * CHUNK_LENGTH; this.group = new THREE.Group(); this.group.name = `jungle-chunk-${index}`; this.owned = [];
+    super(index, `jungle-chunk-${index}`);
     this.lips = riverLips(this.start, this.start + CHUNK_LENGTH);
     this.falls = sideFalls(this.start, this.start + CHUNK_LENGTH);
     this.features = { lips: this.lips.map(lip => lip.index) };
@@ -136,10 +122,6 @@ export class JungleChunk {
     buildJungleDiscoveries(this,this.discoveries);
     solidRocks(this, [...jungleBoulders, ...cliffBlocks]);
     finalizeChunkTransforms(this.group);
-  }
-  addMesh(geometry, mat, name, shadows = false) {
-    const mesh = new THREE.Mesh(geometry, mat); mesh.name = name; mesh.castShadow = shadows; mesh.receiveShadow = true;
-    this.group.add(mesh); this.owned.push(geometry); return mesh;
   }
   buildTerrain() {
     const vertices = [], colors = [], ab = new THREE.Vector3(), ac = new THREE.Vector3(), normal = new THREE.Vector3();
@@ -740,19 +722,9 @@ export class JungleChunk {
     const g = geometryFrom(vertices); g.setAttribute('foamCoord', new THREE.Float32BufferAttribute(coords, 3)); g.boundingSphere.radius += 10;
     this.addMesh(g, valleyMistMaterial, 'valley-mist');
   }
-  dispose() {
-    this.group.removeFromParent(); for (const g of this.owned) g.dispose();
-    this.group.traverse(object => { if (object.isInstancedMesh) object.dispose(); });
-  }
 }
 
-export class JungleWorld {
-  constructor(scene, chunkSource = null) { this.scene = scene; this.chunkSource = chunkSource; this.chunks = new Map(); this.origin = 0; this.center = null; }
-  update(s) {
-    const center = Math.floor(s / CHUNK_LENGTH); this.origin = Math.floor(s / 1024) * 1024;
-    updateResidentChunks(this, center, JungleChunk);
-    positionResidentChunks(this);
-  }
+export class JungleWorld extends LevelWorld {
+  constructor(scene, chunkSource = null) { super(scene, chunkSource, JungleChunk); }
   animate(time) { animateWater(time, this.origin); }
-  dispose() { this.chunkSource?.dispose(); for (const chunk of this.chunks.values()) chunk.dispose(); this.chunks.clear(); }
 }

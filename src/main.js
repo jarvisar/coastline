@@ -41,8 +41,6 @@ const MENU_CRUISE_SPEED = TRAFFIC_CRUISE_SPEED * 1.4;
 // Focus rings for gamepad navigation in the choosers and the pause screen.
 const MENU_CARDS = '[data-journey], [data-car], [data-paint]';
 const PAUSE_CONTROLS = '#resume, #change-car, #autodrive, #traffic, #sound, #audio-mixer-toggle, #audio-mixer button, #audio-mixer input, #fullscreen, #graphics-toggle, [data-quality], #pixel-density, #soft-shading, #enter-vr-pause, .update-entry, .pwa-install-button';
-// Headlight glow per route: 1 is full night.
-const ROUTE_LIGHTS = { snow: 1, volcanic: .65, city: .35, swamp: .9 };
 const mileageFormat = new Intl.NumberFormat('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 let paused = false, started = false, time = 0, hudTime = 0;
 const frameClock = new FrameClock();
@@ -68,6 +66,11 @@ async function boot() {
     let vr;
     const vrStatus = new VRStatus(rendering.vrCamera.camera);
     const hidden = () => vr?.active ? !vr.visible : document.hidden;
+    // Parallel compiling keeps the page responsive while a new route's shaders build.
+    async function compileScene() {
+      if (renderer.extensions.has('KHR_parallel_shader_compile')) await renderer.compileAsync(scene, rendering.camera);
+      else renderer.compile(scene, rendering.camera);
+    }
     const fpsCounter = $('#fps-counter');
     let fpsStart = null, fpsFrames = 0;
     function updateFPS(timestamp, rendered) {
@@ -98,7 +101,7 @@ async function boot() {
     // Free driving is on by default while off-road collision is trialled.
     vehicle.toggleFreeDriving();
     vehicle.setAppearance(journey);
-    vehicle.setLights(ROUTE_LIGHTS[journey] ?? 0);
+    vehicle.setLights(JOURNEYS[journey].night ?? 0);
     rendering.setJourney(journey); audio.setJourney(journey);
     const journeyDialog = $('#journey-dialog'), carDialog = $('#car-dialog'), pauseOverlay = $('#pause-overlay');
     const openChooser = () => [journeyDialog, carDialog].find(dialog => dialog.open) ?? null;
@@ -174,7 +177,7 @@ async function boot() {
       $('.location svg text').textContent = data.routeNumber;
       $('#menu-route').textContent = data.label;
       $('#scene').setAttribute('aria-label', data.canvas);
-      document.querySelector('meta[name="theme-color"]').content = { coast: '#c2e7e8', desert: '#efc692', snow: '#111d30', jungle: '#22402a', plains: '#ecd29a', city: '#b3bcc4', volcanic: '#302728', salt: '#dae8ef', swamp: '#2c3d4b' }[journey];
+      document.querySelector('meta[name="theme-color"]').content = data.themeColor;
       document.querySelectorAll('button[data-journey]').forEach(button => button.setAttribute('aria-current', String(button.dataset.journey === journey)));
     }
     function buildCarCards() {
@@ -283,7 +286,7 @@ async function boot() {
         vehicle.setRoute(JOURNEYS[id].route, nextState);
         autodrive.reset();
         vehicle.setAppearance(id);
-        vehicle.setLights(ROUTE_LIGHTS[id] ?? 0);
+        vehicle.setLights(JOURNEYS[id].night ?? 0);
         traffic.reset(vehicle.route, vehicle.s, id); traffic.render(1, world.origin);
         primeMenuDrive();
         rendering.setJourney(id); audio.setJourney(id); updateJourneyUi(); paintCards(); updatePaintUi();
@@ -291,8 +294,7 @@ async function boot() {
         rendering.snap(); rendering.update(vehicle.car, 1, world.origin); world.animate(time, vehicle);
         // Compile after the old world is removed, against the new route's lights and fog.
         // Compiling earlier builds unused light variants and stalls the first frame.
-        if (renderer.extensions.has('KHR_parallel_shader_compile')) await renderer.compileAsync(scene, rendering.camera);
-        else renderer.compile(scene, rendering.camera);
+        await compileScene();
         updateHud();
         if (renderer.xr.isPresenting) needsRender = true;
         else rendering.render();
@@ -690,8 +692,7 @@ async function boot() {
     world.update(vehicle.s);
     buildCarCards(); buildPaintSwatches(); updateCarUi();
     vehicle.render(1, world.origin); traffic.render(1, world.origin); rendering.update(vehicle.car, 1, world.origin); updateHud(); updateJourneyUi(); updateViewUi(); updateGraphicsUi();
-    if (renderer.extensions.has('KHR_parallel_shader_compile')) await renderer.compileAsync(scene, rendering.camera);
-    else renderer.compile(scene, rendering.camera);
+    await compileScene();
     changingJourney = false;
     renderer.setAnimationLoop(frame);
     void vr.detect();

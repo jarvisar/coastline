@@ -2,7 +2,7 @@ import { computeInstanceBounds } from './instance-batches.js';
 import * as THREE from 'three';
 import { registerChunkResources } from './chunk-resources.js';
 import { finalizeChunkTransforms } from './chunk-transforms.js';
-import { updateResidentChunks, positionResidentChunks } from './resident.js';
+import { LevelChunk, LevelWorld, geometryFrom } from './level.js';
 import { CHUNK_LENGTH, TERRAIN_STEP, randomAt, seededRandom, roadFrame, roadX, roadHeight, coastOffset, shorelineOffset, terrainColumns, terrainCell, terrainVertex, positionAt, pondAt, pondRadius, ravineAmount, groundHeight, rockCover, cliffRib, bridgeAt, coastalGrove, rangeInfluence, wildflowers, icePlant, coastalGuardrail, GUARDRAIL_OFFSET, overlookAt, overlookWidth, clamp, lerp, smoothstep } from './route.js';
 import { createWaterMaterial, createSurfMaterial, createRockWashMaterial, animateWater } from './water.js';
 import { buildLandmarks } from './landmarks.js';
@@ -67,12 +67,6 @@ registerChunkResources('coast', { terrainMaterial, waterMaterial, roadMaterial, 
   postMaterial, capMaterial, trunkGeometry, rockGeometry, postGeometry, capGeometry,
   coastalPines, coastalCrags, coastalCypress, coastalMontereyPine, coastalScrub, coastalSedge, railGeometry, railMaterial, blossomMaterial });
 
-function geometryFrom(positions, colors) {
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-  if (colors) g.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-  g.computeVertexNormals(); g.computeBoundingSphere(); return g;
-}
 function addTriangle(positions, colors, a, b, c, color, start) {
   // Surfaces are height fields, so force upward-facing winding.
   if ((b.z - a.z) * (c.x - a.x) - (b.x - a.x) * (c.z - a.z) < 0) [b, c] = [c, b];
@@ -138,9 +132,9 @@ function crownOf(rock, shape) {
   return { x: center.x, y: center.y, z: center.z, radius };
 }
 
-export class CoastalChunk {
+export class CoastalChunk extends LevelChunk {
   constructor(index) {
-    this.index = index; this.start = index * CHUNK_LENGTH; this.group = new THREE.Group(); this.owned = [];
+    super(index);
     this.discoveries = coastalDiscoveries(this.start - 96, this.start + CHUNK_LENGTH + 96);
     this.buildTerrain(); this.buildWater(); this.buildRoad(); buildLandmarks(this); this.buildScenery();
     buildCoastalDiscoveries(this, this.discoveries); buildCoastalSea(this);
@@ -148,9 +142,7 @@ export class CoastalChunk {
     solidRocks(this, [rockGeometry, ...coastalCrags]);
     finalizeChunkTransforms(this.group);
   }
-  addMesh(geometry, material, shadows = false) {
-    const mesh = new THREE.Mesh(geometry, material); mesh.receiveShadow = true; mesh.castShadow = shadows; this.group.add(mesh); this.owned.push(geometry); return mesh;
-  }
+  addMesh(geometry, material, shadows = false) { return super.addMesh(geometry, material, '', shadows); }
   buildTerrain() {
     const positions = []; const colors = [];
     const firstRow = this.start / TERRAIN_STEP;
@@ -767,28 +759,20 @@ export class CoastalChunk {
     const blossoms = this.addMesh(geometryFrom(positions, colors), blossomMaterial);
     blossoms.name = 'wildflower-drifts'; blossoms.userData.ambientOcclusion = false;
   }
-  dispose() {
-    this.group.removeFromParent();
-    for (const geometry of this.owned) geometry.dispose();
-    this.group.traverse(object => { if (object.isInstancedMesh) object.dispose(); });
-  }
 }
 
-export class CoastalWorld {
+export class CoastalWorld extends LevelWorld {
   constructor(scene, chunkSource = null) {
-    this.scene = scene; this.chunkSource = chunkSource; this.chunks = new Map(); this.origin = 0; this.center = null;
+    super(scene, chunkSource, CoastalChunk);
     this.sky = new CoastalSky(scene);
   }
   update(s) {
-    const center = Math.floor(s / CHUNK_LENGTH);
-    this.origin = Math.floor(s / 1024) * 1024;
-    updateResidentChunks(this, center, CoastalChunk);
-    positionResidentChunks(this);
+    super.update(s);
     this.sky.follow(roadX(s), roadHeight(s), this.origin - s);
   }
   animate(time) {
     animateWater(time, this.origin);
     for (const chunk of this.chunks.values()) chunk.birds?.update(time);
   }
-  dispose() { this.chunkSource?.dispose(); for (const chunk of this.chunks.values()) chunk.dispose(); this.chunks.clear(); this.sky.dispose(); }
+  dispose() { super.dispose(); this.sky.dispose(); }
 }

@@ -10,7 +10,7 @@ const browser = await chromium.launch(process.env.CHROME_PATH
 try {
   const page = await browser.newPage({ viewport: { width: 393, height: 851 } });
   await page.route('https://coastline.test/', route => route.fulfill({ contentType: 'text/html', body:
-    '<section id="welcome"><button id="start">Let’s drive</button></section><div id="pause-overlay" hidden></div>' }));
+    '<section id="welcome"><button id="start">Let’s drive</button></section><div id="pause-overlay" hidden><div class="pause-settings"></div></div>' }));
   async function setup() {
     await page.goto('https://coastline.test/');
     await page.addStyleTag({ content: css });

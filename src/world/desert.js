@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { registerChunkResources } from './chunk-resources.js';
 import { finalizeChunkTransforms } from './chunk-transforms.js';
 import { splitBatch, computeInstanceBounds } from './instance-batches.js';
-import { updateResidentChunks, positionResidentChunks } from './resident.js';
+import { LevelChunk, LevelWorld, geometryFrom } from './level.js';
 import { CHUNK_LENGTH, randomAt, seededRandom, roadHeight, roadFrame } from './route.js';
 import { DESERT_COLUMNS, DESERT_STEP, DESERT_VALLEY_EDGE, desertFacetColumn, desertColumns, desertVertex, desertPosition, desertHeight, desertRowStep, desertBridgeAt, desertCreek, desertCreekDistance, canyonProfile, dryWashCenter, dryWashWidth, mesasForChunk, insideMesa } from './desert-route.js';
 import { buildDesertCrossing, buildDesertWater, desertWaterClock } from './desert-river.js';
@@ -28,12 +28,6 @@ const cactusGeometry = new THREE.SphereGeometry(1, 7, 5);
 const transform = new THREE.Object3D();
 const up = new THREE.Vector3(0, 1, 0);
 
-function geometry(positions, colors) {
-  const result = new THREE.BufferGeometry();
-  result.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-  if (colors) result.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-  result.computeVertexNormals(); result.computeBoundingSphere(); return result;
-}
 function triangle(positions, colors, a, b, c, color, start, upward = true) {
   if (upward && (b.z - a.z) * (c.x - a.x) - (b.x - a.x) * (c.z - a.z) < 0) [b, c] = [c, b];
   for (const p of [a, b, c]) { positions.push(p.x, p.y, p.z + start); if (colors) colors.push(color.r, color.g, color.b); }
@@ -65,7 +59,7 @@ for (let i = 0; i < 31; i++) {
   const height = .2 + randomAt(i, 917) * 1.1;
   leafPositions.push(-z * .11, 0, x * .11, x * radius, height, z * radius, z * .11, 0, -x * .11);
 }
-const leafGeometry = geometry(leafPositions);
+const leafGeometry = geometryFrom(leafPositions);
 
 const agavePositions = [];
 for (let i = 0; i < 13; i++) {
@@ -77,7 +71,7 @@ for (let i = 0; i < 13; i++) {
   const tip = { x: x * length, y: .28 + randomAt(i, 725) * .4, z: z * length };
   for (const p of [left, fold, right, left, tip, fold, fold, tip, right]) agavePositions.push(p.x, p.y, p.z);
 }
-const agaveGeometry = geometry(agavePositions);
+const agaveGeometry = geometryFrom(agavePositions);
 
 const grassPositions = [];
 for (let i = 0; i < 17; i++) {
@@ -87,7 +81,7 @@ for (let i = 0; i < 17; i++) {
   grassPositions.push(-z * .035, 0, x * .035, x * bend * .4, height * .7, z * bend * .4, z * .035, 0, -x * .035,
     z * .035, 0, -x * .035, x * bend * .4, height * .7, z * bend * .4, x * bend, height, z * bend);
 }
-const grassGeometry = geometry(grassPositions);
+const grassGeometry = geometryFrom(grassPositions);
 
 const slabPositions = [];
 const slabRings = [[-.35, .93], [.08, 1.08], [.48, .68]].map(([y, radius], layer) =>
@@ -107,14 +101,13 @@ for (let i = 0; i < 7; i++) {
   triangle(slabPositions, null, { x: .1, y: .52, z: 0 }, slabRings[2][i], slabRings[2][next], null, 0);
   triangle(slabPositions, null, { x: 0, y: -.42, z: 0 }, slabRings[0][i], slabRings[0][next], null, 0, false);
 }
-const slabGeometry = geometry(slabPositions);
+const slabGeometry = geometryFrom(slabPositions);
 registerChunkResources('desert', { groundMaterial, rockMaterial, barkMaterial, plantMaterial, asphaltMaterial, sandMaterial,
   edgeMaterial, centerMaterial, stoneGeometry, bushGeometry, trunkGeometry, cactusGeometry, leafGeometry, agaveGeometry, grassGeometry, slabGeometry });
 
-export class DesertChunk {
+export class DesertChunk extends LevelChunk {
   constructor(index) {
-    this.index = index; this.start = index * CHUNK_LENGTH; this.group = new THREE.Group(); this.owned = []; this.vertices = new Map();
-    this.group.name = `desert-chunk-${index}`;
+    super(index, `desert-chunk-${index}`); this.vertices = new Map();
     this.discoveries = desertDiscoveries(this.start - 40, this.start + CHUNK_LENGTH + 40);
     // Each row needs only two column profiles. Cache them for construction only.
     const columns = new Map();
@@ -131,10 +124,7 @@ export class DesertChunk {
     solidRocks(this, [stoneGeometry, slabGeometry]);
     finalizeChunkTransforms(this.group);
   }
-  addMesh(source, material, castShadow = false) {
-    const mesh = new THREE.Mesh(source, material); mesh.castShadow = castShadow; mesh.receiveShadow = true;
-    this.group.add(mesh); this.owned.push(source); return mesh;
-  }
+  addMesh(source, material, castShadow = false) { return super.addMesh(source, material, '', castShadow); }
   clearDiscoveryFootprints() {
     if (!this.discoveries.length) return;
     // Filter after generation so the seeded sequence for other scenery is unchanged.
@@ -242,7 +232,7 @@ export class DesertChunk {
         });
       }
     }
-    this.addMesh(geometry(positions, colors), groundMaterial, true).name = 'desert-floor';
+    this.addMesh(geometryFrom(positions, colors), groundMaterial, true).name = 'desert-floor';
     buildDesertWater(this, riverTriangles);
   }
   buildMesas() {
@@ -292,7 +282,7 @@ export class DesertChunk {
       this.mesaTops.set(mesa, { top, ring });
       for (let i = 0; i < sides; i++) triangle(positions, colors, top, ring[i], ring[(i + 1) % sides], new THREE.Color('#e9af6c').multiplyScalar(.98 + random() * .04), this.start);
     }
-    this.addMesh(geometry(positions, colors), groundMaterial, true).name = 'sandstone-mesas';
+    this.addMesh(geometryFrom(positions, colors), groundMaterial, true).name = 'sandstone-mesas';
   }
   ribbon(ranges, lift, material, skip) {
     const vertices = [];
@@ -304,7 +294,7 @@ export class DesertChunk {
       const a = at(s, low), b = at(s + 2, low), c = at(s, high), d = at(s + 2, high);
       triangle(vertices, null, a, b, c, null, this.start); triangle(vertices, null, b, d, c, null, this.start);
     }
-    return this.addMesh(geometry(vertices), material);
+    return this.addMesh(geometryFrom(vertices), material);
   }
   buildRoad() {
     this.ribbon([[-6.25, 6.25]], .045, sandMaterial);
@@ -584,20 +574,9 @@ export class DesertChunk {
     instances(this.group, bushGeometry, plantMaterial, shrubs, 'desert-foreground-scrub');
     instances(this.group, grassGeometry, plantMaterial, grasses, 'desert-foreground-grass');
   }
-  dispose() {
-    this.group.removeFromParent();
-    for (const source of this.owned) source.dispose();
-    this.group.traverse(object => { if (object.isInstancedMesh) object.dispose(); });
-  }
 }
 
-export class DesertWorld {
-  constructor(scene, chunkSource = null) { this.scene = scene; this.chunkSource = chunkSource; this.chunks = new Map(); this.origin = 0; this.center = null; }
-  update(s) {
-    const center = Math.floor(s / CHUNK_LENGTH); this.origin = Math.floor(s / 1024) * 1024;
-    updateResidentChunks(this, center, DesertChunk);
-    positionResidentChunks(this);
-  }
+export class DesertWorld extends LevelWorld {
+  constructor(scene, chunkSource = null) { super(scene, chunkSource, DesertChunk); }
   animate(time) { desertWaterClock.value = time; }
-  dispose() { this.chunkSource?.dispose(); for (const chunk of this.chunks.values()) chunk.dispose(); this.chunks.clear(); }
 }

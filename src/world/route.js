@@ -3,7 +3,6 @@ import { resolveWorldSeed, workerSeed } from './generation.js';
 export const SEED = workerSeed ?? resolveWorldSeed(globalThis.location?.search);
 export const CHUNK_LENGTH = 128;
 export const TERRAIN_STEP = 8;
-export const ROAD_HALF_WIDTH = 5.5;
 
 export const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 export const lerp = (a, b, t) => a + (b - a) * t;

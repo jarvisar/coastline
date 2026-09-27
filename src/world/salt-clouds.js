@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { randomAt, smoothstep } from './route.js';
-import { saltPalette, SALT_SUN } from './salt-palette.js';
+import { SALT_SUN } from './salt-palette.js';
 import { SALT_LEVEL, WATER_LEVEL } from './salt-route.js';
 import { waterClock } from './water.js';
 

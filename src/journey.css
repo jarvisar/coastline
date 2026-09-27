@@ -58,7 +58,7 @@ body[data-journey=snow] .vignette { background: linear-gradient(180deg,#101a2b50
 body[data-journey=snow] .welcome, body[data-journey=snow] .brand, body[data-journey=snow] .location { text-shadow: 0 2px 12px #08111c; }
 body[data-journey=snow] :is(.icon-button,.journey-button,.controls,.touch-controls button) { background: #17273ed1; border-color: #93acc64a; }
 body[data-journey=snow] :is(.icon-button,.journey-button,.touch-controls button):hover { background: #304663e0; }
-body[data-journey=snow] :is(kbd,.weather-divider,.control-separator) { border-color: #b8cce84a; }
+body[data-journey=snow] :is(kbd,.control-separator) { border-color: #b8cce84a; }
 body[data-journey=snow] #toast { background: #17273eed; }
 body[data-journey=snow] .chooser { background: #1c2b41fa; }
 body[data-journey=snow] .chooser::backdrop { background: #07101d66; }
@@ -74,7 +74,7 @@ body[data-journey=jungle] .vignette { background: linear-gradient(180deg,#0f2214
 body[data-journey=jungle] .welcome, body[data-journey=jungle] .brand, body[data-journey=jungle] .location { text-shadow: 0 2px 12px #0b1a0f; }
 body[data-journey=jungle] :is(.icon-button,.journey-button,.controls,.touch-controls button) { background: #1c3423d1; border-color: #9cbf8f4a; }
 body[data-journey=jungle] :is(.icon-button,.journey-button,.touch-controls button):hover { background: #2f5136e0; }
-body[data-journey=jungle] :is(kbd,.weather-divider,.control-separator) { border-color: #b8d6a84a; }
+body[data-journey=jungle] :is(kbd,.control-separator) { border-color: #b8d6a84a; }
 body[data-journey=jungle] #toast { background: #1c3423ed; }
 body[data-journey=jungle] .chooser { background: #203a27fa; }
 body[data-journey=jungle] .chooser::backdrop { background: #0a180e66; }
@@ -108,7 +108,7 @@ body[data-journey=volcanic] .vignette { background: linear-gradient(180deg,#281d
 body[data-journey=volcanic] :is(.welcome,.brand,.location) { text-shadow: 0 2px 12px #211719; }
 body[data-journey=volcanic] :is(.icon-button,.journey-button,.controls,.touch-controls button) { background: #35292bd9; border-color: #c9a18c55; }
 body[data-journey=volcanic] :is(.icon-button,.journey-button,.touch-controls button):hover { background: #57403c; }
-body[data-journey=volcanic] :is(kbd,.weather-divider,.control-separator) { border-color: #c9a18c55; }
+body[data-journey=volcanic] :is(kbd,.control-separator) { border-color: #c9a18c55; }
 body[data-journey=volcanic] #toast { background: #35292bf2; }
 body[data-journey=volcanic] .chooser { background: #30272afa; }
 body[data-journey=volcanic] .chooser::backdrop { background: #160e1466; }
@@ -133,7 +133,7 @@ body[data-journey=swamp] .vignette { background: linear-gradient(180deg,#131e255
 body[data-journey=swamp] :is(.welcome,.brand,.location) { text-shadow: 0 2px 12px #0e171d; }
 body[data-journey=swamp] :is(.icon-button,.journey-button,.controls,.touch-controls button) { background: #1f2d36d9; border-color: #a2b8b04d; }
 body[data-journey=swamp] :is(.icon-button,.journey-button,.touch-controls button):hover { background: #34474f; }
-body[data-journey=swamp] :is(kbd,.weather-divider,.control-separator) { border-color: #a2b8b04d; }
+body[data-journey=swamp] :is(kbd,.control-separator) { border-color: #a2b8b04d; }
 body[data-journey=swamp] #toast { background: #1f2d36f2; }
 body[data-journey=swamp] .chooser { background: #22303afa; }
 body[data-journey=swamp] .chooser::backdrop { background: #0c141a66; }
@@ -144,7 +144,6 @@ body[data-journey=swamp] .pause-overlay { background: #16222a66; }
 body[data-journey=swamp] .eyebrow>span { background: #f2c85b; }
 body[data-journey=swamp] .start-button:hover { background: #f1e3b8; }
 body[data-journey=swamp] .touch-controls button.active { background: var(--ink); }
-@media(max-width:1000px) { .weather { display: none; } }
 @media(max-width:600px) {
   .journey-button { position: absolute; right: 0; top: 53px; padding: 9px 13px; font-size: 10px; }
   .chooser { padding: 18px; }

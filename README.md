@@ -93,6 +93,7 @@ More docs:
 - [Audio](docs/audio.md)
 - [Discovery frequency](docs/discoveries.md)
 - [Performance](docs/performance.md)
+- [Adding a route](docs/routes.md)
 
 ## Credits
 

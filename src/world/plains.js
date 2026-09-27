@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { registerChunkResources } from './chunk-resources.js';
 import { finalizeChunkTransforms } from './chunk-transforms.js';
 import { splitBatch, computeInstanceBounds } from './instance-batches.js';
-import { updateResidentChunks, positionResidentChunks } from './resident.js';
+import { LevelChunk, LevelWorld, instances, material, matte } from './level.js';
 import { CHUNK_LENGTH, randomAt, seededRandom, smoothstep, lerp, positionAt, roadFrame } from './route.js';
 import { PLAINS_STEP, PLAINS_COLUMNS, PLAINS_COLUMN_COUNT, ROAD_RESERVE, plainsVertex, plainsRowStep, plainsPosition, plainsRoadHeight, plainsGroundHeight,
   plainsCreekAt, creekCenterS, creekDistance, CREEK_WATER_HALF_WIDTH, BRIDGE_HALF_LENGTH, fieldAt, fieldRowAt, fieldBoundary, fieldBands,
@@ -16,11 +16,6 @@ import { buildPlainsDiscoveries } from './plains-discovery-scenery.js';
 import { PLAINS_RAIL_REACH } from './plains-railway.js';
 import { solidModel, solidPost, solidSpan } from './colliders.js';
 
-// Matte scenery uses Lambert shading. It looks the same as physical shading on
-// rough surfaces and costs much less per pixel. Roads keep physical shading for
-// their faint sheen, as do water and metal.
-const material = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: 1, flatShading: true, ...extra });
-const matte = (color, extra = {}) => new THREE.MeshLambertMaterial({ color, flatShading: true, ...extra });
 const terrainMaterial = matte('#ffffff', { vertexColors: true });
 // Furrows and headlands are drawn in the fragment shader from the per-vertex
 // `furrow` attribute (see facetShade). Rows fade to flat colour where they would alias.
@@ -89,21 +84,6 @@ function triangle(vertices, colors, a, b, c, color, start, furrows, furrowAt) {
 // same way so two cells sharing an edge share the point.
 const cellSteps = (from, to = null) => Math.max(1, Math.round((to === null ? PLAINS_COLUMNS[from + 1] - PLAINS_COLUMNS[from] : (to - from) * PLAINS_STEP) / 3.2));
 const edgePoint = (p, q, w) => Object.fromEntries(['x', 'y', 'z', 's', 'u'].map(key => [key, p[key] * (1 - w) + q[key] * w]));
-function instances(group, geo, mat, items, name, shadows = true, occlusion = true) {
-  if (!items.length) return;
-  for (const part of splitBatch(items)) {
-    const mesh = new THREE.InstancedMesh(geo, mat, part.length); mesh.name = name;
-    if (!occlusion) mesh.userData.ambientOcclusion = false;
-    for (let i = 0; i < part.length; i++) {
-      const item = part[i]; dummy.position.set(...item.p); dummy.rotation.set(...(item.r ?? [0, 0, 0]));
-      if (item.q) dummy.quaternion.copy(item.q);
-      dummy.scale.set(...item.scale); dummy.updateMatrix(); mesh.setMatrixAt(i, dummy.matrix);
-      if (item.color) mesh.setColorAt(i, new THREE.Color(item.color));
-    }
-    mesh.castShadow = shadows; mesh.receiveShadow = true;
-    computeInstanceBounds(mesh); group.add(mesh);
-  }
-}
 
 // Each field uses one tint throughout so the patchwork reads as distinct fields.
 const CROP_PALETTES = {
@@ -135,9 +115,9 @@ function cropColor(s, u) {
 const GRASS_TINTS = { pasture: ['#8fae48', '#9db84f'], verge: ['#9bab4c', '#8da144'] };
 const WHEAT_TINTS = ['#d9a93a', '#e3b545', '#d2a235'];
 
-export class PlainsChunk {
+export class PlainsChunk extends LevelChunk {
   constructor(index) {
-    this.index = index; this.start = index * CHUNK_LENGTH; this.group = new THREE.Group(); this.group.name = `plains-chunk-${index}`; this.owned = [];
+    super(index, `plains-chunk-${index}`);
     this.features = { discoveries: [] };
     // Rail approaches and turbine rows continue through neighboring chunks.
     this.discoveries = plainsDiscoveries(this.start - PLAINS_RAIL_REACH - 12, this.start + CHUNK_LENGTH + PLAINS_RAIL_REACH + 12);
@@ -146,10 +126,6 @@ export class PlainsChunk {
     buildPlainsDiscoveries(this, this.discoveries);
     this.finishScenery();
     finalizeChunkTransforms(this.group);
-  }
-  addMesh(g, mat, name, shadows = false) {
-    const mesh = new THREE.Mesh(g, mat); mesh.name = name; mesh.castShadow = shadows; mesh.receiveShadow = true;
-    this.group.add(mesh); this.owned.push(g); return mesh;
   }
   // Samples the rendered facets so scenery matches them at seams. Falls back to
   // the analytic height outside this chunk, e.g. a wire's far pole.
@@ -459,11 +435,7 @@ export class PlainsChunk {
   buildScenery() {
     const random = seededRandom(this.index + 27113), { posts, wires, poles, shrubs, bales, squareBales, boxes } = this.scenery;
     const hedgeGreens = ['#46722f', '#4f7a35', '#3d672b', '#557f3a'], strawTints = ['#d9b566', '#d1ab5c', '#dfbc6d'];
-    const cypressGreens = CYPRESS_GREENS;
     const oakGreens = ['#587f3a', '#4d7434', '#65883f', '#43682e'], poplarGreens = ['#5f8a3b', '#6a9542', '#547d34'], willowGreens = ['#7f9c4a', '#8aa552', '#73923f'];
-    // Boundary belts get the widest spread so they don't read as one flat mass.
-    const lineGreens = ['#5d8a39', '#6b9942', '#4f7c32', '#76a54a', '#598136', '#6fa03f'];
-    const coniferGreens = CONIFER_GREENS;
     const clear = (s, u, r = 1) => this.clearAt(s, u, r);
     const stone = ['#a9a496', '#9b9789', '#b5b0a3', '#8f8b80'];
     const inChunk = s => s >= this.start && s < this.start + CHUNK_LENGTH;
@@ -1037,20 +1009,10 @@ export class PlainsChunk {
     }
     this.scenery = null;
   }
-  dispose() {
-    this.group.removeFromParent(); for (const g of this.owned) g.dispose();
-    this.group.traverse(object => { if (object.isInstancedMesh) object.dispose(); });
-  }
 }
 
-export class PlainsWorld {
-  constructor(scene, chunkSource = null) { this.scene = scene; this.chunkSource = chunkSource; this.chunks = new Map(); this.origin = 0; this.center = null; }
-  update(s) {
-    const center = Math.floor(s / CHUNK_LENGTH); this.origin = Math.floor(s / 1024) * 1024;
-    updateResidentChunks(this, center, PlainsChunk);
-    positionResidentChunks(this);
-  }
+export class PlainsWorld extends LevelWorld {
+  constructor(scene, chunkSource = null) { super(scene, chunkSource, PlainsChunk); }
   // One clock drives the creek ripples, windmills and turbines.
   animate(time) { animateWater(time, this.origin); }
-  dispose() { this.chunkSource?.dispose(); for (const chunk of this.chunks.values()) chunk.dispose(); this.chunks.clear(); }
 }

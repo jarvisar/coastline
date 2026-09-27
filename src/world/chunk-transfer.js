@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { chunkResource, chunkResourceKey } from './chunk-resources.js';
 import { finalizeChunkTransforms } from './chunk-transforms.js';
 import { CoastalBirds } from './birds.js';
+import { disposeChunk } from './level.js';
 
 const sphereData = sphere => sphere && [...sphere.center.toArray(), sphere.radius];
 const boxData = box => box && [...box.min.toArray(), ...box.max.toArray()];
@@ -48,11 +49,7 @@ export function packChunk(chunk) {
 }
 
 export function unpackChunk(data) {
-  const chunk = { start: data.start, index: data.index, features: data.features, sourceData: data, owned: [], dispose() {
-    this.group.removeFromParent();
-    for (const geometry of this.owned) geometry.dispose();
-    this.group.traverse(object => { if (object.isInstancedMesh) object.dispose(); });
-  } };
+  const chunk = { start: data.start, index: data.index, features: data.features, sourceData: data, owned: [], dispose() { disposeChunk(this); } };
   // Meshes that shared an attribute in the worker, like a reflection reusing
   // its original's instance matrices, share it again here: one GPU buffer.
   const attributes = new Map();

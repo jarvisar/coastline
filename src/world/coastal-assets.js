@@ -1,13 +1,8 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { randomAt } from './route.js';
+import { geometryFrom } from './level.js';
 
-function geometry(vertices, colors) {
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
-  if (colors) g.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-  g.computeVertexNormals(); g.computeBoundingSphere(); return g;
-}
 
 function crag(seed) {
   const vertices = [], colors = [], sides = 8;
@@ -55,7 +50,7 @@ function crag(seed) {
   const back = [profile.lean[0] + .13, profile.ridge[1], -.24 + profile.lean[1]];
   for (let i = 0; i < sides; i++) face(i < 4 ? front : back, top[(i + 1) % sides], top[i], i);
   face(top[0], back, front, 0); face(top[4], front, back, 4);
-  return geometry(vertices, colors);
+  return geometryFrom(vertices, colors);
 }
 
 function pine(seed) {
@@ -75,7 +70,7 @@ function pine(seed) {
       for (let k = 0; k < 6; k++) colors.push(tint.r, tint.g, tint.b);
     }
   }
-  return geometry(vertices, colors);
+  return geometryFrom(vertices, colors);
 }
 
 function coastalTree(pine = false) {
@@ -162,7 +157,7 @@ function sedge() {
       }
     }
   }
-  const g = geometry(vertices, colors);
+  const g = geometryFrom(vertices, colors);
   // Point all normals up so back-facing blades don't render black.
   const normals = g.attributes.normal;
   for (let i = 0; i < normals.count; i++) normals.setXYZ(i, 0, 1, 0);

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { registerChunkResources } from './chunk-resources.js';
 import { finalizeChunkTransforms } from './chunk-transforms.js';
 import { splitBatch, computeInstanceBounds } from './instance-batches.js';
-import { updateResidentChunks, positionResidentChunks } from './resident.js';
+import { LevelChunk, LevelWorld } from './level.js';
 import { CHUNK_LENGTH, randomAt, seededRandom, smoothstep, lerp, roadFrame, positionAt } from './route.js';
 import { SALT_LEVEL, WATER_LEVEL, CAUSEWAY_TOE, CELL_REACH, SALT_EDGES, CELL, CELL_ROWS, cellSeed, saltCell, keyFlooded,
   saltRoadHeight, saltHeight, saltNoise, lagoonAmount, inPool, poolNear, saltClusters, saltPileFields } from './salt-route.js';
@@ -81,10 +81,10 @@ function crustTone(s, u, r = .5) {
 // Ridge height and brightness fade out toward the far field.
 const reachFade = u => 1 - smoothstep(320, 412, Math.abs(u));
 
-export class SaltChunk {
+export class SaltChunk extends LevelChunk {
   constructor(index) {
-    this.index = index; this.start = index * CHUNK_LENGTH; this.group = new THREE.Group(); this.group.name = `salt-chunk-${index}`;
-    this.owned = []; this.features = {}; this.cells = [];
+    super(index, `salt-chunk-${index}`);
+    this.features = {}; this.cells = [];
     this.crust = surface(); this.water = { positions: [], depths: [] };
     this.items = { rocks: saltBoulders.map(() => []), rockMirrors: saltBoulders.map(() => []), pebbles: [], aprons: [], tola: [],
       piles: [], pileMirrors: [], standing: [], standingMirrors: [], feeding: [], feedingMirrors: [], posts: [], bands: [] };
@@ -104,10 +104,6 @@ export class SaltChunk {
     finalizeChunkTransforms(this.group);
   }
   clear(s, u, radius) { return saltDiscoveryClears(s, u, this.discoveries, radius); }
-  addMesh(g, material, name, shadow = false) {
-    const mesh = new THREE.Mesh(g, material); mesh.name = name; mesh.castShadow = shadow; mesh.receiveShadow = true;
-    this.group.add(mesh); this.owned.push(g); return mesh;
-  }
   // Chunk-local position.
   at(s, u, y = saltHeight(s, u)) { const p = positionAt(s, u, y); return { x: p.x, y: p.y, z: p.z + this.start }; }
   // Salt polygons are Voronoi cells, owned by the chunk holding their seed.
@@ -442,26 +438,19 @@ export class SaltChunk {
     }
     delete this.bank;
   }
-  dispose() {
-    this.group.removeFromParent();
-    for (const g of this.owned) g.dispose();
-    this.group.traverse(object => { if (object.isInstancedMesh) object.dispose(); });
-  }
 }
 
-export class SaltWorld {
+export class SaltWorld extends LevelWorld {
   constructor(scene, chunkSource = null) {
-    this.scene = scene; this.chunkSource = chunkSource; this.chunks = new Map(); this.origin = 0; this.center = null;
+    super(scene, chunkSource, SaltChunk);
     this.sky = new SaltSky(scene);
   }
   update(s) {
-    this.origin = Math.floor(s / 1024) * 1024;
-    updateResidentChunks(this, Math.floor(s / CHUNK_LENGTH), SaltChunk);
-    positionResidentChunks(this);
+    super.update(s);
     const anchor = positionAt(s, 0, 0);
     this.sky.follow(anchor.x, anchor.z + this.origin);
   }
   // One clock drives the pools, clouds, cloud shadows and flamingo flight.
   animate(time) { animateWater(time, this.origin); }
-  dispose() { this.chunkSource?.dispose(); for (const chunk of this.chunks.values()) chunk.dispose(); this.chunks.clear(); this.sky.dispose(); }
+  dispose() { super.dispose(); this.sky.dispose(); }
 }

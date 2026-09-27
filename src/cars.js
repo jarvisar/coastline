@@ -11,9 +11,6 @@ export const CLASSIC_SHAPE = {
 
 const shape = name => TRAFFIC_MODELS.find(spec => spec.name === name);
 
-// Only the default car takes its paint from the route.
-export const ROUTE_PAINT = { coast: '#d96143', desert: '#78977b', snow: '#9fc4d5', jungle: '#e0b44a', plains: '#4f8f8b', city: '#7a3b47', volcanic: '#abb5a3', salt: '#eeece6', swamp: '#cdb88f' };
-
 // Road cars stay within about 10% of the coastal wagon. The coupe, formula
 // and specials are the deliberate exceptions.
 //
@@ -117,6 +114,9 @@ export const CARS = {
     stats: { topSpeed: 50, acceleration: 40, braking: 30, grip: 1.32, offRoad: 20 },
   },
 };
+
+// Only the default car takes its paint from the route: the paint of that route's own car.
+export const ROUTE_PAINT = Object.fromEntries(Object.values(CARS).filter(car => car.trim).map(car => [car.trim, car.paint]));
 
 export const CAR_IDS = Object.keys(CARS);
 export const DEFAULT_CAR = 'auto';

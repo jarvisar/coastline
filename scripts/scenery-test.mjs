@@ -9,6 +9,9 @@ try {
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', msg => { if (msg.type() === 'error') errors.push(msg.text()); });
+  // Random traffic, and car models whose shared geometry stays uploaded once drawn,
+  // would blur the leak check on returning to the same bridge.
+  await page.addInitScript(() => localStorage.setItem('coastline-traffic', 'false'));
   await page.goto(process.env.TEST_URL ?? 'http://127.0.0.1:5173', { waitUntil: 'networkidle' });
   await page.waitForFunction(() => window.__coastline && document.querySelector('#loading').classList.contains('loaded'));
   await page.click('#start');
@@ -52,12 +55,14 @@ try {
       if (after[i] !== still[i] || after[i + 1] !== still[i + 1] || after[i + 2] !== still[i + 2]) paused++;
     }
     // Shift the scene by a full phase period to test the shader's floating-origin correction.
-    for (const chunk of a.world.chunks.values()) chunk.group.position.z += 4096;
     a.vehicle.car.position.z += 4096; a.rendering.camera.position.z += 4096;
     for (const object of a.rendering.scene.children) {
       if (object.isDirectionalLight) { object.position.z += 4096; object.target.position.z += 4096; }
     }
     a.world.origin += 4096;
+    // Chunk matrices are static, so move them the way the game does.
+    const { positionResidentChunks } = await import('/src/world/resident.js');
+    positionResidentChunks(a.world);
     const rebased = read(2.2);
     let rebaseDifference = 0;
     for (let i = 0; i < still.length; i += 4) {

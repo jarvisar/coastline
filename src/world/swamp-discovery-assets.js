@@ -61,7 +61,6 @@ class Model {
 }
 
 const MOSS = ['#929c87', '#a2ac98', '#818f7c'].map(hex);
-const GREENS = ['#50674f', '#5d7555', '#465f4c', '#677d59', '#4d6a55'].map(hex);
 
 // A white egret at roost, facing -z, about `size` metres tall.
 function egret(model, position, yaw, size, seed) {

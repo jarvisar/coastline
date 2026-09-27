@@ -13,6 +13,81 @@ import { swampPalette, SWAMP_SUN, SWAMP_LIGHT } from './world/swamp-palette.js';
 // immediate. Height stays slow so the view doesn't bob over terrain.
 const FOLLOW_GROUND = 8, FOLLOW_HEIGHT = 3;
 
+// Sky, sun and exposure for each route. Overhead views use `fog` as given.
+// Driving views fog to the sky colour between thirdNear and thirdFar, so
+// resident chunks must always reach past thirdFar.
+const ROUTE_LIGHTING = {
+  coast: {
+    // Blue fill and a near-neutral sun keep the ocean cyan. The sun is about 43°
+    // up over the sea so shadows fall inland, slightly brighter to keep flat meadows lit.
+    background: '#b5dff5', exposure: 1.02,
+    sky: { color: '#c4e5ff', ground: '#365544', intensity: 1.12 },
+    sun: { color: '#fff1da', intensity: 3.1, offset: [-190, 215, 125] },
+    // The coast range is 100-250 m inland and should show through the haze.
+    // The sea mesh reaches 420 m offshore.
+    fog: { color: '#b9def3', near: 600, far: 1150, thirdNear: 190, thirdFar: 380 },
+  },
+  desert: {
+    background: '#dfb399', exposure: .92,
+    sky: { color: '#e5d8d0', ground: '#79635a', intensity: 1.27 },
+    sun: { color: '#ffe0bc', intensity: 2.45, offset: [-170, 150, 120] },
+    fog: { color: '#dab49b', near: 460, far: 860, thirdNear: 210, thirdFar: 350 },
+  },
+  snow: {
+    background: '#111f2b', exposure: .91,
+    sky: { color: '#91afca', ground: '#2b3b4c', intensity: .72 },
+    sun: { color: '#bbd1ea', intensity: 1.16, offset: [-170, 190, -80] },
+    fog: { color: '#243949', near: 340, far: 760, thirdNear: 190, thirdFar: 330 },
+  },
+  jungle: {
+    // Weak sun nearly overhead so the canopy shades the road, with strong green fill.
+    background: '#a9c4a2', exposure: .9,
+    sky: { color: '#c4dcb0', ground: '#2f4d28', intensity: 1.75 },
+    sun: { color: '#eef2c4', intensity: 1.35, offset: [-55, 245, 40] },
+    fog: { color: '#9ab89a', near: 320, far: 780, thirdNear: 110, thirdFar: 250 },
+  },
+  plains: {
+    // Sun about 20° up for long shadows. Low sun lights flat ground less, so
+    // intensity is higher. The cool fill against a warm sun gives the gold look.
+    background: '#eeb85e', exposure: .98,
+    sky: { color: '#d5dbd0', ground: '#8b7444', intensity: 1.12 },
+    sun: { color: '#ffc368', intensity: 3.45, offset: [-188, 92, 127] },
+    fog: { color: '#e9b360', near: 500, far: 1000, thirdNear: 200, thirdFar: 360 },
+  },
+  city: {
+    // Overcast. Sky fill does most of the lighting and a weak sun keeps facets readable.
+    background: new THREE.Color('#adb7bf').multiplyScalar(.9), exposure: .52,
+    sky: { color: '#d8e0e6', ground: '#5c6369', intensity: 2 },
+    sun: { color: '#e2e9ef', intensity: 1.3, offset: [-150, 210, 110] },
+    fog: { color: new THREE.Color('#aab4bc').multiplyScalar(.9), near: 470, far: 900, thirdNear: 130, thirdFar: 330 },
+  },
+  volcanic: {
+    // Low warm sun with a weaker cool fill to separate lit and shadowed faces.
+    background: volcanicPalette.horizon, exposure: 1.1,
+    sky: { color: volcanicPalette.skyLight, ground: volcanicPalette.groundLight, intensity: 1.65 },
+    sun: { color: volcanicPalette.sun, intensity: 2.55, offset: [-175, 185, 110] },
+    fog: { color: volcanicPalette.horizon, near: 290, far: 800, thirdNear: 105, thirdFar: 310 },
+  },
+  salt: {
+    // High sun over white ground. Strong bounce from the salt keeps shadows
+    // soft, and a high exposure lifts the crust to a bright cream.
+    background: saltPalette.horizon, exposure: 1.48,
+    sky: { color: saltPalette.skyLight, ground: saltPalette.groundLight, intensity: SALT_LIGHT.sky },
+    sun: { color: saltPalette.sun, intensity: SALT_LIGHT.sun, offset: SALT_SUN },
+    // Clear air: the flat reads a long way before it pales into the horizon.
+    fog: { color: saltPalette.fog, near: 700, far: 1300, thirdNear: 230, thirdFar: 470 },
+  },
+  swamp: {
+    // Blue hour. A cool moon-and-sky fill keeps the water readable and leaves
+    // the headlights, camp windows and fireflies as the only warm light.
+    background: swampPalette.horizon, exposure: SWAMP_LIGHT.exposure,
+    sky: { color: swampPalette.skyLight, ground: swampPalette.groundLight, intensity: SWAMP_LIGHT.sky },
+    sun: { color: swampPalette.sun, intensity: SWAMP_LIGHT.sun, offset: SWAMP_SUN },
+    // Dusk haze: the far hammocks soften into blue before the view ends.
+    fog: { color: swampPalette.fog, near: 380, far: 880, thirdNear: 120, thirdFar: 300 },
+  },
+};
+
 export function createRendering(canvas, graphics = new Graphics()) {
   stabilizeShadowFiltering();
   // Multisampling is fixed when the context is created, so the starting level decides it.
@@ -54,6 +129,8 @@ export function createRendering(canvas, graphics = new Graphics()) {
   let journey = 'coast', quality = graphics.settings;
   // Soft edges take 16 shadow-map samples on every lit pixel. The swamp's faint
   // moonlight shadows take one filtered sample instead, to fit phone budgets.
+  // The jungle climbs and falls along the route, so its shadow coverage follows the road's height.
+  const shadowFloor = () => journey === 'jungle' ? sun.target.position.y : 0;
   function applyShadowSoftness() { sun.shadow.radius = quality.id === 'basic' || journey === 'swamp' ? 0 : 2; }
   // AO on or off is the player's choice, else the device default. The quality level sets everything else.
   // A new shadow map size only takes effect once the old texture is released.
@@ -80,23 +157,8 @@ export function createRendering(canvas, graphics = new Graphics()) {
   const activeCamera = () => views[view].firstPerson ? firstPerson.camera : views[view].thirdPerson ? thirdPerson.camera : camera;
   let initialized = false; let view = touchScreen.matches ? 2 : 1; let viewHeight = views[view].height; let previousOrigin = 0;
   let snowy = false;
-  const fogProfiles = {
-    // The coast range is 100-250 m inland and should show through the haze.
-    // Resident chunks always extend past thirdFar. The sea mesh reaches 420 m offshore.
-    coast: { color: '#b9def3', near: 600, far: 1150, thirdNear: 190, thirdFar: 380 },
-    desert: { color: '#dab49b', near: 460, far: 860, thirdNear: 210, thirdFar: 350 },
-    snow: { color: '#243949', near: 340, far: 760, thirdNear: 190, thirdFar: 330 },
-    jungle: { color: '#9ab89a', near: 320, far: 780, thirdNear: 110, thirdFar: 250 },
-    plains: { color: '#e9b360', near: 500, far: 1000, thirdNear: 200, thirdFar: 360 },
-    city: { color: new THREE.Color('#aab4bc').multiplyScalar(.9), near: 470, far: 900, thirdNear: 130, thirdFar: 330 },
-    volcanic: { color: volcanicPalette.horizon, near: 290, far: 800, thirdNear: 105, thirdFar: 310 },
-    // Clear air: the flat reads a long way before it pales into the horizon.
-    salt: { color: saltPalette.fog, near: 700, far: 1300, thirdNear: 230, thirdFar: 470 },
-    // Dusk haze: the far hammocks soften into blue before the view ends.
-    swamp: { color: swampPalette.fog, near: 380, far: 880, thirdNear: 120, thirdFar: 300 },
-  };
   function updateFog() {
-    const profile = fogProfiles[journey];
+    const profile = ROUTE_LIGHTING[journey].fog;
     // Driving views fog to the exact sky colour so faded terrain leaves no seam.
     if (activeCamera().isPerspectiveCamera) {
       scene.fog.color.copy(scene.background);
@@ -111,12 +173,12 @@ export function createRendering(canvas, graphics = new Graphics()) {
   function resize() {
     const width = window.innerWidth, height = window.innerHeight;
     const aspect = width / height;
-    // Portrait needs extra height to fit the alpine road and the lake below it.
-    const size = viewHeight * (aspect < 1 ? (snowy ? 1.12 : 1.12) : 1);
+    // Portrait needs extra height, e.g. to fit the alpine road and the lake below it.
+    const size = viewHeight * (aspect < 1 ? 1.12 : 1);
     camera.left = -size * aspect / 2; camera.right = size * aspect / 2; camera.top = size / 2; camera.bottom = -size / 2; camera.updateProjectionMatrix();
     thirdPerson.resize(aspect);
     firstPerson.resize(aspect);
-    if (initialized) fitSunShadow(activeCamera(), sun, journey === 'jungle' ? sun.target.position.y : 0, previousOrigin);
+    if (initialized) fitSunShadow(activeCamera(), sun, shadowFloor(), previousOrigin);
   }
   function update(car, dt, origin) {
     followedCar = car;
@@ -147,83 +209,20 @@ export function createRendering(canvas, graphics = new Graphics()) {
     if (views[view].thirdPerson) { thirdPerson.update(car, dt); target.copy(car.position); }
     if (views[view].firstPerson) { firstPerson.update(car, dt); target.copy(car.position); }
     sun.position.copy(target).add(sunOffset); sun.target.position.copy(target);
-    fitSunShadow(activeCamera(), sun, journey === 'jungle' ? sun.target.position.y : 0, origin);
+    fitSunShadow(activeCamera(), sun, shadowFloor(), origin);
   }
   // Zoom only changes the projection. Resizing the canvas per zoom frame reallocates buffers.
   window.addEventListener('resize', () => { graphics.suspend(); resizeCanvas(); resize(); }); resize();
   function setJourney(id) {
-    journey = fogProfiles[id] ? id : 'coast';
+    journey = ROUTE_LIGHTING[id] ? id : 'coast';
     snowy = id === 'snow';
     applyShadowSoftness();
     resize();
-    if (id === 'snow') {
-      scene.background.set('#111f2b'); updateFog();
-      sky.color.set('#91afca'); sky.groundColor.set('#2b3b4c'); sky.intensity = .72;
-      sun.color.set('#bbd1ea'); sun.intensity = 1.16; sunOffset.set(-170, 190, -80);
-      renderer.toneMappingExposure = .91;
-      return;
-    }
-    if (id === 'jungle') {
-      // Weak sun nearly overhead so the canopy shades the road, with strong green fill.
-      scene.background.set('#a9c4a2'); updateFog();
-      sky.color.set('#c4dcb0'); sky.groundColor.set('#2f4d28'); sky.intensity = 1.75;
-      sun.color.set('#eef2c4'); sun.intensity = 1.35; sunOffset.set(-55, 245, 40);
-      renderer.toneMappingExposure = .9;
-      return;
-    }
-    if (id === 'plains') {
-      // Sun about 20° up for long shadows. Low sun lights flat ground less, so
-      // intensity is higher. The cool fill against a warm sun gives the gold look.
-      scene.background.set('#eeb85e'); updateFog();
-      sky.color.set('#d5dbd0'); sky.groundColor.set('#8b7444'); sky.intensity = 1.12;
-      sun.color.set('#ffc368'); sun.intensity = 3.45; sunOffset.set(-188, 92, 127);
-      renderer.toneMappingExposure = .98;
-      return;
-    }
-    if (id === 'city') {
-      // Overcast. Sky fill does most of the lighting and a weak sun keeps facets readable.
-      scene.background.set('#adb7bf').multiplyScalar(.9); updateFog();
-      sky.color.set('#d8e0e6'); sky.groundColor.set('#5c6369'); sky.intensity = 2;
-      sun.color.set('#e2e9ef'); sun.intensity = 1.3; sunOffset.set(-150, 210, 110);
-      renderer.toneMappingExposure = .52;
-      return;
-    }
-    if (id === 'volcanic') {
-      // Low warm sun with a weaker cool fill to separate lit and shadowed faces.
-      scene.background.set(volcanicPalette.horizon); updateFog();
-      sky.color.set(volcanicPalette.skyLight); sky.groundColor.set(volcanicPalette.groundLight); sky.intensity = 1.65;
-      sun.color.set(volcanicPalette.sun); sun.intensity = 2.55; sunOffset.set(-175, 185, 110);
-      renderer.toneMappingExposure = 1.1;
-      return;
-    }
-    if (id === 'salt') {
-      // High sun over white ground. Strong bounce from the salt keeps shadows
-      // soft, and a high exposure lifts the crust to a bright cream.
-      scene.background.set(saltPalette.horizon); updateFog();
-      sky.color.set(saltPalette.skyLight); sky.groundColor.set(saltPalette.groundLight); sky.intensity = SALT_LIGHT.sky;
-      sun.color.set(saltPalette.sun); sun.intensity = SALT_LIGHT.sun; sunOffset.set(...SALT_SUN);
-      renderer.toneMappingExposure = 1.48;
-      return;
-    }
-    if (id === 'swamp') {
-      // Blue hour. A cool moon-and-sky fill keeps the water readable and leaves
-      // the headlights, camp windows and fireflies as the only warm light.
-      scene.background.set(swampPalette.horizon); updateFog();
-      sky.color.set(swampPalette.skyLight); sky.groundColor.set(swampPalette.groundLight); sky.intensity = SWAMP_LIGHT.sky;
-      sun.color.set(swampPalette.sun); sun.intensity = SWAMP_LIGHT.sun; sunOffset.set(...SWAMP_SUN);
-      renderer.toneMappingExposure = SWAMP_LIGHT.exposure;
-      return;
-    }
-    const desert = id === 'desert';
-    // Blue fill and a near-neutral sun keep the ocean cyan.
-    scene.background.set(desert ? '#dfb399' : '#b5dff5'); updateFog();
-    sky.color.set(desert ? '#e5d8d0' : '#c4e5ff'); sky.groundColor.set(desert ? '#79635a' : '#365544');
-    sky.intensity = desert ? 1.27 : 1.12;
-    // Coast sun is about 43° up over the sea so shadows fall inland.
-    // Slightly brighter to keep flat meadows lit.
-    sun.color.set(desert ? '#ffe0bc' : '#fff1da'); sun.intensity = desert ? 2.45 : 3.1;
-    sunOffset.set(...(desert ? [-170, 150, 120] : [-190, 215, 125]));
-    renderer.toneMappingExposure = desert ? .92 : 1.02;
+    const lighting = ROUTE_LIGHTING[journey];
+    scene.background.set(lighting.background); updateFog();
+    sky.color.set(lighting.sky.color); sky.groundColor.set(lighting.sky.ground); sky.intensity = lighting.sky.intensity;
+    sun.color.set(lighting.sun.color); sun.intensity = lighting.sun.intensity; sunOffset.set(...lighting.sun.offset);
+    renderer.toneMappingExposure = lighting.exposure;
   }
   setJourney('coast');
   function draw(viewCamera, stereo = false) {

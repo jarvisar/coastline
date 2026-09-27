@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { roadFrame, randomAt } from './route.js';
+import { roadFrame, randomAt, seededRandom } from './route.js';
 import { BANDS } from './city-route.js';
 import { solidModel } from './colliders.js';
 import { cityDiscoveryAssets as assets, cityDiscoveryMaterial as material } from './city-discovery-assets.js';
@@ -52,7 +52,7 @@ export function buildCityDiscoveries(chunk, discoveries) {
         }
         for (const [ds, du] of [[-9, -9], [9, -9], [-9, 9], [9, 9]]) chunk.furniture('lamp', s + ds, u + du, yaw + Math.atan2(-ds, -du) + Math.PI / 2, {});
       }
-      const treeRandom = seeded(site.index + 3401);
+      const treeRandom = seededRandom(site.index + 3401);
       for (let k = 0; k < 14; k++) {
         const t = s + (treeRandom() - .5) * (site.halfS * 2 - 10), v = u + (treeRandom() - .5) * (site.u1 - site.u0 - 8);
         if (!chunk.inChunk(t) || Math.hypot(t - s, v - u) < 15 || Math.abs(t - s) < 4 || Math.abs(v - u) < 4) continue;
@@ -95,4 +95,3 @@ export function buildCityDiscoveries(chunk, discoveries) {
   }
 }
 
-function seeded(seed) { let i = 0; return () => randomAt(seed, i++); }

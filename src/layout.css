@@ -97,7 +97,7 @@ body[data-journey=city] .chooser-heading { background: #eef1f4; }
 /* Short landscape screens drop secondary readouts. */
 @media (max-height: 560px) and (orientation: landscape) {
   :root { --edge: 6px; --header-clear: calc(var(--ui-top) + 60px); --stick-size: 125.84px; }
-  .brand-caption, #stick-help { display: none; }
+  #stick-help { display: none; }
   .brand-mark { width: 32px; height: 32px; }
   .wordmark { font-size: 23px; }
   .journey-button { position: static; font-size: 11px; padding: 10px 12px; }

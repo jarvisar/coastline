@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { registerChunkResources } from './chunk-resources.js';
 import { finalizeChunkTransforms } from './chunk-transforms.js';
 import { splitBatch, computeInstanceBounds } from './instance-batches.js';
-import { updateResidentChunks, positionResidentChunks } from './resident.js';
+import { LevelChunk, LevelWorld, geometryFrom, triangle, matte } from './level.js';
 import { CHUNK_LENGTH, randomAt, seededRandom, smoothstep } from './route.js';
 import { SNOW_STEP, SNOW_COLUMN_COUNT, LAMP_SPACING, snowVertex, snowPosition, snowGroundHeight, snowRoadHeight, snowFrame, snowBridgeAt, lampAt, terrainPocket, alpineLake, onLake, alpineExposure } from './snow-route.js';
 import { alpineRockVariants } from './alpine-rocks.js';
@@ -20,7 +20,6 @@ import { CarHeadlights } from './headlights.js';
 // matte surfaces and costs much less per pixel. Roads keep physical shading for
 // their faint sheen, along with anything glossy or metal.
 const material = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: .95, flatShading: true, ...extra });
-const matte = (color, extra = {}) => new THREE.MeshLambertMaterial({ color, flatShading: true, ...extra });
 const terrainMaterial = matte('#ffffff', { vertexColors: true });
 const snowMaterial = matte('#c7d2df');
 // Same settings as snowMaterial but separate. Sharing one material between
@@ -48,15 +47,6 @@ function onDeck(a, b) {
   return b > bridge.start && a < bridge.end;
 }
 
-function geometry(vertices, colors) {
-  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
-  if (colors) g.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-  g.computeVertexNormals(); g.computeBoundingSphere(); return g;
-}
-function triangle(vertices, colors, a, b, c, color, start) {
-  if ((b.z - a.z) * (c.x - a.x) - (b.x - a.x) * (c.z - a.z) < 0) [b, c] = [c, b];
-  for (const p of [a, b, c]) { vertices.push(p.x, p.y, p.z + start); if (colors) colors.push(color.r, color.g, color.b); }
-}
 function instances(group, geo, mat, items, name) {
   if (!items.length) return;
   for (const part of splitBatch(items)) batch(group, geo, mat, part, name);
@@ -74,9 +64,9 @@ function batch(group, geo, mat, items, name) {
   computeInstanceBounds(mesh); group.add(mesh);
 }
 
-export class SnowChunk {
+export class SnowChunk extends LevelChunk {
   constructor(index) {
-    this.start = index * CHUNK_LENGTH; this.group = new THREE.Group(); this.group.name = `snow-chunk-${index}`; this.owned = [];
+    super(index, `snow-chunk-${index}`);
     this.discoveries = snowDiscoveries(this.start - 40, this.start + CHUNK_LENGTH + 40);
     this.buildTerrain();
     for (const part of buildAlpineLake(this.start)) this.addMesh(part.geometry, part.material, part.name).castShadow = false;
@@ -96,10 +86,7 @@ export class SnowChunk {
     }
     finalizeChunkTransforms(this.group);
   }
-  addMesh(g, mat, name) {
-    const mesh = new THREE.Mesh(g, mat); mesh.name = name; mesh.castShadow = true; mesh.receiveShadow = true;
-    this.group.add(mesh); this.owned.push(g); return mesh;
-  }
+  addMesh(g, mat, name) { return super.addMesh(g, mat, name, true); }
   buildTerrain() {
     const vertices = [], colors = [], cross = new THREE.Vector3(), ab = new THREE.Vector3(), ac = new THREE.Vector3();
     const sampleRow = row => Array.from({ length: SNOW_COLUMN_COUNT }, (_, col) => snowVertex(row, col));
@@ -127,7 +114,7 @@ export class SnowChunk {
       }
       current = next;
     }
-    this.terrain = this.addMesh(geometry(vertices, colors), terrainMaterial, 'snowy-mountain');
+    this.terrain = this.addMesh(geometryFrom(vertices, colors), terrainMaterial, 'snowy-mountain');
   }
   ribbon(ranges, lift, mat, name) {
     const vertices = [];
@@ -137,7 +124,7 @@ export class SnowChunk {
       const a = p(s, low), b = p(s + 2, low), c = p(s, high), d = p(s + 2, high);
       triangle(vertices, null, a, b, c, null, this.start); triangle(vertices, null, b, d, c, null, this.start);
     }
-    this.addMesh(geometry(vertices), mat, name);
+    this.addMesh(geometryFrom(vertices), mat, name);
   }
   buildRoad() {
     this.ribbon([[-7, 7]], .025, snowBankMaterial, 'plowed-snow-shoulders');
@@ -156,7 +143,7 @@ export class SnowChunk {
         triangle(banks, null, at(s + 4, i), at(s + 4, i + 1), at(s, i + 1), null, this.start);
       }
     }
-    this.addMesh(geometry(banks), snowBankMaterial, 'roadside-snowbanks');
+    this.addMesh(geometryFrom(banks), snowBankMaterial, 'roadside-snowbanks');
   }
   buildScenery(index) {
     const random = seededRandom(index + 90241), trunks = [], metal = [], lamps = [];
@@ -341,15 +328,11 @@ export class SnowChunk {
     instances(this.group, boxGeometry, timberMaterial, timber, 'timber-trestle');
     instances(this.group, boxGeometry, snowMaterial, caps, 'trestle-snow');
   }
-  dispose() {
-    this.group.removeFromParent(); for (const g of this.owned) g.dispose();
-    this.group.traverse(object => { if (object.isInstancedMesh) object.dispose(); });
-  }
 }
 
-export class SnowWorld {
+export class SnowWorld extends LevelWorld {
   constructor(scene, chunkSource = null) {
-    this.scene = scene; this.chunkSource = chunkSource; this.chunks = new Map(); this.origin = 0; this.center = null;
+    super(scene, chunkSource, SnowChunk);
     this.effects = new THREE.Group(); this.effects.name = 'snow-night-effects'; scene.add(this.effects);
     // Fixed pool of lights moved to the nearest lamps. No shadows.
     this.lights = Array.from({ length: 7 }, () => { const light = new THREE.PointLight('#ffb76b', 340, 40, 2); this.effects.add(light); return light; });
@@ -377,10 +360,7 @@ export class SnowWorld {
     this.effects.add(this.flakes); this.time = 0;
   }
   update(s) {
-    this.s = s; this.origin = Math.floor(s / 1024) * 1024;
-    const center = Math.floor(s / CHUNK_LENGTH);
-    updateResidentChunks(this, center, SnowChunk);
-    positionResidentChunks(this);
+    super.update(s);
     const lampIndex = Math.round((s - 16) / LAMP_SPACING);
     // Reposition only when the pool advances or the origin rebases. Fades update every frame.
     if (lampIndex !== this.lampIndex || this.origin !== this.lightOrigin) {
@@ -403,7 +383,7 @@ export class SnowWorld {
     const cabinIndex = Math.floor((s - 76) / CABIN_SPACING);
     if (cabinIndex !== this.cabinIndex || this.origin !== this.lightOrigin) {
       this.cabins = this.cabinLights.map((light, i) => {
-        const cabin = this.chunks.get(center).features.cabinLights.find(cabin => cabin.index === cabinIndex + i);
+        const cabin = this.chunks.get(this.center).features.cabinLights.find(cabin => cabin.index === cabinIndex + i);
         const p = snowPosition(cabin.s, cabin.u, cabin.y);
         light.position.set(p.x - 3, p.y + 2, p.z + this.origin);
         return cabin;
@@ -424,8 +404,8 @@ export class SnowWorld {
     this.snowfall.update(time, anchor, this.origin);
   }
   dispose() {
-    this.chunkSource?.dispose();
-    for (const chunk of this.chunks.values()) chunk.dispose(); this.chunks.clear(); this.effects.removeFromParent();
+    super.dispose();
+    this.effects.removeFromParent();
     this.snowfall.dispose();
     this.headlights.dispose();
     this.glowGeometry.dispose(); this.glowMaterial.dispose();

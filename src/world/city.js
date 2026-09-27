@@ -2,8 +2,7 @@ import * as THREE from 'three';
 import { joinCoplanarFaces } from './surface-joins.js';
 import { registerChunkResources } from './chunk-resources.js';
 import { finalizeChunkTransforms } from './chunk-transforms.js';
-import { splitBatch, computeInstanceBounds } from './instance-batches.js';
-import { updateResidentChunks, positionResidentChunks } from './resident.js';
+import { LevelChunk, LevelWorld, geometryFrom, triangle, instances, material, matte } from './level.js';
 import { CHUNK_LENGTH, randomAt, seededRandom, smoothstep, lerp, roadFrame } from './route.js';
 import { CITY_STEP, CITY_COLUMN_COUNT, KERB, PAVEMENT_LIFT, cityVertex, cityPosition, cityRoadHeight, cityGroundHeight, pavementHeight, quayOffset, RIVER_LEVEL,
   FAR_BANK, FAR_BANK_TOP, QUAY_WALL, blockBoundary, blockAt, crossStreetAt, nearStreet, onCrossStreet, STREET_HALF_WIDTH, BANDS, SKYLINE_FROM,
@@ -26,11 +25,6 @@ import { TRAFFIC_MODELS } from '../traffic-models.js';
 import { CityPlanting } from './city-planting.js';
 import { Rainfall } from './rainfall.js';
 
-// Rough scenery uses Lambert shading. It looks the same as physical shading on
-// matte surfaces and costs much less per pixel. Roads keep physical shading for
-// their faint sheen, along with anything glossy or metal.
-const material = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: 1, flatShading: true, ...extra });
-const matte = (color, extra = {}) => new THREE.MeshLambertMaterial({ color, flatShading: true, ...extra });
 const terrainMaterial = matte('#ffffff', { vertexColors: true });
 // Darker and glossier than other routes' roads so the asphalt reads as wet.
 const roadMaterial = material('#4d5155', { roughness: .5, flatShading: false });
@@ -50,41 +44,13 @@ const parkedTrimMaterial = material('#ffffff', { vertexColors: true, roughness: 
 const leavesMaterial = matte('#ffffff', { vertexColors: true });
 const barkMaterial = matte('#55483b');
 const boxGeometry = new THREE.BoxGeometry(1, 1, 1);
-const dummy = new THREE.Object3D(), up = new THREE.Vector3(0, 1, 0);
+const up = new THREE.Vector3(0, 1, 0);
 // Furniture that stops the car, mapped to whether its collider is round.
 // Railings, manholes and rooftop tanks never block the car.
 const SOLID_FURNITURE = { lamp: true, signal: true, bin: true, bench: false, shelter: false, kiosk: false };
 registerChunkResources('city', { terrainMaterial, roadMaterial, kerbMaterial, edgeMaterial, centerMaterial, waterMaterial, blocksMaterial, streetsMaterial, skylineMaterial, litMaterial,
   furnitureMaterial, paintedMaterial, parkedPaintMaterial, parkedTrimMaterial, leavesMaterial, barkMaterial, boxGeometry, cityAssets, parkedCars, trees: cityTrees });
 
-function geometry(vertices, colors) {
-  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
-  if (colors) g.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-  g.computeVertexNormals(); g.computeBoundingSphere(); return g;
-}
-function triangle(vertices, colors, a, b, c, color, start, coordinates) {
-  if ((b.z - a.z) * (c.x - a.x) - (b.x - a.x) * (c.z - a.z) < 0) [b, c] = [c, b];
-  for (const p of [a, b, c]) {
-    vertices.push(p.x, p.y, p.z + start);
-    if (colors) colors.push(color.r, color.g, color.b);
-    if (coordinates) coordinates.push(p.u, p.s);
-  }
-}
-function instances(group, geo, mat, items, name, shadows = true, ambientOcclusion = true) {
-  if (!items.length) return;
-  for (const part of splitBatch(items)) {
-    const mesh = new THREE.InstancedMesh(geo, mat, part.length); mesh.name = name;
-    for (let i = 0; i < part.length; i++) {
-      const item = part[i]; dummy.position.set(...item.p); dummy.rotation.set(...(item.r ?? [0, 0, 0]));
-      if (item.q) dummy.quaternion.copy(item.q);
-      dummy.scale.set(...(item.scale ?? [1, 1, 1])); dummy.updateMatrix(); mesh.setMatrixAt(i, dummy.matrix);
-      if (item.color) mesh.setColorAt(i, new THREE.Color(item.color));
-    }
-    mesh.castShadow = shadows; mesh.receiveShadow = true;
-    if (!ambientOcclusion) mesh.userData.ambientOcclusion = false;
-    computeInstanceBounds(mesh); group.add(mesh);
-  }
-}
 
 const WALLS = ['#846159', '#8f7064', '#755955', '#9e9ea2', '#aba7a2', '#b4b7ba', '#a0a5aa', '#90a2ab', '#78878f', '#ab9e91', '#b8a790', '#67747f', '#5a6670', '#978d81'];
 const ROOFS = ['#5c6064', '#54585c', '#666a6e', '#4f5357'];
@@ -97,9 +63,9 @@ const waterDeep = new THREE.Color('#5f6d76'), waterLight = new THREE.Color('#6c7
 const TREE_GREENS = ['#66804d', '#708859', '#56744b', '#768856'];
 const pick = (list, n) => list[((n % list.length) + list.length) % list.length];
 
-export class CityChunk {
+export class CityChunk extends LevelChunk {
   constructor(index) {
-    this.index = index; this.start = index * CHUNK_LENGTH; this.group = new THREE.Group(); this.group.name = `city-chunk-${index}`; this.owned = [];
+    super(index, `city-chunk-${index}`);
     this.features = { discoveries: [], bridges: [] };
     this.planting = new CityPlanting();
     this.discoveries = cityDiscoveries(this.start - 160, this.start + CHUNK_LENGTH + 160);
@@ -111,10 +77,6 @@ export class CityChunk {
     this.finishScenery();
     this.planting = null; this.waterfrontSites = null;
     finalizeChunkTransforms(this.group);
-  }
-  addMesh(g, mat, name, shadows = false) {
-    const mesh = new THREE.Mesh(g, mat); mesh.name = name; mesh.castShadow = shadows; mesh.receiveShadow = true;
-    this.group.add(mesh); this.owned.push(g); return mesh;
   }
   inChunk(s) { return s >= this.start && s < this.start + CHUNK_LENGTH; }
   // Samples the rendered facets. Points outside this chunk use the analytic ground.
@@ -171,7 +133,7 @@ export class CityChunk {
         });
       }
     }
-    this.terrain = this.addMesh(geometry(vertices, colors), terrainMaterial, 'city-ground', true);
+    this.terrain = this.addMesh(geometryFrom(vertices, colors), terrainMaterial, 'city-ground', true);
     this.sampleGround = terrainSampler(this.terrain);
   }
   facetColor(tri, row, col, i) {
@@ -207,7 +169,7 @@ export class CityChunk {
       const a = at(s, low), b = at(s + 2, low), c = at(s, high), d = at(s + 2, high);
       triangle(vertices, null, a, b, c, null, this.start); triangle(vertices, null, b, d, c, null, this.start);
     }
-    this.addMesh(geometry(vertices), mat, name);
+    this.addMesh(geometryFrom(vertices), mat, name);
   }
   buildRoad() {
     this.ribbon([[-5.5, 5.5]], .075, roadMaterial, 'city-road');
@@ -232,7 +194,7 @@ export class CityChunk {
         triangle(vertices, colors, a, b, c, color, this.start, coordinates); triangle(vertices, colors, b, d, c, color, this.start, coordinates);
       }
     }
-    const water = this.addMesh(geometry(vertices, colors), waterMaterial, 'city-river');
+    const water = this.addMesh(geometryFrom(vertices, colors), waterMaterial, 'city-river');
     water.geometry.setAttribute('riverCoord', new THREE.Float32BufferAttribute(coordinates, 2));
     water.geometry.boundingSphere.radius += .5;
   }
@@ -553,12 +515,12 @@ export class CityChunk {
   }
   finishScenery() {
     const { blocks, details, streets, lit, skyline, boxes, furniture, parked, bark, leaves } = this.scenery;
-    if (blocks.vertices.length) this.addMesh(joinCoplanarFaces(geometry(blocks.vertices, blocks.colors)), blocksMaterial, 'city-blocks', true);
-    if (details.vertices.length) this.addMesh(joinCoplanarFaces(geometry(details.vertices, details.colors)), blocksMaterial, 'city-promenade', true);
-    if (streets.vertices.length) this.addMesh(joinCoplanarFaces(geometry(streets.vertices, streets.colors)), streetsMaterial, 'city-side-roads');
-    if (lit.vertices.length) { const mesh = this.addMesh(geometry(lit.vertices, lit.colors), litMaterial, 'lit-windows'); mesh.receiveShadow = false; }
+    if (blocks.vertices.length) this.addMesh(joinCoplanarFaces(geometryFrom(blocks.vertices, blocks.colors)), blocksMaterial, 'city-blocks', true);
+    if (details.vertices.length) this.addMesh(joinCoplanarFaces(geometryFrom(details.vertices, details.colors)), blocksMaterial, 'city-promenade', true);
+    if (streets.vertices.length) this.addMesh(joinCoplanarFaces(geometryFrom(streets.vertices, streets.colors)), streetsMaterial, 'city-side-roads');
+    if (lit.vertices.length) { const mesh = this.addMesh(geometryFrom(lit.vertices, lit.colors), litMaterial, 'lit-windows'); mesh.receiveShadow = false; }
     if (skyline.vertices.length) {
-      const mesh = this.addMesh(geometry(skyline.vertices, skyline.colors), skylineMaterial, 'city-skyline');
+      const mesh = this.addMesh(geometryFrom(skyline.vertices, skyline.colors), skylineMaterial, 'city-skyline');
       mesh.userData.ambientOcclusion = false;
     }
     instances(this.group, boxGeometry, paintedMaterial, boxes, 'city-boxes');
@@ -573,10 +535,6 @@ export class CityChunk {
       instances(this.group, variant.leaves, leavesMaterial, leaves.get(variant), 'city-crowns');
     }
     this.scenery = null;
-  }
-  dispose() {
-    this.group.removeFromParent(); for (const g of this.owned) g.dispose();
-    this.group.traverse(object => { if (object.isInstancedMesh) object.dispose(); });
   }
 }
 
@@ -593,20 +551,14 @@ export function lightning(time) {
   return strength;
 }
 
-export class CityWorld {
+export class CityWorld extends LevelWorld {
   constructor(scene, chunkSource = null) {
-    this.scene = scene; this.chunkSource = chunkSource; this.chunks = new Map(); this.origin = 0; this.center = null; this.s = 0;
+    super(scene, chunkSource, CityChunk); this.s = 0;
     this.effects = new THREE.Group(); this.effects.name = 'city-storm-effects'; scene.add(this.effects);
     this.rainfall = new Rainfall(); this.drops = this.rainfall.points; this.dropGeometry = this.rainfall.geometry; this.effects.add(this.drops);
     this.flash = new THREE.AmbientLight('#dbe6f4', 0); this.effects.add(this.flash);
     this.reducedMotion = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
     this.time = 0;
-  }
-  update(s) {
-    this.s = s; this.origin = Math.floor(s / 1024) * 1024;
-    const center = Math.floor(s / CHUNK_LENGTH);
-    updateResidentChunks(this, center, CityChunk);
-    positionResidentChunks(this);
   }
   animate(time) {
     this.time = time; animateWater(time, this.origin);
@@ -615,8 +567,7 @@ export class CityWorld {
     this.flash.intensity = this.reducedMotion ? 0 : lightning(time);
   }
   dispose() {
-    this.chunkSource?.dispose();
-    for (const chunk of this.chunks.values()) chunk.dispose(); this.chunks.clear();
+    super.dispose();
     this.effects.removeFromParent(); this.rainfall.dispose(); this.flash.dispose();
   }
 }
