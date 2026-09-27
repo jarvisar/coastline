@@ -55,7 +55,7 @@ export function createRendering(canvas, graphics = new Graphics()) {
   // Soft edges take 16 shadow-map samples on every lit pixel. The swamp's faint
   // moonlight shadows take one filtered sample instead, to fit phone budgets.
   function applyShadowSoftness() { sun.shadow.radius = quality.id === 'basic' || journey === 'swamp' ? 0 : 2; }
-  // AO on or off is the player's choice. The quality level sets everything else.
+  // AO on or off is the player's choice, else the device default. The quality level sets everything else.
   // A new shadow map size only takes effect once the old texture is released.
   function applyQuality(settings) {
     quality = settings;

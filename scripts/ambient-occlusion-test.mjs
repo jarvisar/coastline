@@ -13,7 +13,8 @@ try {
   const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
-  await page.goto(`${url}/?seed=21`);
+  // A strong host GPU starts with AO on, so start it off to test the switch from a known state.
+  await page.goto(`${url}/?seed=21&ao=0`);
   await page.waitForFunction(() => window.__coastline && document.querySelector('#loading.loaded'));
   await page.click('#start');
   assert.equal(await page.locator('#fps-counter').isVisible(), false);

@@ -1,5 +1,7 @@
 // Quality levels, starting-level detection and the adaptive frame-rate controller.
-// AO is a separate opt-in setting that presets and Auto never toggle.
+// AO is a separate setting that presets never toggle. A saved choice always wins.
+// Without one, AO starts on only on strong hardware, and the controller may turn
+// that default off if it costs frames.
 // Levels must not change shader light counts, which forces a recompile mid-drive.
 
 // `density` scales the device pixel ratio so it saves pixels on 1x panels too.
@@ -46,19 +48,43 @@ const SOFTWARE_RENDERER = /swiftshader|llvmpipe|softpipe|software|basic render/i
 // Apple GPUs are left out because they aren't slow. Mesa is left out because it
 // also drives discrete cards on Linux.
 const INTEGRATED_RENDERER = /intel|\buhd\b|\biris\b|hd graphics|vega \d|radeon\(tm\) graphics/i;
+// Cards of their own known to draw AO easily: NVIDIA RTX, TITAN and GTX 960 on,
+// AMD Radeon RX, Pro and VII, Intel Arc A and B, and Apple's Pro, Max and Ultra chips.
+const STRONG_RENDERERS = [
+  /\bRTX\b/, /\bGTX (9[6-8]0|10[5-8]0|16[5-6]0)/, /\bTITAN\b/i,
+  /\bRadeon (RX|Pro|VII)\b/, /\bArc\b(\(TM\))? [AB]\d{3}/, /\bApple M\d+ (Pro|Max|Ultra)\b/,
+];
+// AMD processor graphics those also match, like "Radeon RX Vega 11 Graphics".
+const WEAK_RENDERERS = [/\bVega \d+ Graphics\b/, /\bRX Vega (3|6|8|9|10|11)\b/];
+export const strongGpu = name => STRONG_RENDERERS.some(pattern => pattern.test(name)) && !WEAK_RENDERERS.some(pattern => pattern.test(name));
 
 // Cores and memory can't tell integrated from discrete GPUs, so ask for the name.
+// Chrome, Edge and Electron report RENDERER as "WebKit WebGL" and name the card
+// through the debug extension. Firefox names a near card in RENDERER and warns
+// about the extension. Safari only ever says "Apple GPU".
 export function probeRenderer(createCanvas = () => globalThis.document?.createElement('canvas')) {
   try {
     const canvas = createCanvas();
     const gl = canvas?.getContext('webgl2') ?? canvas?.getContext('webgl');
     if (!gl) return '';
-    const debug = gl.getExtension('WEBGL_debug_renderer_info');
-    const name = debug ? gl.getParameter(debug.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
+    let name = gl.getParameter(gl.RENDERER);
+    if (name === 'WebKit WebGL') {
+      const debug = gl.getExtension('WEBGL_debug_renderer_info');
+      if (debug) name = gl.getParameter(debug.UNMASKED_RENDERER_WEBGL);
+    }
     // Browsers cap live contexts, so release the probe's straight away.
     gl.getExtension('WEBGL_lose_context')?.loseContext();
     return typeof name === 'string' ? name : '';
   } catch { return ''; }
+}
+// Both detections read the name, and every probe costs a WebGL context.
+let probedRenderer;
+const rendererName = () => probedRenderer ??= probeRenderer();
+
+function touchDevice(hints, nav) {
+  // Catches tablets that report as desktops. Touchscreen laptops keep a fine pointer.
+  const coarsePointer = hints.coarsePointer ?? Boolean(globalThis.matchMedia?.('(pointer: coarse)').matches);
+  return hints.mobile ?? (nav.userAgentData?.mobile === true || coarsePointer);
 }
 
 function displayPixels() {
@@ -72,9 +98,7 @@ function displayPixels() {
 // which beats starting high and stuttering.
 export function detectLevel(hints = {}) {
   const nav = hints.navigator ?? globalThis.navigator ?? {};
-  // Catches tablets that report as desktops. Touchscreen laptops keep a fine pointer.
-  const coarsePointer = hints.coarsePointer ?? Boolean(globalThis.matchMedia?.('(pointer: coarse)').matches);
-  const mobile = hints.mobile ?? (nav.userAgentData?.mobile === true || coarsePointer);
+  const mobile = touchDevice(hints, nav);
   const cores = hints.cores ?? nav.hardwareConcurrency ?? 0;
   // Safari has no deviceMemory, so 0 means unknown.
   const memory = hints.memory ?? nav.deviceMemory ?? 0;
@@ -84,19 +108,29 @@ export function detectLevel(hints = {}) {
     if (cores >= 4) return 2;
     return WORST;
   }
-  const gpu = hints.gpu ?? probeRenderer();
+  const gpu = hints.gpu ?? rendererName();
   if (SOFTWARE_RENDERER.test(gpu)) return WORST;
-  // One step down per weak-hardware signal.
+  // One step down per weak-hardware signal. Intel's Arc A and B cards aren't integrated.
   let steps = 0;
-  if (INTEGRATED_RENDERER.test(gpu)) steps++;
+  if (INTEGRATED_RENDERER.test(gpu) && !strongGpu(gpu)) steps++;
   if (cores !== 0 && cores <= 4) steps++;
   if (memory !== 0 && memory <= 4) steps++;
   if ((hints.pixels ?? displayPixels()) >= 4e6) steps++;
   return Math.min(steps, WORST);
 }
 
+// A higher bar than High: a strong card on a device that would start at High.
+// Phones, tablets, the Steam Deck, processor graphics, software drawing and
+// cards the browser won't name all start without AO.
+export function detectAmbientOcclusion(hints = {}) {
+  const nav = hints.navigator ?? globalThis.navigator ?? {};
+  if (touchDevice(hints, nav)) return false;
+  const gpu = hints.gpu ?? rendererName();
+  return strongGpu(gpu) && detectLevel({ ...hints, mobile: false, gpu }) === 0;
+}
+
 export class Graphics {
-  constructor({ storage = defaultStorage(), ambientOcclusion = null, detect = detectLevel } = {}) {
+  constructor({ storage = defaultStorage(), ambientOcclusion = null, detect = detectLevel, detectAO = detectAmbientOcclusion } = {}) {
     const stored = readStored(storage);
     this.storage = storage;
     this.listeners = new Set();
@@ -105,9 +139,15 @@ export class Graphics {
     this.level = storedLevel === -1 ? this.detected : storedLevel;
     this.mode = QUALITY_LEVELS.some(level => level.id === stored.mode) ? stored.mode : 'auto';
     if (this.mode !== 'auto') this.level = levelIndex(this.mode);
-    // AO is on only for an explicit saved true. Older saved values don't opt in.
-    // `?ao=0` overrides the saved choice for this visit.
-    this.ambientOcclusion = ambientOcclusion ?? (stored.ambientOcclusion === true);
+    // A saved true or false is the player's choice. Older saves wrote false
+    // whether or not the player chose it, so a saved false stays off.
+    this.aoChoice = typeof stored.ambientOcclusion === 'boolean' ? stored.ambientOcclusion : null;
+    // `?ao=0` turns AO off for this visit without saving that as a choice.
+    this.aoOverride = ambientOcclusion;
+    // Without a choice, AO starts on only at High on strong hardware. `aoDropped`
+    // is the safeguard having turned that off here, as was the old `softShading: false`.
+    this.aoDefault = this.level === 0 && detectAO();
+    this.aoDropped = stored.ambientOcclusionDropped === true || stored.softShading === false;
     this.densityOverride = Number.isFinite(stored.density) && stored.density >= MIN_DENSITY && stored.density <= 1 ? stored.density : null;
     // Auto never climbs back past a level it downgraded to, so it can't flicker.
     this.ceiling = 0;
@@ -119,6 +159,9 @@ export class Graphics {
 
   get auto() { return this.mode === 'auto'; }
   get levelId() { return QUALITY_LEVELS[this.level].id; }
+  get ambientOcclusion() { return this.aoOverride ?? this.aoChoice ?? (this.aoDefault && !this.aoDropped); }
+  // On by default rather than by choice, so the safeguard may turn it off.
+  get provisionalAO() { return this.aoOverride === null && this.aoChoice === null && this.ambientOcclusion; }
   get settings() {
     return { ...QUALITY_LEVELS[this.level], density: this.densityOverride ?? QUALITY_LEVELS[this.level].density, ambientOcclusion: this.ambientOcclusion };
   }
@@ -130,7 +173,7 @@ export class Graphics {
   announce(reason) { for (const listener of this.listeners) listener(this.settings, reason, this); }
 
   save() {
-    writeStored(this.storage, { mode: this.mode, level: this.levelId, density: this.densityOverride, ambientOcclusion: this.ambientOcclusion });
+    writeStored(this.storage, { mode: this.mode, level: this.levelId, density: this.densityOverride, ambientOcclusion: this.aoChoice, ambientOcclusionDropped: this.aoDropped });
   }
 
   setMode(mode) {
@@ -159,17 +202,31 @@ export class Graphics {
 
   toggleAmbientOcclusion() {
     const enabled = !this.ambientOcclusion;
-    this.ambientOcclusion = enabled;
+    this.aoChoice = enabled;
+    this.aoOverride = null;
+    // Rates measured before the switch no longer compare.
+    this.cascade = null;
     this.suspend();
     this.save();
     this.announce('ambient-occlusion');
     return enabled;
   }
 
+  // The safeguard. Default AO draws the scene a second time, so it goes before any level.
+  dropAmbientOcclusion() {
+    this.aoDropped = true;
+    this.suspend();
+    this.save();
+    this.announce('auto');
+    return true;
+  }
+
   // Undo a run of step-downs that didn't help.
-  restore({ level }) {
+  restore({ level, aoDropped }) {
     const next = Math.max(0, Math.min(WORST, level));
-    const changed = next !== this.level;
+    const ambientOcclusion = this.ambientOcclusion;
+    this.aoDropped = aoDropped;
+    const changed = next !== this.level || this.ambientOcclusion !== ambientOcclusion;
     this.level = next;
     this.ceiling = next;
     if (!changed) return false;
@@ -214,9 +271,10 @@ export class Graphics {
     this.refreshStart = timestamp; this.refreshIntervals.length = 0;
   }
 
-  // `active` is false while paused, hidden or changing route.
+  // `active` is false while paused, hidden or changing route. A pinned level
+  // still measures while default AO is on or dropping it is being judged.
   sample(timestamp, active) {
-    if (!this.auto) return false;
+    if (!this.auto && !this.provisionalAO && !this.cascade) return false;
     if (!active) {
       this.startedAt = null; this.windowStart = null; this.frames = 0;
       this.refreshPrevious = null; this.refreshStart = null; this.refreshIntervals.length = 0;
@@ -243,17 +301,22 @@ export class Graphics {
       if (this.cascade) {
         if (fps >= this.cascade.fps * WORTHWHILE) {
           // Rebase on this step's rate so an early big gain can't excuse later useless steps.
-          this.cascade = { level: this.level, fps, failures: 0 };
-        } else if (++this.cascade.failures >= GIVE_UP_AFTER) {
-          // Two useless steps. Restore the last useful level and target the rate we get.
+          this.cascade = { level: this.level, aoDropped: this.aoDropped, fps, failures: 0 };
+        } else if (++this.cascade.failures >= GIVE_UP_AFTER || !this.auto) {
+          // Two useless steps, or one on a pinned level where AO was the only
+          // step. Restore the last useful state and target the rate we get.
           const cascade = this.cascade;
           this.cascade = null;
           this.target = Math.max(24, fps);
           return this.restore(cascade);
         }
       }
-      if (this.level < WORST) {
-        this.cascade ??= { level: this.level, fps, failures: 0 };
+      if (this.provisionalAO) {
+        this.cascade ??= { level: this.level, aoDropped: this.aoDropped, fps, failures: 0 };
+        return this.dropAmbientOcclusion();
+      }
+      if (this.auto && this.level < WORST) {
+        this.cascade ??= { level: this.level, aoDropped: this.aoDropped, fps, failures: 0 };
         return this.change(this.level + 1);
       }
       this.cascade = null;
@@ -263,7 +326,7 @@ export class Graphics {
     this.slow = 0;
     if (fps < this.target * FAST) { this.fast = 0; this.cascade = null; return false; }
     this.cascade = null;
-    if (++this.fast < FAST_WINDOWS || this.level <= this.ceiling) return false;
+    if (!this.auto || ++this.fast < FAST_WINDOWS || this.level <= this.ceiling) return false;
     this.fast = 0;
     return this.change(this.level - 1);
   }

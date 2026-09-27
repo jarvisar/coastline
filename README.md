@@ -54,7 +54,7 @@ For VR, open the site in the Quest browser and click `Enter VR`. Use the left st
 
 ## Settings
 
-The pause menu has traffic, sound, fullscreen and graphics settings. `Auto` adjusts graphics quality while you drive, or pick High, Balanced, Smooth or Basic. Soft shading adds ambient occlusion and is off by default.
+The pause menu has traffic, sound, fullscreen and graphics settings. `Auto` adjusts graphics quality while you drive, or pick High, Balanced, Smooth or Basic. Soft shading adds ambient occlusion. It starts on for desktop graphics cards that can easily run it and off everywhere else, and turns itself off if it's costing frame rate. Switching it on or off yourself is remembered and always wins.
 
 Sound also starts off. Press M to turn it on. `Audio settings` has volume sliders, presets and music.
 

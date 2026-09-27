@@ -157,6 +157,79 @@ try {
     results.push({ deviceScaleFactor, ...result });
     await context.close();
   }
+
+  // A strong desktop card, named over SwiftShader, which really is too slow for AO.
+  // The safeguard runs on the game's own frames here, not fed timestamps.
+  const strong = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  await strong.addInitScript(() => {
+    for (const context of [WebGLRenderingContext, WebGL2RenderingContext]) {
+      const getParameter = context.prototype.getParameter;
+      context.prototype.getParameter = function (name) {
+        // UNMASKED_RENDERER_WEBGL
+        return name === 0x9246 ? 'ANGLE (NVIDIA, NVIDIA GeForce RTX 4070 (0x00002786) Direct3D11 vs_5_0 ps_5_0, D3D11)' : getParameter.call(this, name);
+      };
+    }
+  });
+  const desktop = await strong.newPage();
+  desktop.on('pageerror', error => errors.push(error.message));
+  const load = async (query = '') => {
+    await desktop.goto(`${url}/${query}`);
+    await desktop.waitForFunction(() => window.__coastline && document.querySelector('#loading.loaded'));
+  };
+  const aoState = () => desktop.evaluate(() => {
+    const { graphics, rendering } = window.__coastline;
+    return { level: graphics.levelId, choice: graphics.aoChoice, dropped: graphics.aoDropped, enabled: rendering.ambientOcclusion.enabled,
+      pressed: document.querySelector('#soft-shading').getAttribute('aria-pressed'), status: document.querySelector('#graphics-status').textContent,
+      toast: document.querySelector('#toast').textContent, saved: JSON.parse(localStorage.getItem('coastline.graphics') ?? 'null') };
+  });
+
+  // ?ao=0 wins for the visit and is not saved as a choice.
+  await load('?ao=0');
+  await desktop.evaluate(() => { window.__coastline.action('pause'); window.__coastline.graphics.setMode('auto'); });
+  let state = await aoState();
+  assert.equal(state.enabled, false, '?ao=0 starts without AO');
+  assert.equal(state.saved.ambientOcclusion, null, '?ao=0 is not saved');
+  await desktop.evaluate(() => localStorage.clear());
+
+  await load();
+  state = await aoState();
+  assert.equal(state.level, 'high');
+  assert.equal(state.enabled, true, 'a strong card starts with AO');
+  assert.equal(state.pressed, 'true');
+  assert.match(state.status, /^Auto · High · 1280 × 800 · soft shading on$/);
+  await desktop.waitForFunction(() => !window.__coastline.rendering.ambientOcclusion.enabled, null, { timeout: 60000 });
+  state = await aoState();
+  const safeguard = { fps: await desktop.evaluate(() => window.__coastline.graphics.fps) };
+  assert.equal(state.dropped, true, 'the safeguard turned AO off');
+  assert.equal(state.level, 'high', 'before any level');
+  assert.equal(state.choice, null, 'without making a choice for the player');
+  assert.equal(state.toast, 'Graphics · High · soft shading off · adjusted for this device');
+  assert.equal(state.pressed, 'false');
+  assert.equal(state.saved.ambientOcclusionDropped, true);
+
+  // Remembered at High on the next visit, until the player switches it back on.
+  await desktop.evaluate(() => { window.__coastline.action('pause'); window.__coastline.graphics.setMode('high'); });
+  await load();
+  await desktop.evaluate(() => window.__coastline.action('pause'));
+  state = await aoState();
+  assert.equal(state.level, 'high');
+  assert.equal(state.enabled, false, 'a dropped default stays off');
+  await desktop.keyboard.press('KeyO');
+  state = await aoState();
+  assert.equal(state.enabled, true);
+  assert.equal(state.saved.ambientOcclusion, true, 'O saves a choice');
+  await load();
+  assert.equal((await aoState()).enabled, true, 'the choice beats the dropped default');
+  assert.equal(await desktop.evaluate(() => window.__coastline.graphics.provisionalAO), false, 'and the safeguard leaves it alone');
+
+  // A saved off beats a strong card.
+  await desktop.evaluate(() => localStorage.setItem('coastline.graphics', JSON.stringify({ mode: 'high', level: 'high', ambientOcclusion: false })));
+  await load();
+  state = await aoState();
+  assert.equal(state.enabled, false);
+  assert.equal(state.dropped, false);
+  results.push({ strongDesktop: { ...state, safeguard } });
+  await strong.close();
   assert.deepEqual(errors, []);
   await mkdir('.artifacts/graphics', { recursive: true });
   await writeFile('.artifacts/graphics/report.json', JSON.stringify({ passed: true, results }, null, 2));
