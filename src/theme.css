@@ -40,6 +40,12 @@ body[data-journey=salt] {
   --surface: #f5f9fa; --surface-card: #fbfdfd; --surface-control: #e4edf1;
   --surface-hover: #d5e3ea; --muted: #4b6373; --line: #9cb2bf;
 }
+body[data-journey=swamp] {
+  color-scheme: dark;
+  --surface: #22303a; --surface-card: #2c3c45; --surface-control: #2d3e47;
+  --surface-hover: #3b5059; --muted: #bfcdca; --line: #7b938f;
+  --action: #3f5d4e; --action-hover: #4c6f5e;
+}
 body[data-journey=volcanic] {
   color-scheme: dark;
   --surface: #30272a; --surface-card: #403236; --surface-control: #3c2f32;

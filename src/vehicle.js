@@ -105,6 +105,14 @@ export function createClassicCar(entry = carEntry(DEFAULT_CAR)) {
     box(cans, [.3, .44, .5], [x, 2.47, .2], can);
     box(cans, [.08, .06, .16], [x, 2.72, .06], chrome);
   }
+  // Upside-down canoe for the swamp. Its own colours, whatever the paint.
+  const canoe = new THREE.Group(); canoe.name = 'swamp-canoe'; body.add(canoe);
+  const hullShape = new THREE.Shape();
+  hullShape.moveTo(0, -2.25); hullShape.quadraticCurveTo(.47, -1.35, .45, 0); hullShape.quadraticCurveTo(.47, 1.35, 0, 2.25); hullShape.quadraticCurveTo(-.47, 1.35, -.45, 0); hullShape.quadraticCurveTo(-.47, -1.35, 0, -2.25);
+  const hull = new THREE.Mesh(new THREE.ExtrudeGeometry(hullShape, { depth: .3, bevelEnabled: false, curveSegments: 3 }), mat('#3e6a4c'));
+  hull.rotation.x = Math.PI / 2; hull.position.set(0, 2.56, .1); hull.castShadow = true; canoe.add(hull);
+  box(canoe, [.07, .03, 4.1], [0, 2.575, .1], mat('#2d4d38'));
+  for (const z of [-.7, .9]) box(canoe, [.95, .035, .08], [0, 2.575, z], mat('#c9b48b'));
   const wheels = [];
   for (const x of [-1.02, 1.02]) for (const z of [-1.18, 1.21]) {
     const pivot = new THREE.Group(); pivot.position.set(x, .49, z); car.add(pivot);
@@ -120,8 +128,8 @@ export function createClassicCar(entry = carEntry(DEFAULT_CAR)) {
     const kit = entry.trim ?? journey;
     paint.color.set(customPaint ?? ROUTE_PAINT[kit] ?? ROUTE_PAINT.coast);
     surfboard.visible = kit === 'coast'; spare.visible = kit === 'desert' || kit === 'volcanic' || kit === 'salt'; roofBox.visible = kit === 'snow'; cargo.visible = kit === 'jungle'; bale.visible = kit === 'plains'; bike.visible = kit === 'city';
-    cans.visible = kit === 'salt';
-    rack.visible = surfboard.visible || roofBox.visible || cargo.visible || bale.visible || bike.visible || cans.visible;
+    cans.visible = kit === 'salt'; canoe.visible = kit === 'swamp';
+    rack.visible = surfboard.visible || roofBox.visible || cargo.visible || bale.visible || bike.visible || cans.visible || canoe.visible;
     plate.position.x = spare.visible ? -.65 : 0;
   }
   function paintCar(color) { customPaint = color || null; applyTrim(kitJourney); }

@@ -10,9 +10,11 @@ const REACH = 1.2;
 // Decay rate of recoil speed after a car is knocked backwards.
 const RECOIL_GRIP = 8;
 const BEHIND = 380, AHEAD = 620;
-const DENSITY = { coast: 1, snow: .75, desert: .5, jungle: .6, plains: .5, city: 1, volcanic: .35, salt: .4 };
+const DENSITY = { coast: 1, snow: .75, desert: .5, jungle: .6, plains: .5, city: 1, volcanic: .35, salt: .4, swamp: .45 };
 const FLEET = { city: 9 };
-const LIGHTS = { snow: 1, city: .35, volcanic: .65 };
+const LIGHTS = { snow: 1, city: .35, volcanic: .65, swamp: .9 };
+// Routes dark enough for the nearest cars to light the road.
+const BEAMS = new Set(['snow', 'swamp']);
 
 // Separating-axis test on two rectangles. Coordinates ignore the render origin.
 export function trafficContact(a, b) {
@@ -69,7 +71,7 @@ export class Traffic {
     }
   }
   reset(route, s, journey = this.journey) {
-    this.route = route; this.journey = journey; this.salt = { coast: 2100, desert: 2200, snow: 2300, jungle: 2400, plains: 2500, city: 2600, volcanic: 2700, salt: 2800 }[journey];
+    this.route = route; this.journey = journey; this.salt = { coast: 2100, desert: 2200, snow: 2300, jungle: 2400, plains: 2500, city: 2600, volcanic: 2700, salt: 2800, swamp: 2900 }[journey];
     // Unseeded on purpose so traffic differs on each visit to the same scenery.
     this.seed = Math.floor(Math.random() * 4294967296);
     this.spacing = 1 / (DENSITY[journey] ?? 1);
@@ -78,7 +80,7 @@ export class Traffic {
     for (const car of this.pool) car.car.visible = car.index < fleet;
     for (const { rig } of this.headlightRigs) {
       rig.removeFromParent();
-      if (journey === 'snow') this.group.add(rig);
+      if (BEAMS.has(journey)) this.group.add(rig);
     }
     this.lastPlayerS = s; this.models.setLights(LIGHTS[journey] ?? 0);
     const span = 1080 / Math.ceil(fleet / 2);
@@ -202,7 +204,7 @@ export class Traffic {
       car.car.position.lerpVectors(car.previousPosition, car.position, clamp(alpha, 0, 1));
       car.car.quaternion.slerpQuaternions(car.previousQuaternion, car.quaternion, clamp(alpha, 0, 1));
     }
-    if (this.journey === 'snow') {
+    if (BEAMS.has(this.journey)) {
       // Reused array so the per-frame sort doesn't allocate.
       const nearest = this.nearest;
       for (let i = 0; i < this.vehicles.length; i++) nearest[i] = this.vehicles[i];

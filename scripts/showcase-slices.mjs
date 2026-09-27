@@ -6,7 +6,7 @@ import { createServer } from 'vite';
 
 // The showcase omits the city. Featured routes share a seed, camera angle and
 // full landscape framing; salt uses a nearby wetter stretch to show its pools.
-const routes = ['coast', 'desert', 'snow', 'jungle', 'plains', 'volcanic', 'salt'];
+const routes = ['coast', 'desert', 'snow', 'jungle', 'plains', 'volcanic', 'salt', 'swamp'];
 const position = Number(process.env.POSITION ?? -1100);
 if (!Number.isFinite(position)) throw new Error('POSITION must be a finite road distance.');
 const saltPosition = Number(process.env.SALT_POSITION ?? position + 80);

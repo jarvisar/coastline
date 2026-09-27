@@ -14,6 +14,7 @@ import { snowDiscoveries, snowDiscoveryClears } from './snow-discoveries.js';
 import { buildSnowDiscoveries, animateSnowDiscoveries } from './snow-discovery-scenery.js';
 import { solidPost, solidSpan, solidRocks } from './colliders.js';
 import { buildAlpineLandmarks, nearAlpineRelay } from './alpine-landmarks.js';
+import { CarHeadlights } from './headlights.js';
 
 const material = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: .95, flatShading: true, ...extra });
 const terrainMaterial = material('#ffffff', { vertexColors: true });
@@ -41,23 +42,6 @@ registerChunkResources('snow', { terrainMaterial, snowMaterial, snowBankMaterial
 function onDeck(a, b) {
   const bridge = snowBridgeAt((a + b) / 2);
   return b > bridge.start && a < bridge.end;
-}
-
-function headlightPattern() {
-  // Two headlight lobes from one spotlight map, so no second light or shadow pass.
-  const size = 64, pixels = new Uint8Array(size * size * 4);
-  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
-    const u = (x + .5) / size * 2 - 1, v = (y + .5) / size * 2 - 1;
-    const left = Math.exp(-.5 * ((u + .3) / .25) ** 2);
-    const right = Math.exp(-.5 * ((u - .3) / .25) ** 2);
-    const value = Math.round(255 * Math.min(1, left + right) * Math.exp(-.5 * (v / .65) ** 2));
-    const offset = (y * size + x) * 4;
-    pixels[offset] = pixels[offset + 1] = pixels[offset + 2] = value; pixels[offset + 3] = 255;
-  }
-  const texture = new THREE.DataTexture(pixels, size, size);
-  texture.minFilter = texture.magFilter = THREE.LinearFilter;
-  texture.needsUpdate = true;
-  return texture;
 }
 
 function geometry(vertices, colors) {
@@ -383,11 +367,7 @@ export class SnowWorld {
     };
     this.lampGlows = new THREE.Points(this.glowGeometry, this.glowMaterial); this.lampGlows.name = 'lamp-halos';
     this.lampGlows.frustumCulled = false; this.effects.add(this.lampGlows);
-    this.headlights = new THREE.Group(); this.effects.add(this.headlights);
-    this.headlight = new THREE.SpotLight('#ffe0a6', 170, 18, .64, .8, 1.5);
-    this.headlight.position.set(0, 1.03, -2.02); this.headlight.target.position.set(0, -1, -8);
-    this.headlight.map = headlightPattern(); this.headlight.castShadow = false;
-    this.headlights.add(this.headlight, this.headlight.target);
+    this.headlights = new CarHeadlights(); this.headlight = this.headlights.light; this.effects.add(this.headlights);
     this.snowfall = new Snowfall(); this.flakes = this.snowfall.points;
     this.flakeGeometry = this.snowfall.geometry; this.flakeMaterial = this.snowfall.material;
     this.effects.add(this.flakes); this.time = 0;
@@ -435,11 +415,7 @@ export class SnowWorld {
   animate(time, vehicle) {
     this.time = time; lakeClock.value = time;
     animateSnowDiscoveries(this.chunks.values(), time, vehicle);
-    if (vehicle) {
-      this.headlights.visible = vehicle.carId !== 'formula';
-      this.headlights.position.copy(vehicle.car.position); this.headlights.quaternion.copy(vehicle.car.quaternion);
-      this.headlight.shadow.camera.up.copy(up).applyQuaternion(vehicle.car.quaternion);
-    }
+    if (vehicle) this.headlights.follow(vehicle);
     const anchor = snowPosition(this.s, -35, snowRoadHeight(this.s));
     this.snowfall.update(time, anchor, this.origin);
   }
@@ -447,7 +423,7 @@ export class SnowWorld {
     this.chunkSource?.dispose();
     for (const chunk of this.chunks.values()) chunk.dispose(); this.chunks.clear(); this.effects.removeFromParent();
     this.snowfall.dispose();
-    this.headlight.map.dispose(); this.headlight.dispose();
+    this.headlights.dispose();
     this.glowGeometry.dispose(); this.glowMaterial.dispose();
   }
 }

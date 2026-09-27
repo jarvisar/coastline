@@ -6,6 +6,7 @@ import { plainsDrivingRoute } from './world/plains-route.js';
 import { cityDrivingRoute } from './world/city-route.js';
 import { volcanicDrivingRoute } from './world/volcanic-route.js';
 import { saltDrivingRoute } from './world/salt-route.js';
+import { swampDrivingRoute } from './world/swamp-route.js';
 
 export const JOURNEYS = {
   coast: {
@@ -55,5 +56,11 @@ export const JOURNEYS = {
     introduction: 'Cross a blinding white salt flat where shallow pools mirror the sky.',
     sound: 'Open wind, flamingos and engine sounds on',
     canvas: 'A raised causeway across a white salt flat cracked into polygons, with turquoise pools reflecting the clouds, faceted boulders, wading flamingos and violet mountains on the horizon. Drive with WASD or the arrow keys.',
+  },
+  swamp: {
+    title: 'Cypress Swamp', label: 'CYPRESS SWAMP', routeNumber: '9', route: swampDrivingRoute,
+    introduction: 'Cross a still, misty swamp at dusk on a causeway through the cypress.',
+    sound: 'Frogs, night insects and engine sounds on',
+    canvas: 'A low causeway at dusk across still black water that mirrors moss-hung cypress, dead snags and palmetto islands, with drifting mist, fireflies, wading egrets, a lurking alligator and lamplit fishing camps on stilts. Drive with WASD or the arrow keys.',
   },
 };

@@ -155,10 +155,11 @@ export class DriveAudio {
     set(g.air.level, this.journey === 'city' ? .025 : profile.air + foam * profile.wash, 1);
     set(g.air.frequency, profile.high * (.8 + envelope * .4), 1);
     set(g.rain.level, this.journey === 'city' ? .28 + gust * .09 : 0, 1);
-    const insects = ['jungle', 'plains'].includes(this.journey) ? (.018 + .012 * Math.sin(now * .83) ** 4) * (1 - state.motion * .4) : 0;
+    const insects = ['jungle', 'plains', 'swamp'].includes(this.journey) ? (.018 + .012 * Math.sin(now * .83) ** 4) * (1 - state.motion * .4) : 0;
     set(g.insects.level, insects); set(g.insectPulse, insects * .7);
-    set(g.insects.frequency, this.journey === 'plains' ? 4300 : 3600);
-    set(g.insectMod.frequency, this.journey === 'plains' ? 36 : 47);
+    // Swamp katydids rasp higher and slower than crickets.
+    set(g.insects.frequency, { plains: 4300, swamp: 4900 }[this.journey] ?? 3600);
+    set(g.insectMod.frequency, { plains: 36, swamp: 21 }[this.journey] ?? 47);
   }
   effects(telemetry, state, now) {
     if (state.shiftSerial !== this.shiftSerial) {

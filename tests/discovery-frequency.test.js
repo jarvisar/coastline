@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
-test('all eight scenes average about 2.5 driven miles, with each discovery near its editable target across seeds', () => {
+test('all nine scenes average about 2.5 driven miles, with each discovery near its editable target across seeds', () => {
   const totals = new Map();
   let miles = 0;
   for (const seed of [4817, 12345, 8675309, 42, 2026]) {
@@ -23,7 +23,7 @@ test('all eight scenes average about 2.5 driven miles, with each discovery near 
         `${key}, seed ${seed}: ${row['average miles']} miles`);
     }
   }
-  assert.equal(totals.size, 34, 'all 26 special discovery types and all eight scene totals are measured');
+  assert.equal(totals.size, 36, 'all 27 special discovery types and all nine scene totals are measured');
   for (const [key, { count, target, overall }] of totals) {
     const actual = miles / count;
     if (overall) assert.ok(actual > 2.25 && actual < 2.8, `${key}: ${actual} miles`);

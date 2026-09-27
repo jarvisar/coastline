@@ -15,7 +15,7 @@ try {
   await page.addInitScript(() => localStorage.setItem('coastline.graphics', JSON.stringify({ mode: 'high', level: 'high' })));
   await page.goto(`${url}/?seed=4817`, { waitUntil: 'networkidle' }); await ready(page);
   await page.getByRole('button', { name: /^Change route$/i }).click();
-  assert.equal(await page.locator('.journey-card').count(), 8);
+  assert.equal(await page.locator('.journey-card').count(), 9);
   await page.getByRole('button', { name: 'Salt Flats', exact: true }).click(); await ready(page);
   assert.equal(await page.locator('.location-title').textContent(), 'SALT FLATS');
   assert.equal(await page.evaluate(() => document.body.dataset.journey), 'salt');
@@ -68,8 +68,7 @@ try {
   assert.equal(await page.evaluate(() => !!window.__coastline.rendering.scene.getObjectByName('salt-sky-dome')), false);
   assert.equal(await page.evaluate(() => !!window.__coastline.rendering.scene.getObjectByName('salt-cumulus-reflection')), false);
   await page.keyboard.press('Digit8'); await ready(page); assert.equal(await journey(page), 'salt');
-  // Salt is last, so the next route wraps round to the coast.
-  await page.keyboard.press('KeyN'); await ready(page); assert.equal(await journey(page), 'coast');
+  await page.keyboard.press('KeyN'); await ready(page); assert.equal(await journey(page), 'swamp');
   await page.keyboard.press('Digit8'); await ready(page);
   await page.reload({ waitUntil: 'networkidle' }); await ready(page); assert.equal(await journey(page), 'salt');
 

@@ -70,6 +70,10 @@ export class SoundDirector {
       // A nasal, goose-like chatter answered further off.
       for (let i = 0; i < 3; i++) sing(i * .2, 830 - i * 40, 640, .13, .016);
       sing(.85, 760, 590, .18, .009); sing(1.05, 800, 620, .14, .008);
+    } else if (kind === 'frog') {
+      // Bullfrogs grunt low. Peepers answer high and quick.
+      if (this.random() < .55) { sing(0, 150, 118, .34, .03); sing(.42, 142, 112, .38, .026); sing(.92, 152, 120, .3, .02); }
+      else for (let i = 0; i < 5; i++) sing(i * .17, 2750, 3050, .07, .009);
     } else if (kind === 'drip') {
       sing(0, 1700, 700, .11, .012); sing(.32, 2200, 900, .09, .008);
     }

@@ -14,7 +14,7 @@ try {
   await page.addInitScript(() => localStorage.setItem('coastline.graphics', JSON.stringify({ mode: 'high', level: 'high' })));
   await page.goto(`${url}/?seed=4817`, { waitUntil: 'networkidle' }); await ready(page);
   await page.getByRole('button', { name: /^Change route$/i }).click();
-  assert.equal(await page.locator('.journey-card').count(), 8);
+  assert.equal(await page.locator('.journey-card').count(), 9);
   await page.getByRole('button', { name: 'Volcanic Rift', exact: true }).click(); await ready(page);
   assert.equal(await page.locator('.location-title').textContent(), 'VOLCANIC RIFT');
   assert.equal(await page.evaluate(() => document.body.dataset.journey), 'volcanic');

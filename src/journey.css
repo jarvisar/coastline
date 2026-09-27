@@ -128,6 +128,22 @@ body[data-journey=salt] .pause-overlay { background: #d3e3ec55; }
 body[data-journey=salt] .eyebrow>span { background: #df7f96; }
 body[data-journey=salt] .start-button:hover { background: #3a6179; }
 body[data-journey=salt] .touch-controls button.active { background: var(--ink); }
+body[data-journey=swamp] { --ink: #dfe7e6; --cream: #1f2c34; color: var(--ink); background: #25333d; }
+body[data-journey=swamp] .vignette { background: linear-gradient(180deg,#131e2555,transparent 22%,transparent 80%,#131e2566); }
+body[data-journey=swamp] :is(.welcome,.brand,.location) { text-shadow: 0 2px 12px #0e171d; }
+body[data-journey=swamp] :is(.icon-button,.journey-button,.controls,.touch-controls button) { background: #1f2d36d9; border-color: #a2b8b04d; }
+body[data-journey=swamp] :is(.icon-button,.journey-button,.touch-controls button):hover { background: #34474f; }
+body[data-journey=swamp] :is(kbd,.weather-divider,.control-separator) { border-color: #a2b8b04d; }
+body[data-journey=swamp] #toast { background: #1f2d36f2; }
+body[data-journey=swamp] .chooser { background: #22303afa; }
+body[data-journey=swamp] .chooser::backdrop { background: #0c141a66; }
+body[data-journey=swamp] .chooser-card { background: #2c3c45; border-color: #a2b8b04d; }
+body[data-journey=swamp] .chooser-card[aria-current=true] { border-color: var(--ink); }
+body[data-journey=swamp] #journey-transition { background: #25333d; }
+body[data-journey=swamp] .pause-overlay { background: #16222a66; }
+body[data-journey=swamp] .eyebrow>span { background: #f2c85b; }
+body[data-journey=swamp] .start-button:hover { background: #f1e3b8; }
+body[data-journey=swamp] .touch-controls button.active { background: var(--ink); }
 @media(max-width:1000px) { .weather { display: none; } }
 @media(max-width:600px) {
   .journey-button { position: absolute; right: 0; top: 53px; padding: 9px 13px; font-size: 10px; }

@@ -41,6 +41,8 @@ const MENU_CRUISE_SPEED = TRAFFIC_CRUISE_SPEED * 1.4;
 // Focus rings for gamepad navigation in the choosers and the pause screen.
 const MENU_CARDS = '[data-journey], [data-car], [data-paint]';
 const PAUSE_CONTROLS = '#resume, #change-car, #autodrive, #traffic, #sound, #audio-mixer-toggle, #audio-mixer button, #audio-mixer input, #fullscreen, #graphics-toggle, [data-quality], #pixel-density, #soft-shading, #enter-vr-pause, .update-entry, .pwa-install-button';
+// Headlight glow per route: 1 is full night.
+const ROUTE_LIGHTS = { snow: 1, volcanic: .65, city: .35, swamp: .9 };
 const mileageFormat = new Intl.NumberFormat('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 let paused = false, started = false, time = 0, hudTime = 0;
 const frameClock = new FrameClock();
@@ -96,7 +98,7 @@ async function boot() {
     // Free driving is on by default while off-road collision is trialled.
     vehicle.toggleFreeDriving();
     vehicle.setAppearance(journey);
-    vehicle.setLights(journey === 'snow' ? 1 : journey === 'volcanic' ? .65 : journey === 'city' ? .35 : 0);
+    vehicle.setLights(ROUTE_LIGHTS[journey] ?? 0);
     rendering.setJourney(journey); audio.setJourney(journey);
     const journeyDialog = $('#journey-dialog'), carDialog = $('#car-dialog'), pauseOverlay = $('#pause-overlay');
     const openChooser = () => [journeyDialog, carDialog].find(dialog => dialog.open) ?? null;
@@ -172,7 +174,7 @@ async function boot() {
       $('.location svg text').textContent = data.routeNumber;
       $('#menu-route').textContent = data.label;
       $('#scene').setAttribute('aria-label', data.canvas);
-      document.querySelector('meta[name="theme-color"]').content = { coast: '#c2e7e8', desert: '#efc692', snow: '#111d30', jungle: '#22402a', plains: '#ecd29a', city: '#b3bcc4', volcanic: '#302728', salt: '#dae8ef' }[journey];
+      document.querySelector('meta[name="theme-color"]').content = { coast: '#c2e7e8', desert: '#efc692', snow: '#111d30', jungle: '#22402a', plains: '#ecd29a', city: '#b3bcc4', volcanic: '#302728', salt: '#dae8ef', swamp: '#2c3d4b' }[journey];
       document.querySelectorAll('button[data-journey]').forEach(button => button.setAttribute('aria-current', String(button.dataset.journey === journey)));
     }
     function buildCarCards() {
@@ -281,7 +283,7 @@ async function boot() {
         vehicle.setRoute(JOURNEYS[id].route, nextState);
         autodrive.reset();
         vehicle.setAppearance(id);
-        vehicle.setLights(id === 'snow' ? 1 : id === 'volcanic' ? .65 : id === 'city' ? .35 : 0);
+        vehicle.setLights(ROUTE_LIGHTS[id] ?? 0);
         traffic.reset(vehicle.route, vehicle.s, id); traffic.render(1, world.origin);
         primeMenuDrive();
         rendering.setJourney(id); audio.setJourney(id); updateJourneyUi(); paintCards(); updatePaintUi();

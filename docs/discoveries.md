@@ -12,12 +12,13 @@ Discoveries are the landmarks that show up along each route. To change how often
 | Rainy Downtown | [city-discoveries.js](../src/world/city-discoveries.js) |
 | Volcanic Rift | [volcanic-discoveries.js](../src/world/volcanic-discoveries.js) |
 | Salt Plains | [salt-discoveries.js](../src/world/salt-discoveries.js) |
+| Cypress Swamp | [swamp-discoveries.js](../src/world/swamp-discoveries.js) |
 
 For example, `'cable-car': 5` means about one every five miles. Lower numbers make it more common and `Infinity` turns it off. Zero or negative numbers aren't allowed.
 
 The defaults work out to about one discovery every 2.5 miles. The actual gaps depend on terrain, the seed and minimum spacing, so changing one value can shift other discoveries around, but their average frequency stays the same.
 
-Birds, Alpine lakeside cabins and normal road bridges are spawned separately. Smaller objects, like the boat at a dock, come with their parent discovery. On the salt flat, the ground under each discovery is kept dry and most cactus islands get a lagoon beside them.
+Birds, Alpine lakeside cabins and normal road bridges are spawned separately. Smaller objects, like the boat at a dock, come with their parent discovery. Swamp fishing camps are discoveries; their docks, boats, clearings and lanterns belong to the camp. On the salt flat, the ground under each discovery is kept dry and most cactus islands get a lagoon beside them.
 
 ## Checking placement
 

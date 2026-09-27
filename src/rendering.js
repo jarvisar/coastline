@@ -7,6 +7,7 @@ import { Graphics, renderScale } from './graphics.js';
 import { XRCameraRig } from './xr-camera.js';
 import { volcanicPalette } from './world/volcanic-palette.js';
 import { saltPalette, SALT_SUN, SALT_LIGHT } from './world/salt-palette.js';
+import { swampPalette, SWAMP_SUN, SWAMP_LIGHT } from './world/swamp-palette.js';
 
 // Overhead follow rates per second. Ground settles fast so steering feels
 // immediate. Height stays slow so the view doesn't bob over terrain.
@@ -87,6 +88,8 @@ export function createRendering(canvas, graphics = new Graphics()) {
     volcanic: { color: volcanicPalette.horizon, near: 290, far: 800, thirdNear: 105, thirdFar: 310 },
     // Clear air: the flat reads a long way before it pales into the horizon.
     salt: { color: saltPalette.fog, near: 700, far: 1300, thirdNear: 230, thirdFar: 470 },
+    // Dusk haze: the far hammocks soften into blue before the view ends.
+    swamp: { color: swampPalette.fog, near: 380, far: 880, thirdNear: 120, thirdFar: 300 },
   };
   function updateFog() {
     const profile = fogProfiles[journey];
@@ -195,6 +198,15 @@ export function createRendering(canvas, graphics = new Graphics()) {
       sky.color.set(saltPalette.skyLight); sky.groundColor.set(saltPalette.groundLight); sky.intensity = SALT_LIGHT.sky;
       sun.color.set(saltPalette.sun); sun.intensity = SALT_LIGHT.sun; sunOffset.set(...SALT_SUN);
       renderer.toneMappingExposure = 1.48;
+      return;
+    }
+    if (id === 'swamp') {
+      // Blue hour. A cool moon-and-sky fill keeps the water readable and leaves
+      // the headlights, camp windows and fireflies as the only warm light.
+      scene.background.set(swampPalette.horizon); updateFog();
+      sky.color.set(swampPalette.skyLight); sky.groundColor.set(swampPalette.groundLight); sky.intensity = SWAMP_LIGHT.sky;
+      sun.color.set(swampPalette.sun); sun.intensity = SWAMP_LIGHT.sun; sunOffset.set(...SWAMP_SUN);
+      renderer.toneMappingExposure = SWAMP_LIGHT.exposure;
       return;
     }
     const desert = id === 'desert';
