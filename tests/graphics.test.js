@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { Graphics, QUALITY_LEVELS, detectAmbientOcclusion, detectFrameLock, detectLevel, levelIndex, lockedRate, probeRenderer, questHeadset, renderScale, strongGpu } from '../src/graphics.js';
+import { Graphics, QUALITY_LEVELS, detectAmbientOcclusion, detectFrameCap, detectLevel, levelIndex, probeRenderer, questHeadset, renderScale, strongGpu } from '../src/graphics.js';
 
 function memoryStorage(initial = {}) {
   const map = new Map(Object.entries(initial));
@@ -17,14 +17,15 @@ class Device {
     if (typeof this.rates === 'function') return this.rates(this.graphics.settings);
     return typeof this.rates === 'number' ? this.rates : this.rates[levelIndex(this.graphics.levelId)];
   }
-  // Like the game loop: Lock 60fps may leave a refresh out, which Auto still sees.
-  run(seconds, { hz, active = true } = {}) {
+  // Like the game loop: every refresh outside VR goes through skip(), which the
+  // FPS cap may leave out, and only drawn frames are sampled.
+  run(seconds, { hz, active = true, vr = false } = {}) {
     for (let remaining = seconds * 1000; remaining > 0;) {
       const step = 1000 / (hz ?? this.hz);
       this.time += step; remaining -= step;
-      const drawn = !this.graphics.skip(this.time);
-      if (drawn) this.drawn++;
-      if (this.graphics.sample(this.time, active, drawn)) {
+      if (!vr && this.graphics.skip(this.time)) continue;
+      this.drawn++;
+      if (this.graphics.sample(this.time, active && !vr)) {
         this.changes++; this.levels.push(this.graphics.levelId);
         this.steps.push(`${this.graphics.levelId}${this.graphics.settings.ambientOcclusion ? '+ao' : '-ao'}`);
       }
@@ -32,7 +33,7 @@ class Device {
     return this;
   }
 }
-const graphicsAt = (level, options = {}) => new Graphics({ storage: memoryStorage(), detect: () => level, detectAO: () => false, detectLock: () => false, ...options });
+const graphicsAt = (level, options = {}) => new Graphics({ storage: memoryStorage(), detect: () => level, detectAO: () => false, detectCap: () => false, ...options });
 // Hardware that detection trusts with AO.
 const strongAt = (level, options = {}) => graphicsAt(level, { detectAO: () => true, ...options });
 // AO costs a device `cost` of its frame rate at every level.
@@ -138,22 +139,23 @@ for (const refresh of [90, 120, 144]) {
 }
 
 test('Auto detects high refresh through uneven frames and ignores isolated short intervals', () => {
+  const frame = (graphics, time) => graphics.skip(time) || graphics.sample(time, true);
   const steady = graphicsAt(levelIndex('high'));
-  let time = 0; steady.sample(time, true);
-  for (let i = 0; i < 500; i++) steady.sample(time += (i % 30 === 0 ? 2 : 1000 / 60), true);
+  let time = 0; frame(steady, time);
+  for (let i = 0; i < 500; i++) frame(steady, time += (i % 30 === 0 ? 2 : 1000 / 60));
   assert.equal(steady.target, 60);
   const phone = graphicsAt(levelIndex('high'));
   const levels = [];
-  phone.onChange(() => levels.push(phone.levelId));
-  time = 0; phone.sample(time, true);
-  for (let i = 0; i < 1500; i++) phone.sample(time += (i % 2 ? 1000 / 120 : 1000 / 60), true);
+  phone.onChange((settings, reason) => reason === 'auto' && levels.push(phone.levelId));
+  time = 0; frame(phone, time);
+  for (let i = 0; i < 1500; i++) frame(phone, time += (i % 2 ? 1000 / 120 : 1000 / 60));
   assert.ok(Math.abs(phone.refreshRate - 120) < 1, 'dropped frames do not disguise a 120 Hz display as 80 Hz');
   assert.equal(levels[0], 'balanced', 'uneven high-refresh delivery triggers a downgrade');
 });
 
-test('hidden frames cannot teach Auto an artificial refresh rate', () => {
+test('headset frames cannot teach Auto the screen\'s refresh rate', () => {
   const graphics = graphicsAt(levelIndex('high'));
-  const display = new Device(graphics, 240).run(20, { active: false });
+  const display = new Device(graphics, 240).run(20, { vr: true });
   display.run(20, { hz: 60 });
   assert.equal(graphics.target, 60);
   assert.equal(display.changes, 0);
@@ -223,7 +225,7 @@ test('a chosen level is pinned, adapts to nothing, and is remembered', () => {
   assert.equal(graphics.levelId, 'high');
   new Device(graphics, 8).run(120);
   assert.equal(graphics.levelId, 'high', 'a pinned level stays pinned');
-  assert.deepEqual(stored(storage), { mode: 'high', level: 'high', density: null, ambientOcclusion: null, ambientOcclusionDropped: false, frameLock: null });
+  assert.deepEqual(stored(storage), { mode: 'high', level: 'high', density: null, ambientOcclusion: null, ambientOcclusionDropped: false, frameCap: null });
 
   const next = new Graphics({ storage, detect: () => levelIndex('basic') });
   assert.equal(next.mode, 'high');
@@ -238,7 +240,7 @@ test('auto remembers the level it settled on so the next visit starts there', ()
   const graphics = new Graphics({ storage, detect: () => levelIndex('high') });
   new Device(graphics, [22, 31, 43, 61]).run(60);
   assert.equal(graphics.levelId, 'basic');
-  assert.deepEqual(stored(storage), { mode: 'auto', level: 'basic', density: null, ambientOcclusion: null, ambientOcclusionDropped: false, frameLock: null });
+  assert.deepEqual(stored(storage), { mode: 'auto', level: 'basic', density: null, ambientOcclusion: null, ambientOcclusionDropped: false, frameCap: null });
   const next = new Graphics({ storage, detect: () => levelIndex('high') });
   assert.equal(next.auto, true);
   assert.equal(next.levelId, 'basic');
@@ -466,7 +468,7 @@ test('the safeguard drops default AO before any level when it costs frames, and 
   assert.deepEqual(reasons, ['auto'], 'it is announced like any Auto change');
   device.run(200);
   assert.equal(device.changes, 1, 'and it does not come back on its own');
-  assert.deepEqual(stored(storage), { mode: 'auto', level: 'high', density: null, ambientOcclusion: null, ambientOcclusionDropped: true, frameLock: null });
+  assert.deepEqual(stored(storage), { mode: 'auto', level: 'high', density: null, ambientOcclusion: null, ambientOcclusionDropped: true, frameCap: null });
   const next = strongAt(0, { storage });
   assert.equal(next.ambientOcclusion, false, 'the next visit starts without it');
   assert.equal(next.toggleAmbientOcclusion(), true, 'the player can still turn it back on');
@@ -540,49 +542,103 @@ test('the safeguard never overrides a choice, including one made mid-verdict', (
   assert.equal(visit.aoDropped, false);
 });
 
-test('Lock 60fps starts on without a strong card of its own, and never applies on Quest', () => {
-  assert.equal(detectFrameLock({ mobile: true, gpu: 'Adreno (TM) 750' }), true, 'phones and tablets');
-  assert.equal(detectFrameLock({ mobile: false, gpu: 'ANGLE (Intel, Intel(R) Iris(R) Xe Graphics Direct3D11 vs_5_0 ps_5_0, D3D11)' }), true, 'processor graphics');
-  assert.equal(detectFrameLock({ mobile: false, gpu: '' }), true, 'cards the browser won\'t name');
-  assert.equal(detectFrameLock({ mobile: false, gpu: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 4080 SUPER Direct3D11 vs_5_0 ps_5_0, D3D11)' }), false, 'a strong card of its own');
+test('the FPS cap holds about 60 without a strong card of its own, and is never offered on Quest', () => {
+  assert.equal(detectFrameCap({ mobile: true, gpu: 'Adreno (TM) 750' }), true, 'phones and tablets');
+  assert.equal(detectFrameCap({ mobile: false, gpu: 'ANGLE (Intel, Intel(R) Iris(R) Xe Graphics Direct3D11 vs_5_0 ps_5_0, D3D11)' }), true, 'processor graphics');
+  assert.equal(detectFrameCap({ mobile: false, gpu: '' }), true, 'cards the browser won\'t name');
+  assert.equal(detectFrameCap({ mobile: false, gpu: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 4080 SUPER Direct3D11 vs_5_0 ps_5_0, D3D11)' }), false, 'a strong card of its own');
   assert.equal(questHeadset({ userAgent: 'Mozilla/5.0 (X11; Linux x86_64; Quest 3) AppleWebKit/537.36 (KHTML, like Gecko) OculusBrowser/35.0.0.0 Chrome/132.0.0.0 VR Safari/537.36' }), true);
   assert.equal(questHeadset({ userAgent: 'Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Mobile Safari/537.36' }), false);
 
   const storage = memoryStorage();
-  const phone = new Graphics({ storage, detect: () => 1, detectLock: () => true, quest: false });
-  assert.equal(phone.settings.frameLock, true);
-  assert.equal(phone.toggleFrameLock(), false, 'turning it off is a choice');
-  assert.equal(stored(storage).frameLock, false);
-  assert.equal(new Graphics({ storage, detect: () => 1, detectLock: () => true, quest: false }).frameLock, false, 'the choice wins on the next visit');
+  const phone = new Graphics({ storage, detect: () => 1, detectCap: () => true, quest: false });
+  new Device(phone, 120).run(5);
+  assert.equal(phone.spacing, 2, 'a 120 Hz phone draws every second refresh');
+  assert.equal(phone.setFrameCap(0), true);
+  assert.equal(phone.spacing, 1, 'uncapped, it draws them all');
+  assert.equal(stored(storage).frameCap, 0, 'and that is saved as a choice');
+  const next = new Graphics({ storage, detect: () => 1, detectCap: () => true, quest: false });
+  new Device(next, 120).run(5);
+  assert.equal(next.spacing, 1, 'the choice wins on the next visit');
 
-  const headset = new Graphics({ storage: memoryStorage(), detect: () => 1, detectLock: () => true, quest: true });
-  assert.equal(headset.lockAvailable, false);
-  assert.equal(headset.frameLock, false, 'Quest sets its own rate');
-  assert.equal(headset.toggleFrameLock(), false);
-  assert.equal(headset.skip(0) || headset.skip(4), false, 'and no refresh is left out');
+  const headset = new Graphics({ storage: memoryStorage(), detect: () => 1, detectCap: () => true, quest: true });
+  assert.equal(headset.capAvailable, false);
+  assert.equal(headset.setFrameCap(30), false);
+  const screen = new Device(headset, 120).run(5);
+  assert.ok(Math.abs(headset.refreshRate - 120) < 1 && headset.spacing === 1, 'Quest sets its own rate');
+  assert.ok(Math.abs(screen.drawn - 600) <= 1, 'and no refresh is left out');
 });
 
-test('Lock 60fps keeps drawn frames evenly spaced near 60', () => {
-  for (const [refresh, rate] of [[60, 60], [75, 75], [90, 45], [120, 60], [144, 72], [165, 55], [240, 60]]) {
-    assert.ok(Math.abs(lockedRate(refresh) - rate) < 1e-9, `${refresh} Hz locks to ${rate}`);
-    const graphics = graphicsAt(0, { detectLock: () => true }), drawn = [];
-    for (let i = 0; i < refresh * 2; i++) if (!graphics.skip(i * 1000 / refresh)) drawn.push(i);
-    const gaps = new Set(drawn.slice(1).map((frame, i) => frame - drawn[i]));
-    assert.deepEqual([...gaps], [refresh / rate], `${refresh} Hz draws every ${refresh / rate} refreshes`);
+test('the FPS cap offers only rates the screen can space evenly, and defaults to the lowest from 60 up', () => {
+  const hundredths = rates => rates.map(rate => Math.round(rate * 100) / 100);
+  for (const [refresh, rates, fallback] of [
+    [60, [30, 60], 60], [75, [37.5, 75], 75], [90, [30, 45, 90], 90], [100, [33.33, 50, 100], 100],
+    [120, [30, 40, 60, 120], 60], [144, [36, 48, 72, 144], 72], [165, [33, 41.25, 55, 82.5, 165], 82.5],
+    [240, [30, 34.29, 40, 48, 60, 80, 120, 240], 60],
+  ]) {
+    const graphics = graphicsAt(0, { detectCap: () => true });
+    const screen = new Device(graphics, refresh).run(3);
+    assert.ok(Math.abs(graphics.refreshRate - refresh) < 1e-6);
+    assert.deepEqual(hundredths(graphics.capRates), rates, `${refresh} Hz offers ${rates.join(', ')}`);
+    assert.ok(Math.abs(graphics.cap - fallback) < 1e-6, `${refresh} Hz starts at ${fallback}`);
+    // The slider saves rates rounded, and each still draws every nth refresh.
+    for (const rate of graphics.capRates) {
+      graphics.setFrameCap(rate === graphics.refreshRate ? 0 : Math.round(rate));
+      assert.ok(Math.abs(graphics.cap - rate) < 1e-6, `${Math.round(rate)} at ${refresh} Hz`);
+      const drawn = [];
+      for (let i = 0; i < refresh * 2; i++) if (!graphics.skip(screen.time += 1000 / refresh)) drawn.push(i);
+      const gaps = new Set(drawn.slice(1).map((frame, i) => frame - drawn[i]));
+      assert.deepEqual([...gaps], [Math.round(refresh / rate)], `${Math.round(rate)} at ${refresh} Hz is evenly spaced`);
+    }
   }
-  const unlocked = graphicsAt(0);
-  for (let i = 0; i < 240; i++) assert.equal(unlocked.skip(i * 1000 / 144), false, 'unlocked, every refresh is drawn');
+  const strong = graphicsAt(0);
+  new Device(strong, 144).run(3);
+  assert.equal(strong.spacing, 1, 'a strong card starts uncapped');
+  assert.equal(new Graphics({ storage: memoryStorage(), detect: () => 0, detectCap: () => true }).capRates.length, 2, 'before measuring, a 60 Hz screen');
 });
 
-test('Auto aims for the locked rate, so a 120 Hz phone keeps its quality at 60', () => {
-  const graphics = graphicsAt(levelIndex('high'), { detectLock: () => true });
-  const phone = new Device(graphics, 120).run(60);
+test('timestamps rounded to the millisecond, as in Firefox and Safari, still measure the screen and pace it evenly', () => {
+  for (const refresh of [90, 120, 144, 165]) {
+    const graphics = graphicsAt(0, { detectCap: () => true });
+    let vsync = 0;
+    const frame = () => !graphics.skip(Math.round(vsync += 1000 / refresh));
+    for (let i = 0; i < refresh * 3; i++) frame();
+    assert.ok(Math.abs(graphics.refreshRate - refresh) < .5, `${refresh} Hz measured as ${graphics.refreshRate}`);
+    for (const rate of [graphics.cap, graphics.capRates[0]]) {
+      graphics.setFrameCap(Math.round(rate));
+      const drawn = [];
+      for (let i = 0; i < refresh * 2; i++) if (frame()) drawn.push(i);
+      const gaps = new Set(drawn.slice(1).map((frame, i) => frame - drawn[i]));
+      assert.deepEqual([...gaps], [graphics.spacing], `${Math.round(rate)} at ${refresh} Hz is evenly spaced`);
+    }
+  }
+});
+
+test('a saved cap follows the screen it ends up on', () => {
+  const saved = value => memoryStorage({ 'coastline.graphics': JSON.stringify(value) });
+  const docked = graphicsAt(0, { storage: saved({ frameCap: 60 }) });
+  new Device(docked, 144).run(3);
+  assert.ok(Math.abs(docked.cap - 48) < 1e-6, '60 on a 144 Hz screen draws 48, the closest even rate under it');
+  const slow = graphicsAt(0, { storage: saved({ frameCap: 30 }) });
+  new Device(slow, 75).run(3);
+  assert.ok(Math.abs(slow.cap - 37.5) < 1e-6, 'and never goes under the slider\'s lowest rate');
+  assert.equal(graphicsAt(0, { storage: saved({ frameLock: false }), detectCap: () => true }).capChoice, 0, 'Lock 60fps turned off carries over as uncapped');
+  assert.equal(graphicsAt(0, { storage: saved({ frameLock: true }) }).capChoice, 60, 'and turned on as 60');
+  assert.equal(graphicsAt(0, { storage: saved({ frameCap: -1 }) }).capChoice, null, 'nonsense is ignored');
+});
+
+test('Auto aims for the capped rate, so a 120 Hz phone keeps its quality at 60', () => {
+  const graphics = graphicsAt(levelIndex('high'), { detectCap: () => true });
+  const phone = new Device(graphics, 120).run(5);
+  phone.drawn = 0; phone.run(60);
   assert.equal(phone.changes, 0, 'drawing 60 on a 120 Hz screen is not falling behind');
   assert.ok(Math.abs(graphics.refreshRate - 120) < 1 && Math.abs(graphics.target - 60) < 1);
   assert.ok(Math.abs(phone.drawn / 60 - 60) < 1, 'about 60 frames a second are drawn');
-  graphics.toggleFrameLock();
-  assert.ok(Math.abs(graphics.target - 120) < 1, 'unlocked, it aims for the screen again');
-  const slow = graphicsAt(levelIndex('high'), { detectLock: () => true });
+  graphics.setFrameCap(0);
+  assert.ok(Math.abs(graphics.target - 120) < 1, 'uncapped, it aims for the screen again');
+  graphics.setFrameCap(40);
+  assert.ok(Math.abs(graphics.target - 40) < 1, 'and for a lower cap');
+  const slow = graphicsAt(levelIndex('high'), { detectCap: () => true });
   const heavy = new Device(slow, [50, 61, 61, 61]).run(60);
   assert.ok(heavy.changes > 0 && slow.levelId !== 'high', 'a device that can\'t hold 60 still steps down');
 });

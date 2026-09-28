@@ -1,4 +1,4 @@
-// Quality levels, starting-level detection and the adaptive frame-rate controller.
+// Quality levels, starting-level detection, the FPS cap and the adaptive frame-rate controller.
 // AO is a separate setting that presets never toggle. A saved choice always wins.
 // Without one, AO starts on only on strong hardware, and the controller may turn
 // that default off if it costs frames.
@@ -129,25 +129,29 @@ export function detectAmbientOcclusion(hints = {}) {
   return strongGpu(gpu) && detectLevel({ ...hints, mobile: false, gpu }) === 0;
 }
 
-// Quest's browser. VR there runs at 90 Hz, and Lock 60fps doesn't apply.
+// Quest's browser. VR there runs at 90 Hz, and the FPS cap isn't offered.
 export const questHeadset = (nav = globalThis.navigator ?? {}) => /OculusBrowser|\bQuest\b/.test(nav.userAgent ?? '');
 
-// Lock 60fps starts on unless the browser names a strong card of its own, so
-// phones, tablets, processor graphics and unnamed cards hold 60 on faster screens.
-export function detectFrameLock(hints = {}) {
+// Without a saved choice, the FPS cap holds about 60 unless the browser names a
+// strong card of its own, so phones, tablets, processor graphics and unnamed
+// cards don't run flat out on faster screens.
+export function detectFrameCap(hints = {}) {
   const nav = hints.navigator ?? globalThis.navigator ?? {};
   return touchDevice(hints, nav) || !strongGpu(hints.gpu ?? rendererName());
 }
 
-// Lock 60fps draws the first screen refresh at least this many milliseconds after
-// the last, which keeps drawn frames evenly spaced: every refresh up to 75 Hz,
-// every second one at 90 Hz (45 fps), 120 Hz (60) and 144 Hz (72), and every
-// third at 165 Hz (55).
-const LOCK_GAP = 12.75;
-export const lockedRate = refresh => refresh / Math.max(1, Math.ceil(LOCK_GAP * refresh / 1000));
+// The screen only shows a new frame on a refresh, so the cap draws every
+// refresh, every second one, every third and so on. Rates in between would
+// space frames unevenly, which looks worse than a steady lower rate. The
+// default cap is the lowest of these that isn't under 60. That's every refresh
+// at 60, 75, 90 and 100 Hz, 60 fps at 120 and 240 Hz, 72 at 144 Hz and 82.5 at
+// 165 Hz. Both limits sit a bit low so 59.94 Hz screens count.
+const NEAR_60 = 58, NEAR_30 = 29.5;
+// The slider offers every rate from 30 up.
+const capSteps = refresh => Math.max(1, Math.floor(refresh / NEAR_30));
 
 export class Graphics {
-  constructor({ storage = defaultStorage(), ambientOcclusion = null, detect = detectLevel, detectAO = detectAmbientOcclusion, detectLock = detectFrameLock, quest = questHeadset() } = {}) {
+  constructor({ storage = defaultStorage(), ambientOcclusion = null, detect = detectLevel, detectAO = detectAmbientOcclusion, detectCap = detectFrameCap, quest = questHeadset() } = {}) {
     const stored = readStored(storage);
     this.storage = storage;
     this.listeners = new Set();
@@ -166,11 +170,14 @@ export class Graphics {
     this.aoDefault = this.level === 0 && detectAO();
     this.aoDropped = stored.ambientOcclusionDropped === true || stored.softShading === false;
     this.densityOverride = Number.isFinite(stored.density) && stored.density >= MIN_DENSITY && stored.density <= 1 ? stored.density : null;
-    // A saved Lock 60fps is the player's choice. It doesn't apply on Quest.
-    this.lockAvailable = !quest;
-    this.lockChoice = typeof stored.frameLock === 'boolean' ? stored.frameLock : null;
-    this.lockDefault = this.lockAvailable && detectLock();
-    this.drawn = -Infinity;
+    // A saved FPS cap is the player's choice, 0 for uncapped. Lock 60fps, the
+    // switch it replaced, saved true or false.
+    this.capAvailable = !quest;
+    this.capChoice = Number.isFinite(stored.frameCap) && stored.frameCap >= 0 ? stored.frameCap
+      : typeof stored.frameLock === 'boolean' ? (stored.frameLock ? 60 : 0) : null;
+    this.capDefault = this.capAvailable && detectCap();
+    this.lastDrawn = -Infinity;
+    this.refreshPrevious = null; this.refreshStart = null; this.refreshIntervals = [];
     // Auto never climbs back past a level it downgraded to, so it can't flicker.
     this.ceiling = 0;
     this.target = 60;
@@ -184,11 +191,22 @@ export class Graphics {
   get ambientOcclusion() { return this.aoOverride ?? this.aoChoice ?? (this.aoDefault && !this.aoDropped); }
   // On by default rather than by choice, so the safeguard may turn it off.
   get provisionalAO() { return this.aoOverride === null && this.aoChoice === null && this.ambientOcclusion; }
-  get frameLock() { return this.lockAvailable && (this.lockChoice ?? this.lockDefault); }
-  // The frame rate Auto aims for: the screen's own, or its Lock 60fps rate.
-  get cap() { return this.frameLock ? lockedRate(this.refreshRate) : this.refreshRate; }
+  // Screen refreshes per drawn frame.
+  get spacing() {
+    const choice = this.capAvailable ? this.capChoice : 0;
+    if (choice === null) return this.capDefault ? Math.max(1, Math.floor(this.refreshRate / NEAR_60)) : 1;
+    // Saved rates are rounded, and the measured refresh drifts a little between visits.
+    return choice ? Math.min(capSteps(this.refreshRate), Math.ceil(this.refreshRate / (choice * 1.03))) : 1;
+  }
+  // The frame rate Auto aims for.
+  get cap() { return this.refreshRate / this.spacing; }
+  // The rates the slider offers, lowest first. The last one is uncapped.
+  get capRates() {
+    const steps = capSteps(this.refreshRate);
+    return Array.from({ length: steps }, (_, i) => this.refreshRate / (steps - i));
+  }
   get settings() {
-    return { ...QUALITY_LEVELS[this.level], density: this.densityOverride ?? QUALITY_LEVELS[this.level].density, ambientOcclusion: this.ambientOcclusion, frameLock: this.frameLock };
+    return { ...QUALITY_LEVELS[this.level], density: this.densityOverride ?? QUALITY_LEVELS[this.level].density, ambientOcclusion: this.ambientOcclusion };
   }
   // Fixed at context creation, so only the starting level's value takes effect.
   get antialias() { return QUALITY_LEVELS[this.level].antialias; }
@@ -198,7 +216,7 @@ export class Graphics {
   announce(reason) { for (const listener of this.listeners) listener(this.settings, reason, this); }
 
   save() {
-    writeStored(this.storage, { mode: this.mode, level: this.levelId, density: this.densityOverride, ambientOcclusion: this.aoChoice, ambientOcclusionDropped: this.aoDropped, frameLock: this.lockChoice });
+    writeStored(this.storage, { mode: this.mode, level: this.levelId, density: this.densityOverride, ambientOcclusion: this.aoChoice, ambientOcclusionDropped: this.aoDropped, frameCap: this.capChoice });
   }
 
   setMode(mode) {
@@ -237,23 +255,26 @@ export class Graphics {
     return enabled;
   }
 
-  // A choice is saved and wins over the default. Does nothing on Quest.
-  toggleFrameLock() {
-    if (!this.lockAvailable) return false;
-    this.lockChoice = !this.frameLock;
+  // A choice is saved and wins over the default. 0 is uncapped. Does nothing on Quest.
+  setFrameCap(rate) {
+    if (!this.capAvailable || !Number.isFinite(rate) || rate < 0) return false;
+    this.capChoice = rate;
     // The drawn frame rate changes, so Auto aims for the new one.
     this.target = this.cap; this.cascade = null;
     this.suspend();
     this.save();
-    this.announce('frame-lock');
-    return this.lockChoice;
+    this.announce('frame-cap');
+    return true;
   }
 
-  // Called for every animation frame outside VR. True when Lock 60fps leaves
-  // this screen refresh out.
+  // Called for every animation frame outside VR, so it sees every screen refresh.
+  // True when the FPS cap leaves this one out. Half a refresh of slack covers
+  // timestamp jitter.
   skip(timestamp) {
-    if (this.frameLock && timestamp - this.drawn < LOCK_GAP) return true;
-    this.drawn = timestamp;
+    this.observeRefresh(timestamp);
+    const spacing = this.spacing;
+    if (spacing > 1 && timestamp - this.lastDrawn < (spacing - .5) * 1000 / this.refreshRate) return true;
+    this.lastDrawn = timestamp;
     return false;
   }
 
@@ -292,11 +313,11 @@ export class Graphics {
   suspend(settle = SETTLE_MS) {
     this.settle = settle; this.startedAt = null; this.windowStart = null;
     this.frames = 0; this.slow = 0; this.fast = 0;
-    this.refreshPrevious = null; this.refreshStart = null; this.refreshIntervals = [];
   }
 
   // Detect high refresh displays from frame intervals. The 20th percentile sees
   // through dropped frames. Needing 30 samples ignores stray short intervals.
+  // Headset frames never come through here.
   observeRefresh(timestamp) {
     const previous = this.refreshPrevious;
     this.refreshPrevious = timestamp;
@@ -304,30 +325,35 @@ export class Graphics {
     if (previous !== null && timestamp > previous) this.refreshIntervals.push(timestamp - previous);
     if (timestamp - this.refreshStart < WINDOW_MS) return;
     if (this.refreshIntervals.length >= 30) {
-      this.refreshIntervals.sort((a, b) => a - b);
-      const interval = this.refreshIntervals[Math.floor(this.refreshIntervals.length * .2)];
+      const intervals = this.refreshIntervals.sort((a, b) => a - b);
+      // Timestamps jitter, and Firefox and Safari round them to about a
+      // millisecond, so any one interval can be off. Averaging the ones that
+      // last about a refresh cancels that out. The second pass recenters on the
+      // first average.
+      let interval = intervals[Math.floor(intervals.length * .2)];
+      for (let pass = 0; pass < 2; pass++) {
+        let sum = 0, count = 0;
+        for (const each of intervals) if (each > interval * .5 && each < interval * 1.5) { sum += each; count++; }
+        interval = sum / count;
+      }
       const rate = Math.min(240, 1000 / interval);
       if (rate > this.refreshRate * 1.1) {
         this.refreshRate = rate;
         this.target = this.cap;
         this.fast = 0; this.slow = 0; this.cascade = null;
+        // The slider's rates change with it.
+        this.announce('refresh');
       }
     }
     this.refreshStart = timestamp; this.refreshIntervals.length = 0;
   }
 
-  // `active` is false while paused, hidden or changing route. A pinned level
-  // still measures while default AO is on or dropping it is being judged.
-  // Refreshes Lock 60fps left out (`drawn` false) still show the screen's rate.
-  sample(timestamp, active, drawn = true) {
+  // Called for drawn frames. `active` is false while paused, hidden or changing
+  // route. A pinned level still measures while default AO is on or dropping it
+  // is being judged.
+  sample(timestamp, active) {
     if (!this.auto && !this.provisionalAO && !this.cascade) return false;
-    if (!active) {
-      this.startedAt = null; this.windowStart = null; this.frames = 0;
-      this.refreshPrevious = null; this.refreshStart = null; this.refreshIntervals.length = 0;
-      return false;
-    }
-    this.observeRefresh(timestamp);
-    if (!drawn) return false;
+    if (!active) { this.startedAt = null; this.windowStart = null; this.frames = 0; return false; }
     this.startedAt ??= timestamp;
     if (timestamp - this.startedAt < this.settle) return false;
     if (this.windowStart === null) { this.windowStart = timestamp; this.frames = 0; return false; }

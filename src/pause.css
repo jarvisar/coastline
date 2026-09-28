@@ -19,7 +19,7 @@
 .pause-settings .controller-hint { margin: 0; padding: 8px 12px; border-radius: 10px; justify-self: center; text-align: center; }
 .pause-settings .pwa-install { width: 100%; margin: 0; }
 .pause-settings .pwa-install-help { padding: 8px 12px; border-radius: 10px; }
-.pause-settings :is(.audio-channel input, #pixel-density) { height: 44px; }
+.pause-settings :is(.audio-channel input, .graphics-slider input) { height: 44px; }
 .pause-settings :is(.audio-presets button, .graphics-levels button) { min-height: 44px; }
 .graphics-toggle { min-height: 58px; margin-top: 6px; text-align: left; }
 .graphics-toggle small { display: block; font-size: 11px; line-height: 1.4; font-weight: 400; opacity: .65; margin-top: 3px; }
@@ -30,7 +30,7 @@
 .graphics-settings[hidden] { display: none; }
 .graphics-settings .graphics-levels { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
 .graphics-settings .graphics-levels button { padding-inline: 4px; }
-.graphics-settings .pixel-density-control label { flex-wrap: wrap; gap: 4px 12px; }
+.graphics-settings .graphics-slider label { flex-wrap: wrap; gap: 4px 12px; }
 .graphics-settings .graphics-status { margin: 10px 0 0; }
 .graphics-toggle:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
 body[data-controller=true] .pause-settings input:focus { outline: 2px solid var(--ink); outline-offset: 3px; }

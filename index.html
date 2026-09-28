@@ -88,12 +88,15 @@
                   <button type="button" role="radio" aria-checked="false" data-quality="smooth">Smooth</button>
                   <button type="button" role="radio" aria-checked="false" data-quality="basic">Basic</button>
                 </div>
-                <div class="pixel-density-control">
+                <div class="graphics-slider">
                   <label for="pixel-density">Pixel density <output id="pixel-density-value" for="pixel-density">100% · Native</output></label>
                   <input type="range" id="pixel-density" min="50" max="100" step="1" value="100">
                 </div>
                 <button type="button" id="soft-shading" class="panel-toggle" aria-pressed="true">Soft shading<span class="panel-switch" aria-hidden="true"></span></button>
-                <button type="button" id="frame-lock" class="panel-toggle" aria-pressed="false">Lock 60fps<span class="panel-switch" aria-hidden="true"></span></button>
+                <div class="graphics-slider">
+                  <label for="fps-cap">FPS cap <output id="fps-cap-value" for="fps-cap">Uncapped</output></label>
+                  <input type="range" id="fps-cap" min="0" max="1" step="1" value="1">
+                </div>
                 <p id="graphics-status" class="graphics-status" role="status"></p>
               </div>
             </section>

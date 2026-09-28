@@ -40,7 +40,7 @@ const MENU_MOVES = ['menuNext', 'menuPrevious', 'menuUp', 'menuDown'];
 const MENU_CRUISE_SPEED = TRAFFIC_CRUISE_SPEED * 1.4;
 // Focus rings for gamepad navigation in the choosers and the pause screen.
 const MENU_CARDS = '[data-journey], [data-car], [data-paint]';
-const PAUSE_CONTROLS = '#resume, #change-car, #autodrive, #traffic, #sound, #audio-mixer-toggle, #audio-mixer button, #audio-mixer input, #fullscreen, #graphics-toggle, [data-quality], #pixel-density, #soft-shading, #frame-lock, #enter-vr-pause, .update-entry, .pwa-install-button';
+const PAUSE_CONTROLS = '#resume, #change-car, #autodrive, #traffic, #sound, #audio-mixer-toggle, #audio-mixer button, #audio-mixer input, #fullscreen, #graphics-toggle, [data-quality], #pixel-density, #soft-shading, #fps-cap, #enter-vr-pause, .update-entry, .pwa-install-button';
 const mileageFormat = new Intl.NumberFormat('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 let paused = false, started = false, time = 0, hudTime = 0;
 const frameClock = new FrameClock();
@@ -582,13 +582,18 @@ async function boot() {
       graphicsToggle.setAttribute('aria-expanded', String(!graphicsPanel.hidden));
     });
     const softShading = $('#soft-shading'), graphicsStatus = $('#graphics-status');
-    // Quest sets its own rate, so the lock isn't offered there.
-    const frameLock = $('#frame-lock'); frameLock.hidden = !graphics.lockAvailable;
+    const fpsCap = $('#fps-cap'), fpsCapValue = $('#fps-cap-value');
     const pixelDensity = $('#pixel-density'), pixelDensityValue = $('#pixel-density-value');
     function updateGraphicsUi(settings = graphics.settings) {
       for (const button of qualityButtons) button.setAttribute('aria-checked', String(button.dataset.quality === graphics.mode));
       softShading.setAttribute('aria-pressed', String(settings.ambientOcclusion));
-      frameLock.setAttribute('aria-pressed', String(settings.frameLock));
+      // Quest sets its own rate, and a screen with only one rate from 30 up has nothing to pick.
+      const rates = graphics.capRates, fps = Math.round(graphics.cap), capped = graphics.spacing > 1;
+      fpsCap.closest('.graphics-slider').hidden = !graphics.capAvailable || rates.length < 2;
+      fpsCap.max = String(rates.length - 1);
+      fpsCap.value = String(rates.length - graphics.spacing);
+      fpsCapValue.textContent = capped ? `${fps} fps` : 'Uncapped';
+      fpsCap.setAttribute('aria-valuetext', capped ? `${fps} frames per second` : 'Uncapped');
       const densityPercent = Math.round(settings.density * 100);
       $('#graphics-summary').textContent = `${graphics.auto ? 'Auto' : settings.label} · ${densityPercent}%`;
       pixelDensity.value = String(densityPercent);
@@ -604,7 +609,11 @@ async function boot() {
     });
     for (const button of qualityButtons) button.addEventListener('click', () => graphics.setMode(button.dataset.quality));
     softShading.addEventListener('click', () => action('ambientOcclusion'));
-    frameLock.addEventListener('click', () => toast(`Lock 60fps ${graphics.toggleFrameLock() ? 'on' : 'off'}`));
+    // The top of the slider saves as uncapped, so it follows a faster screen.
+    fpsCap.addEventListener('input', () => {
+      const rates = graphics.capRates, index = Number(fpsCap.value);
+      graphics.setFrameCap(index === rates.length - 1 ? 0 : Math.round(rates[index]));
+    });
     pixelDensity.addEventListener('input', () => graphics.setDensity(Number(pixelDensity.value) / 100));
     const hud = { distance: $('#distance') };
     function updateHud() {
@@ -666,8 +675,8 @@ async function boot() {
     // where the headset owns the framebuffer and refresh rate.
     const sampling = () => !vr.active && !paused && !document.hidden && document.hasFocus() && !changingJourney;
     function frame(timestamp, xrFrame) {
-      // Lock 60fps leaves out whole screen refreshes. In VR the headset sets the rate.
-      if (!vr.active && graphics.skip(timestamp)) { rendering.recordFrame(timestamp, sampling(), false); return; }
+      // The FPS cap leaves out whole screen refreshes. In VR the headset sets the rate.
+      if (!vr.active && graphics.skip(timestamp)) return;
       vrStatus.update(vrMenuModel());
       if (vr.active) input.xr.update(vr.session.inputSources, { blocked: !vr.visible || changingJourney, paused });
       else input.gamepad.update({ blocked: document.hidden || !document.hasFocus() || changingJourney, paused, menu: openChooser() ? 'chooser' : openPauseMenu() ? 'pause' : false });
@@ -688,7 +697,7 @@ async function boot() {
       soundScene.heading = Math.atan2(cameraMatrix[2], cameraMatrix[0]);
       audio.update(vehicle.audioTelemetry, dt, false, soundScene);
       hudTime += dt; if (hudTime > .1) { updateHud(); hudTime = 0; }
-      rendering.recordFrame(timestamp, sampling(), true);
+      rendering.recordFrame(timestamp, sampling());
       // Paused desktop redraws only when invalidated. VR draws every frame for head tracking.
       const rendered = vr.active ? Boolean(xrFrame) : !document.hidden && (!paused || needsRender);
       if (rendered) {

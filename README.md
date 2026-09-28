@@ -56,7 +56,7 @@ For VR, open the site in the Quest browser and click `Enter VR`. Use the left st
 
 The pause menu has traffic, sound, fullscreen and graphics settings. `Auto` adjusts graphics quality while you drive, or pick High, Balanced, Smooth or Basic. Soft shading adds ambient occlusion. It starts on for desktop graphics cards that can easily run it and off everywhere else, and turns itself off if it's costing frame rate. Switching it on or off yourself is remembered and always wins.
 
-`Lock 60fps` holds the frame rate at about 60 on faster screens. It starts on unless your computer has a graphics card of its own, and turning it off lets the game match your screen. Your choice is remembered. On Quest it isn't offered, and VR runs at 90 Hz.
+`FPS cap` limits the frame rate. It only offers rates that fit evenly into your screen's refresh rate, like 30, 40 and 60 on a 120 Hz screen, because anything else makes motion uneven. Phones, tablets and computers without a graphics card of their own start at the lowest of those that's at least 60. Everything else starts uncapped. Your choice is remembered. Quest doesn't show it, and VR runs at 90 Hz there.
 
 Sound also starts off. Press M to turn it on. `Audio settings` has volume sliders, presets and music.
 

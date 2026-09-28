@@ -106,7 +106,7 @@ body[data-journey] :is(.error, #journey-transition) { color: var(--ink); backgro
 body[data-journey] :is(.chooser-intro, .chooser-card-description, .chooser-note,
   .paint-current, .paint-note, .paint-shop h3, .garage-subheading, .car-meter,
   .panel-button-value, .audio-mixer-toggle small, .graphics-toggle small,
-  .audio-description, .audio-channel output, .pixel-density-control output,
+  .audio-description, .audio-channel output, .graphics-slider output,
   .graphics-status, .controller-hint, .stick-help-line, .pwa-install-help) {
   color: var(--muted); opacity: 1;
 }

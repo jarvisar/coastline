@@ -204,6 +204,14 @@ try {
   const shading = await page.locator('#soft-shading').getAttribute('aria-pressed');
   await press(0); await frames();
   assert.notEqual(await page.locator('#soft-shading').getAttribute('aria-pressed'), shading, 'A flips soft shading');
+  await press(13); await frames();
+  assert.equal(await focus(), 'fps-cap', 'down reaches the FPS cap');
+  await press(14); await frames();
+  assert.equal(await page.locator('#fps-cap-value').textContent(), '30 fps', 'left lowers the cap on a 60 Hz screen');
+  await press(15); await frames();
+  assert.equal(await page.locator('#fps-cap-value').textContent(), 'Uncapped', 'right raises it again');
+  await press(12); await frames();
+  assert.equal(await focus(), 'soft-shading');
   await press(12); await frames();
   assert.equal(await focus(), 'pixel-density', 'up reaches pixel density');
   await press(12); await frames();

@@ -44,21 +44,21 @@ try {
       reads();
 
       // `rates` is a fixed refresh rate or a per-level rate, so stepping down
-      // buys frames the way the controller expects. Like the game loop, Lock
-      // 60fps may leave a refresh out, which Auto still sees.
+      // buys frames the way the controller expects. Like the game loop, the FPS
+      // cap may leave a refresh out, and only drawn frames are sampled.
       const order = ['high', 'balanced', 'smooth', 'basic'];
       const drive = (rates, start, seconds) => {
         graphics.sample(start, false);
         let time = start;
         for (const end = start + seconds * 1000; time < end;) {
           time += 1000 / (typeof rates === 'number' ? rates : rates[order.indexOf(graphics.levelId)]);
-          graphics.sample(time, true, !graphics.skip(time));
+          if (!graphics.skip(time)) graphics.sample(time, true);
         }
         return time;
       };
-      // Phones start with Lock 60fps on. The scenarios below match the screen.
-      const locked = graphics.frameLock;
-      if (locked) graphics.toggleFrameLock();
+      // Phones start capped near 60. The scenarios below draw every refresh.
+      const phone = { capped: graphics.capDefault, choice: graphics.capChoice };
+      graphics.setFrameCap(0);
       graphics.setMode('high'); graphics.setMode('auto');
       reads();
       let clock = drive(60, 0, 20);
@@ -74,14 +74,14 @@ try {
       graphics.setMode('smooth'); graphics.setMode('auto');
       clock = drive([60, 90, 120, 120], clock + 1000, 120);
       const highRefresh = { level: graphics.levelId, target: graphics.target, ratio: renderer.getPixelRatio() };
-      // Locked, a 120 Hz screen draws 60, and a device that manages that at High keeps High.
-      graphics.toggleFrameLock(); graphics.setMode('high'); graphics.setMode('auto');
+      // Capped at 60, a 120 Hz screen draws 60, and a device that manages that at High keeps High.
+      graphics.setFrameCap(60); graphics.setMode('high'); graphics.setMode('auto');
       clock = drive(120, clock + 1000, 60);
-      const lockedRefresh = { locked, level: graphics.levelId, target: graphics.target };
+      const cappedRefresh = { ...phone, level: graphics.levelId, target: graphics.target };
       observer.disconnect();
       graphics.setMode('auto');
       renderer.render(rendering.scene, rendering.camera);
-      return { levels, enabledLevels, steady, slowed, recovered, pinned, highRefresh, lockedRefresh,
+      return { levels, enabledLevels, steady, slowed, recovered, pinned, highRefresh, cappedRefresh,
         unchangedProjection: JSON.stringify(projection) === JSON.stringify(camera.projectionMatrix.toArray()) };
     });
 
@@ -114,9 +114,23 @@ try {
     assert.equal(result.highRefresh.level, 'smooth', 'Auto preserves smooth delivery on a faster display');
     assert.ok(Math.abs(result.highRefresh.target - 120) < 1);
     assert.equal(result.highRefresh.ratio, expected('smooth'));
-    assert.equal(result.lockedRefresh.locked, true, 'phones start with Lock 60fps on');
-    assert.equal(result.lockedRefresh.level, 'high', 'drawing 60 on a 120 Hz screen keeps the level');
-    assert.ok(Math.abs(result.lockedRefresh.target - 60) < 1, 'and Auto aims for 60');
+    assert.deepEqual([result.cappedRefresh.capped, result.cappedRefresh.choice], [true, null], 'phones start capped without a choice');
+    assert.equal(result.cappedRefresh.level, 'high', 'drawing 60 on a 120 Hz screen keeps the level');
+    assert.ok(Math.abs(result.cappedRefresh.target - 60) < 1, 'and Auto aims for 60');
+
+    // The slider offers what the 120 Hz screen above shows evenly, and it's reachable
+    // by keyboard and controller.
+    await page.locator('#graphics-toggle').click();
+    const cap = page.locator('#fps-cap'), capValue = page.locator('#fps-cap-value');
+    assert.deepEqual([await cap.getAttribute('max'), await cap.inputValue(), await capValue.textContent()], ['3', '2', '60 fps']);
+    await cap.press('ArrowLeft');
+    assert.equal(await capValue.textContent(), '40 fps', 'keyboard arrows step through the caps');
+    assert.ok(Math.abs(await page.evaluate(() => window.__coastline.graphics.cap) - 40) < 1);
+    await page.evaluate(() => window.__coastline.action('menuNext'));
+    assert.equal(await capValue.textContent(), '60 fps', 'controller right steps up');
+    await cap.press('End');
+    assert.equal(await capValue.textContent(), 'Uncapped');
+    assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('coastline.graphics')).frameCap), 0, 'the top saves as uncapped');
 
     // Panel matches the renderer across a rotation and a reload.
     await page.setViewportSize({ width: 844, height: 390 });

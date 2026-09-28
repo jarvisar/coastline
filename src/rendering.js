@@ -123,9 +123,8 @@ export function createRendering(canvas, graphics = new Graphics()) {
     canvasWidth = width; canvasHeight = height; pixelRatio = ratio;
   }
   resizeCanvas();
-  // Only sample frame times while the scene is actually drawing. `drawn` is false
-  // for a screen refresh Lock 60fps left out.
-  const recordFrame = (timestamp, active, drawn) => graphics.sample(timestamp, active, drawn);
+  // Only sample frame times while the scene is actually drawing.
+  const recordFrame = (timestamp, active) => graphics.sample(timestamp, active);
   document.addEventListener('visibilitychange', () => graphics.suspend());
   window.addEventListener('blur', () => graphics.suspend());
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFShadowMap;
