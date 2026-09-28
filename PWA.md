@@ -1,6 +1,6 @@
 # Installing the Website
 
-The [website](https://jarvisar.github.io/coastline/) can be installed like a regular app:
+The [website](https://coastline.ajarvis.co/) can be installed like a regular app:
 
 - iPhone / iPad: in Safari, tap `Share` → `Add to Home Screen`. Leave `Open as Web App` on if it shows up.
 - Android: in Chrome, tap `Install app` or `Add to Home screen`.
