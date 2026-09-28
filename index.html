@@ -4,8 +4,35 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#c2e7e8" />
-    <meta name="description" content="A scenic driving game with coastal highways, desert canyons, snowy mountain roads, a misty jungle river valley, golden farmland plains, a rain-soaked city, glowing volcanic rifts, a mirror-bright salt flat, and a misty cypress swamp at dusk." />
-    <title>Coastline — A scenic driving game</title>
+    <meta name="description" content="Free endless driving game in your browser. Drive nine generated routes from the Pacific Coast to a cypress swamp with keyboard, controller, touch or VR." />
+    <title>Coastline | Scenic Driving Game in Your Browser</title>
+    <link rel="canonical" href="https://ajarvis.co/coastline/" />
+    <!-- Link previews need absolute URLs, so these point at the live site -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Coastline" />
+    <meta property="og:title" content="Coastline | Scenic Driving Game in Your Browser" />
+    <meta property="og:description" content="Free endless driving game in your browser. Drive nine generated routes from the Pacific Coast to a cypress swamp with keyboard, controller, touch or VR." />
+    <meta property="og:url" content="https://ajarvis.co/coastline/" />
+    <meta property="og:image" content="https://ajarvis.co/coastline/screenshots/scene-slices.jpg" />
+    <meta property="og:image:width" content="1792" />
+    <meta property="og:image:height" content="1008" />
+    <meta property="og:image:alt" content="All nine Coastline routes side by side, from the Pacific Coast to the cypress swamp" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "VideoGame",
+        "name": "Coastline",
+        "url": "https://ajarvis.co/coastline/",
+        "description": "Endless driving game built with Three.js. Nine routes with road, scenery and sound generated in code.",
+        "image": "https://ajarvis.co/coastline/screenshots/scene-slices.jpg",
+        "genre": ["Driving", "Casual"],
+        "gamePlatform": ["Web browser", "Windows", "macOS", "Linux"],
+        "playMode": "SinglePlayer",
+        "author": { "@type": "Person", "name": "jarvisar", "url": "https://github.com/jarvisar" },
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+      }
+    </script>
     <!-- Keep startup styles inline so the page is covered before the game module loads. -->
     <style>
       html, body { margin: 0; overflow: hidden; background: #d5e7d9; }
@@ -32,6 +59,9 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   </head>
   <body>
+    <noscript>
+      <p style="position: fixed; inset: 0; z-index: 9; margin: 0; padding: 24px; background: #d5e7d9; color: #25473e; font: 14px 'Segoe UI', Arial, sans-serif;">Coastline is an endless driving game built with Three.js. It needs JavaScript and WebGL to run. Source and desktop builds are on <a href="https://github.com/jarvisar/coastline">GitHub</a>.</p>
+    </noscript>
     <main id="app">
       <div id="loading" class="loading" role="status"><span class="loading-spinner" aria-hidden="true"></span><span>Loading Coastline…</span></div>
       <canvas id="scene" aria-label="A low-poly coastal landscape. Drive with WASD or the arrow keys."></canvas>

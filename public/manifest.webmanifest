@@ -1,8 +1,8 @@
 {
   "id": "./",
-  "name": "Coastline — A scenic driving game",
+  "name": "Coastline",
   "short_name": "Coastline",
-  "description": "A scenic driving game with coastal highways, desert canyons, snowy mountain roads, a misty jungle river valley, golden farmland plains, a rain-soaked city, glowing volcanic rifts, and a mirror-bright salt flat.",
+  "description": "Endless driving game with nine generated routes, from the Pacific Coast to a cypress swamp.",
   "lang": "en-US",
   "start_url": "./",
   "scope": "./",
