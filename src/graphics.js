@@ -129,8 +129,25 @@ export function detectAmbientOcclusion(hints = {}) {
   return strongGpu(gpu) && detectLevel({ ...hints, mobile: false, gpu }) === 0;
 }
 
+// Quest's browser. VR there runs at 90 Hz, and Lock 60fps doesn't apply.
+export const questHeadset = (nav = globalThis.navigator ?? {}) => /OculusBrowser|\bQuest\b/.test(nav.userAgent ?? '');
+
+// Lock 60fps starts on unless the browser names a strong card of its own, so
+// phones, tablets, processor graphics and unnamed cards hold 60 on faster screens.
+export function detectFrameLock(hints = {}) {
+  const nav = hints.navigator ?? globalThis.navigator ?? {};
+  return touchDevice(hints, nav) || !strongGpu(hints.gpu ?? rendererName());
+}
+
+// Lock 60fps draws the first screen refresh at least this many milliseconds after
+// the last, which keeps drawn frames evenly spaced: every refresh up to 75 Hz,
+// every second one at 90 Hz (45 fps), 120 Hz (60) and 144 Hz (72), and every
+// third at 165 Hz (55).
+const LOCK_GAP = 12.75;
+export const lockedRate = refresh => refresh / Math.max(1, Math.ceil(LOCK_GAP * refresh / 1000));
+
 export class Graphics {
-  constructor({ storage = defaultStorage(), ambientOcclusion = null, detect = detectLevel, detectAO = detectAmbientOcclusion } = {}) {
+  constructor({ storage = defaultStorage(), ambientOcclusion = null, detect = detectLevel, detectAO = detectAmbientOcclusion, detectLock = detectFrameLock, quest = questHeadset() } = {}) {
     const stored = readStored(storage);
     this.storage = storage;
     this.listeners = new Set();
@@ -149,6 +166,11 @@ export class Graphics {
     this.aoDefault = this.level === 0 && detectAO();
     this.aoDropped = stored.ambientOcclusionDropped === true || stored.softShading === false;
     this.densityOverride = Number.isFinite(stored.density) && stored.density >= MIN_DENSITY && stored.density <= 1 ? stored.density : null;
+    // A saved Lock 60fps is the player's choice. It doesn't apply on Quest.
+    this.lockAvailable = !quest;
+    this.lockChoice = typeof stored.frameLock === 'boolean' ? stored.frameLock : null;
+    this.lockDefault = this.lockAvailable && detectLock();
+    this.drawn = -Infinity;
     // Auto never climbs back past a level it downgraded to, so it can't flicker.
     this.ceiling = 0;
     this.target = 60;
@@ -162,8 +184,11 @@ export class Graphics {
   get ambientOcclusion() { return this.aoOverride ?? this.aoChoice ?? (this.aoDefault && !this.aoDropped); }
   // On by default rather than by choice, so the safeguard may turn it off.
   get provisionalAO() { return this.aoOverride === null && this.aoChoice === null && this.ambientOcclusion; }
+  get frameLock() { return this.lockAvailable && (this.lockChoice ?? this.lockDefault); }
+  // The frame rate Auto aims for: the screen's own, or its Lock 60fps rate.
+  get cap() { return this.frameLock ? lockedRate(this.refreshRate) : this.refreshRate; }
   get settings() {
-    return { ...QUALITY_LEVELS[this.level], density: this.densityOverride ?? QUALITY_LEVELS[this.level].density, ambientOcclusion: this.ambientOcclusion };
+    return { ...QUALITY_LEVELS[this.level], density: this.densityOverride ?? QUALITY_LEVELS[this.level].density, ambientOcclusion: this.ambientOcclusion, frameLock: this.frameLock };
   }
   // Fixed at context creation, so only the starting level's value takes effect.
   get antialias() { return QUALITY_LEVELS[this.level].antialias; }
@@ -173,7 +198,7 @@ export class Graphics {
   announce(reason) { for (const listener of this.listeners) listener(this.settings, reason, this); }
 
   save() {
-    writeStored(this.storage, { mode: this.mode, level: this.levelId, density: this.densityOverride, ambientOcclusion: this.aoChoice, ambientOcclusionDropped: this.aoDropped });
+    writeStored(this.storage, { mode: this.mode, level: this.levelId, density: this.densityOverride, ambientOcclusion: this.aoChoice, ambientOcclusionDropped: this.aoDropped, frameLock: this.lockChoice });
   }
 
   setMode(mode) {
@@ -181,7 +206,7 @@ export class Graphics {
     if (mode !== 'auto' && index === -1) return false;
     this.mode = mode === 'auto' ? 'auto' : mode;
     // Clears adaptive history and the density override. AO is left alone.
-    this.ceiling = 0; this.cascade = null; this.target = this.refreshRate;
+    this.ceiling = 0; this.cascade = null; this.target = this.cap;
     this.densityOverride = null;
     if (index !== -1) this.level = index;
     this.suspend();
@@ -210,6 +235,26 @@ export class Graphics {
     this.save();
     this.announce('ambient-occlusion');
     return enabled;
+  }
+
+  // A choice is saved and wins over the default. Does nothing on Quest.
+  toggleFrameLock() {
+    if (!this.lockAvailable) return false;
+    this.lockChoice = !this.frameLock;
+    // The drawn frame rate changes, so Auto aims for the new one.
+    this.target = this.cap; this.cascade = null;
+    this.suspend();
+    this.save();
+    this.announce('frame-lock');
+    return this.lockChoice;
+  }
+
+  // Called for every animation frame outside VR. True when Lock 60fps leaves
+  // this screen refresh out.
+  skip(timestamp) {
+    if (this.frameLock && timestamp - this.drawn < LOCK_GAP) return true;
+    this.drawn = timestamp;
+    return false;
   }
 
   // The safeguard. Default AO draws the scene a second time, so it goes before any level.
@@ -264,7 +309,7 @@ export class Graphics {
       const rate = Math.min(240, 1000 / interval);
       if (rate > this.refreshRate * 1.1) {
         this.refreshRate = rate;
-        this.target = rate;
+        this.target = this.cap;
         this.fast = 0; this.slow = 0; this.cascade = null;
       }
     }
@@ -273,7 +318,8 @@ export class Graphics {
 
   // `active` is false while paused, hidden or changing route. A pinned level
   // still measures while default AO is on or dropping it is being judged.
-  sample(timestamp, active) {
+  // Refreshes Lock 60fps left out (`drawn` false) still show the screen's rate.
+  sample(timestamp, active, drawn = true) {
     if (!this.auto && !this.provisionalAO && !this.cascade) return false;
     if (!active) {
       this.startedAt = null; this.windowStart = null; this.frames = 0;
@@ -281,6 +327,7 @@ export class Graphics {
       return false;
     }
     this.observeRefresh(timestamp);
+    if (!drawn) return false;
     this.startedAt ??= timestamp;
     if (timestamp - this.startedAt < this.settle) return false;
     if (this.windowStart === null) { this.windowStart = timestamp; this.frames = 0; return false; }

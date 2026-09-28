@@ -44,17 +44,21 @@ try {
       reads();
 
       // `rates` is a fixed refresh rate or a per-level rate, so stepping down
-      // buys frames the way the controller expects.
+      // buys frames the way the controller expects. Like the game loop, Lock
+      // 60fps may leave a refresh out, which Auto still sees.
       const order = ['high', 'balanced', 'smooth', 'basic'];
       const drive = (rates, start, seconds) => {
         graphics.sample(start, false);
         let time = start;
         for (const end = start + seconds * 1000; time < end;) {
           time += 1000 / (typeof rates === 'number' ? rates : rates[order.indexOf(graphics.levelId)]);
-          graphics.sample(time, true);
+          graphics.sample(time, true, !graphics.skip(time));
         }
         return time;
       };
+      // Phones start with Lock 60fps on. The scenarios below match the screen.
+      const locked = graphics.frameLock;
+      if (locked) graphics.toggleFrameLock();
       graphics.setMode('high'); graphics.setMode('auto');
       reads();
       let clock = drive(60, 0, 20);
@@ -70,10 +74,14 @@ try {
       graphics.setMode('smooth'); graphics.setMode('auto');
       clock = drive([60, 90, 120, 120], clock + 1000, 120);
       const highRefresh = { level: graphics.levelId, target: graphics.target, ratio: renderer.getPixelRatio() };
+      // Locked, a 120 Hz screen draws 60, and a device that manages that at High keeps High.
+      graphics.toggleFrameLock(); graphics.setMode('high'); graphics.setMode('auto');
+      clock = drive(120, clock + 1000, 60);
+      const lockedRefresh = { locked, level: graphics.levelId, target: graphics.target };
       observer.disconnect();
       graphics.setMode('auto');
       renderer.render(rendering.scene, rendering.camera);
-      return { levels, enabledLevels, steady, slowed, recovered, pinned, highRefresh,
+      return { levels, enabledLevels, steady, slowed, recovered, pinned, highRefresh, lockedRefresh,
         unchangedProjection: JSON.stringify(projection) === JSON.stringify(camera.projectionMatrix.toArray()) };
     });
 
@@ -106,6 +114,9 @@ try {
     assert.equal(result.highRefresh.level, 'smooth', 'Auto preserves smooth delivery on a faster display');
     assert.ok(Math.abs(result.highRefresh.target - 120) < 1);
     assert.equal(result.highRefresh.ratio, expected('smooth'));
+    assert.equal(result.lockedRefresh.locked, true, 'phones start with Lock 60fps on');
+    assert.equal(result.lockedRefresh.level, 'high', 'drawing 60 on a 120 Hz screen keeps the level');
+    assert.ok(Math.abs(result.lockedRefresh.target - 60) < 1, 'and Auto aims for 60');
 
     // Panel matches the renderer across a rotation and a reload.
     await page.setViewportSize({ width: 844, height: 390 });
@@ -148,7 +159,7 @@ try {
     await page.evaluate(() => {
       const rendering = window.__coastline.rendering, original = rendering.recordFrame;
       window.__samples = [];
-      rendering.recordFrame = (time, active) => { window.__samples.push(active); return original(time, active); };
+      rendering.recordFrame = (...args) => { window.__samples.push(args[1]); return original(...args); };
     });
     await page.waitForFunction(() => window.__samples.includes(true));
     await page.evaluate(() => window.__coastline.action('pause'));

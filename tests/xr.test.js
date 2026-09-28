@@ -149,16 +149,26 @@ test('overhead VR retains each view framing without mutating the desktop camera'
   }
 });
 
-function sessionFixture({ supported = true, secure = true, userAgent = 'Quest', failRequest = false, failSetup = false } = {}) {
+function sessionFixture({ supported = true, secure = true, userAgent = 'Quest', failRequest = false, failSetup = false, frameRate = null, supportedFrameRates } = {}) {
   const events = [], session = new EventTarget(), button = new EventTarget();
-  Object.assign(session, { visibilityState: 'visible', end: async () => session.dispatchEvent(new Event('end')) });
+  Object.assign(session, { visibilityState: 'visible', end: async () => session.dispatchEvent(new Event('end')),
+    supportedFrameRates, targetRates: [], async updateTargetFrameRate(rate) { this.targetRates.push(rate); } });
   button.setAttribute = () => {};
   const xr = { enabled: false, setReferenceSpaceType() {}, setFramebufferScaleFactor() {}, setFoveation() {}, async setSession() { if (failSetup) throw new Error('setup failed'); } };
   let requested = 0;
   const navigator = { userAgent, xr: { async isSessionSupported(mode) { assert.equal(mode, 'immersive-vr'); return supported; }, async requestSession(mode, options) { requested++; assert.equal(mode, 'immersive-vr'); assert.deepEqual(options.requiredFeatures, ['local']); if (failRequest) throw new Error('denied'); return session; } } };
-  const vr = new BrowserVR({ renderer: { xr }, buttons: [button], secure, navigator, onStart: () => events.push('start'), onEnd: () => events.push('end'), onVisibility: visible => events.push(visible), onError: () => events.push('error') });
+  const vr = new BrowserVR({ renderer: { xr }, buttons: [button], secure, navigator, frameRate, onStart: () => events.push('start'), onEnd: () => events.push('end'), onVisibility: visible => events.push(visible), onError: () => events.push('error') });
   return { vr, session, button, events, get requested() { return requested; } };
 }
+
+test('VR asks for its preferred rate only where the headset offers it', async () => {
+  for (const [frameRate, supportedFrameRates, expected] of [[90, new Float32Array([72, 80, 90, 120]), [90]], [90, new Float32Array([60, 72]), []], [90, undefined, []], [null, new Float32Array([72, 90]), []]]) {
+    const { vr, session } = sessionFixture({ frameRate, supportedFrameRates });
+    await vr.detect(); await vr.toggle();
+    assert.equal(vr.active, true);
+    assert.deepEqual(session.targetRates, expected, `${frameRate} Hz from ${supportedFrameRates}`);
+  }
+});
 
 test('VR support detection hides unsupported, insecure and Electron entry', async () => {
   for (const options of [{ supported: false }, { secure: false }, { userAgent: 'Chrome Electron/44.0' }]) {

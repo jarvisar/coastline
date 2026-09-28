@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { Graphics, QUALITY_LEVELS, detectAmbientOcclusion, detectLevel, levelIndex, probeRenderer, renderScale, strongGpu } from '../src/graphics.js';
+import { Graphics, QUALITY_LEVELS, detectAmbientOcclusion, detectFrameLock, detectLevel, levelIndex, lockedRate, probeRenderer, questHeadset, renderScale, strongGpu } from '../src/graphics.js';
 
 function memoryStorage(initial = {}) {
   const map = new Map(Object.entries(initial));
@@ -12,16 +12,19 @@ const stored = storage => JSON.parse(storage.map.get('coastline.graphics'));
 // reached at each quality level, or a function of the current settings, so
 // stepping down can actually gain frames.
 class Device {
-  constructor(graphics, rates = 60) { this.graphics = graphics; this.rates = rates; this.time = 0; this.changes = 0; this.levels = []; this.steps = []; }
+  constructor(graphics, rates = 60) { this.graphics = graphics; this.rates = rates; this.time = 0; this.changes = 0; this.drawn = 0; this.levels = []; this.steps = []; }
   get hz() {
     if (typeof this.rates === 'function') return this.rates(this.graphics.settings);
     return typeof this.rates === 'number' ? this.rates : this.rates[levelIndex(this.graphics.levelId)];
   }
+  // Like the game loop: Lock 60fps may leave a refresh out, which Auto still sees.
   run(seconds, { hz, active = true } = {}) {
     for (let remaining = seconds * 1000; remaining > 0;) {
       const step = 1000 / (hz ?? this.hz);
       this.time += step; remaining -= step;
-      if (this.graphics.sample(this.time, active)) {
+      const drawn = !this.graphics.skip(this.time);
+      if (drawn) this.drawn++;
+      if (this.graphics.sample(this.time, active, drawn)) {
         this.changes++; this.levels.push(this.graphics.levelId);
         this.steps.push(`${this.graphics.levelId}${this.graphics.settings.ambientOcclusion ? '+ao' : '-ao'}`);
       }
@@ -29,7 +32,7 @@ class Device {
     return this;
   }
 }
-const graphicsAt = (level, options = {}) => new Graphics({ storage: memoryStorage(), detect: () => level, detectAO: () => false, ...options });
+const graphicsAt = (level, options = {}) => new Graphics({ storage: memoryStorage(), detect: () => level, detectAO: () => false, detectLock: () => false, ...options });
 // Hardware that detection trusts with AO.
 const strongAt = (level, options = {}) => graphicsAt(level, { detectAO: () => true, ...options });
 // AO costs a device `cost` of its frame rate at every level.
@@ -220,7 +223,7 @@ test('a chosen level is pinned, adapts to nothing, and is remembered', () => {
   assert.equal(graphics.levelId, 'high');
   new Device(graphics, 8).run(120);
   assert.equal(graphics.levelId, 'high', 'a pinned level stays pinned');
-  assert.deepEqual(stored(storage), { mode: 'high', level: 'high', density: null, ambientOcclusion: null, ambientOcclusionDropped: false });
+  assert.deepEqual(stored(storage), { mode: 'high', level: 'high', density: null, ambientOcclusion: null, ambientOcclusionDropped: false, frameLock: null });
 
   const next = new Graphics({ storage, detect: () => levelIndex('basic') });
   assert.equal(next.mode, 'high');
@@ -235,7 +238,7 @@ test('auto remembers the level it settled on so the next visit starts there', ()
   const graphics = new Graphics({ storage, detect: () => levelIndex('high') });
   new Device(graphics, [22, 31, 43, 61]).run(60);
   assert.equal(graphics.levelId, 'basic');
-  assert.deepEqual(stored(storage), { mode: 'auto', level: 'basic', density: null, ambientOcclusion: null, ambientOcclusionDropped: false });
+  assert.deepEqual(stored(storage), { mode: 'auto', level: 'basic', density: null, ambientOcclusion: null, ambientOcclusionDropped: false, frameLock: null });
   const next = new Graphics({ storage, detect: () => levelIndex('high') });
   assert.equal(next.auto, true);
   assert.equal(next.levelId, 'basic');
@@ -463,7 +466,7 @@ test('the safeguard drops default AO before any level when it costs frames, and 
   assert.deepEqual(reasons, ['auto'], 'it is announced like any Auto change');
   device.run(200);
   assert.equal(device.changes, 1, 'and it does not come back on its own');
-  assert.deepEqual(stored(storage), { mode: 'auto', level: 'high', density: null, ambientOcclusion: null, ambientOcclusionDropped: true });
+  assert.deepEqual(stored(storage), { mode: 'auto', level: 'high', density: null, ambientOcclusion: null, ambientOcclusionDropped: true, frameLock: null });
   const next = strongAt(0, { storage });
   assert.equal(next.ambientOcclusion, false, 'the next visit starts without it');
   assert.equal(next.toggleAmbientOcclusion(), true, 'the player can still turn it back on');
@@ -535,4 +538,51 @@ test('the safeguard never overrides a choice, including one made mid-verdict', (
   const visit = strongAt(0, { ambientOcclusion: false });
   new Device(visit, 30).run(90);
   assert.equal(visit.aoDropped, false);
+});
+
+test('Lock 60fps starts on without a strong card of its own, and never applies on Quest', () => {
+  assert.equal(detectFrameLock({ mobile: true, gpu: 'Adreno (TM) 750' }), true, 'phones and tablets');
+  assert.equal(detectFrameLock({ mobile: false, gpu: 'ANGLE (Intel, Intel(R) Iris(R) Xe Graphics Direct3D11 vs_5_0 ps_5_0, D3D11)' }), true, 'processor graphics');
+  assert.equal(detectFrameLock({ mobile: false, gpu: '' }), true, 'cards the browser won\'t name');
+  assert.equal(detectFrameLock({ mobile: false, gpu: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 4080 SUPER Direct3D11 vs_5_0 ps_5_0, D3D11)' }), false, 'a strong card of its own');
+  assert.equal(questHeadset({ userAgent: 'Mozilla/5.0 (X11; Linux x86_64; Quest 3) AppleWebKit/537.36 (KHTML, like Gecko) OculusBrowser/35.0.0.0 Chrome/132.0.0.0 VR Safari/537.36' }), true);
+  assert.equal(questHeadset({ userAgent: 'Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Mobile Safari/537.36' }), false);
+
+  const storage = memoryStorage();
+  const phone = new Graphics({ storage, detect: () => 1, detectLock: () => true, quest: false });
+  assert.equal(phone.settings.frameLock, true);
+  assert.equal(phone.toggleFrameLock(), false, 'turning it off is a choice');
+  assert.equal(stored(storage).frameLock, false);
+  assert.equal(new Graphics({ storage, detect: () => 1, detectLock: () => true, quest: false }).frameLock, false, 'the choice wins on the next visit');
+
+  const headset = new Graphics({ storage: memoryStorage(), detect: () => 1, detectLock: () => true, quest: true });
+  assert.equal(headset.lockAvailable, false);
+  assert.equal(headset.frameLock, false, 'Quest sets its own rate');
+  assert.equal(headset.toggleFrameLock(), false);
+  assert.equal(headset.skip(0) || headset.skip(4), false, 'and no refresh is left out');
+});
+
+test('Lock 60fps keeps drawn frames evenly spaced near 60', () => {
+  for (const [refresh, rate] of [[60, 60], [75, 75], [90, 45], [120, 60], [144, 72], [165, 55], [240, 60]]) {
+    assert.ok(Math.abs(lockedRate(refresh) - rate) < 1e-9, `${refresh} Hz locks to ${rate}`);
+    const graphics = graphicsAt(0, { detectLock: () => true }), drawn = [];
+    for (let i = 0; i < refresh * 2; i++) if (!graphics.skip(i * 1000 / refresh)) drawn.push(i);
+    const gaps = new Set(drawn.slice(1).map((frame, i) => frame - drawn[i]));
+    assert.deepEqual([...gaps], [refresh / rate], `${refresh} Hz draws every ${refresh / rate} refreshes`);
+  }
+  const unlocked = graphicsAt(0);
+  for (let i = 0; i < 240; i++) assert.equal(unlocked.skip(i * 1000 / 144), false, 'unlocked, every refresh is drawn');
+});
+
+test('Auto aims for the locked rate, so a 120 Hz phone keeps its quality at 60', () => {
+  const graphics = graphicsAt(levelIndex('high'), { detectLock: () => true });
+  const phone = new Device(graphics, 120).run(60);
+  assert.equal(phone.changes, 0, 'drawing 60 on a 120 Hz screen is not falling behind');
+  assert.ok(Math.abs(graphics.refreshRate - 120) < 1 && Math.abs(graphics.target - 60) < 1);
+  assert.ok(Math.abs(phone.drawn / 60 - 60) < 1, 'about 60 frames a second are drawn');
+  graphics.toggleFrameLock();
+  assert.ok(Math.abs(graphics.target - 120) < 1, 'unlocked, it aims for the screen again');
+  const slow = graphicsAt(levelIndex('high'), { detectLock: () => true });
+  const heavy = new Device(slow, [50, 61, 61, 61]).run(60);
+  assert.ok(heavy.changes > 0 && slow.levelId !== 'high', 'a device that can\'t hold 60 still steps down');
 });

@@ -1,6 +1,7 @@
 export class BrowserVR {
-  constructor({ renderer, buttons, onStart, onEnd, onVisibility, onError, canEnter = () => true, navigator = globalThis.navigator, secure = globalThis.isSecureContext }) {
-    Object.assign(this, { renderer, buttons, onStart, onEnd, onVisibility, onError, canEnter, navigator, secure });
+  // `frameRate` is a refresh rate to ask the headset for, like 90 on Quest.
+  constructor({ renderer, buttons, onStart, onEnd, onVisibility, onError, canEnter = () => true, frameRate = null, navigator = globalThis.navigator, secure = globalThis.isSecureContext }) {
+    Object.assign(this, { renderer, buttons, onStart, onEnd, onVisibility, onError, canEnter, frameRate, navigator, secure });
     this.session = null;
     this.pending = false;
     this.supported = false;
@@ -54,6 +55,8 @@ export class BrowserVR {
       this.renderer.xr.setFramebufferScaleFactor(1.5);
       this.renderer.xr.setFoveation(0);
       await this.renderer.xr.setSession(session);
+      // Headsets that don't offer the rate keep their own.
+      if (this.frameRate && session.supportedFrameRates?.includes(this.frameRate)) void session.updateTargetFrameRate(this.frameRate).catch(() => {});
       if (this.session === session) this.onStart();
     } catch (error) {
       if (this.session) {

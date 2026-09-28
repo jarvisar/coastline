@@ -8,7 +8,7 @@ import './audio/mixer.css';
 import './pause.css';
 import './theme.css';
 import { createRendering } from './rendering.js';
-import { Graphics } from './graphics.js';
+import { Graphics, questHeadset } from './graphics.js';
 import { JOURNEYS } from './journeys.js';
 import { CARS, CAR_IDS, DEFAULT_CAR, ROUTE_PAINT, carEntry, carMeters } from './cars.js';
 import { carArt } from './car-art.js';
@@ -40,7 +40,7 @@ const MENU_MOVES = ['menuNext', 'menuPrevious', 'menuUp', 'menuDown'];
 const MENU_CRUISE_SPEED = TRAFFIC_CRUISE_SPEED * 1.4;
 // Focus rings for gamepad navigation in the choosers and the pause screen.
 const MENU_CARDS = '[data-journey], [data-car], [data-paint]';
-const PAUSE_CONTROLS = '#resume, #change-car, #autodrive, #traffic, #sound, #audio-mixer-toggle, #audio-mixer button, #audio-mixer input, #fullscreen, #graphics-toggle, [data-quality], #pixel-density, #soft-shading, #enter-vr-pause, .update-entry, .pwa-install-button';
+const PAUSE_CONTROLS = '#resume, #change-car, #autodrive, #traffic, #sound, #audio-mixer-toggle, #audio-mixer button, #audio-mixer input, #fullscreen, #graphics-toggle, [data-quality], #pixel-density, #soft-shading, #frame-lock, #enter-vr-pause, .update-entry, .pwa-install-button';
 const mileageFormat = new Intl.NumberFormat('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 let paused = false, started = false, time = 0, hudTime = 0;
 const frameClock = new FrameClock();
@@ -433,6 +433,7 @@ async function boot() {
     });
     vr = new BrowserVR({
       renderer, buttons: [$('#enter-vr'), $('#enter-vr-pause')], canEnter: () => !changingJourney && !openChooser(),
+      frameRate: questHeadset() ? 90 : null,
       onStart() {
         $('#vr-error').hidden = true;
         input.xrActive = true; input.clear();
@@ -581,10 +582,13 @@ async function boot() {
       graphicsToggle.setAttribute('aria-expanded', String(!graphicsPanel.hidden));
     });
     const softShading = $('#soft-shading'), graphicsStatus = $('#graphics-status');
+    // Quest sets its own rate, so the lock isn't offered there.
+    const frameLock = $('#frame-lock'); frameLock.hidden = !graphics.lockAvailable;
     const pixelDensity = $('#pixel-density'), pixelDensityValue = $('#pixel-density-value');
     function updateGraphicsUi(settings = graphics.settings) {
       for (const button of qualityButtons) button.setAttribute('aria-checked', String(button.dataset.quality === graphics.mode));
       softShading.setAttribute('aria-pressed', String(settings.ambientOcclusion));
+      frameLock.setAttribute('aria-pressed', String(settings.frameLock));
       const densityPercent = Math.round(settings.density * 100);
       $('#graphics-summary').textContent = `${graphics.auto ? 'Auto' : settings.label} · ${densityPercent}%`;
       pixelDensity.value = String(densityPercent);
@@ -600,6 +604,7 @@ async function boot() {
     });
     for (const button of qualityButtons) button.addEventListener('click', () => graphics.setMode(button.dataset.quality));
     softShading.addEventListener('click', () => action('ambientOcclusion'));
+    frameLock.addEventListener('click', () => toast(`Lock 60fps ${graphics.toggleFrameLock() ? 'on' : 'off'}`));
     pixelDensity.addEventListener('input', () => graphics.setDensity(Number(pixelDensity.value) / 100));
     const hud = { distance: $('#distance') };
     function updateHud() {
@@ -657,7 +662,12 @@ async function boot() {
       collideScenery(vehicle, world.chunks, dt);
       traffic.update(dt, vehicle);
     };
+    // Auto only samples frame times while the scene is drawing, and never in VR,
+    // where the headset owns the framebuffer and refresh rate.
+    const sampling = () => !vr.active && !paused && !document.hidden && document.hasFocus() && !changingJourney;
     function frame(timestamp, xrFrame) {
+      // Lock 60fps leaves out whole screen refreshes. In VR the headset sets the rate.
+      if (!vr.active && graphics.skip(timestamp)) { rendering.recordFrame(timestamp, sampling(), false); return; }
       vrStatus.update(vrMenuModel());
       if (vr.active) input.xr.update(vr.session.inputSources, { blocked: !vr.visible || changingJourney, paused });
       else input.gamepad.update({ blocked: document.hidden || !document.hasFocus() || changingJourney, paused, menu: openChooser() ? 'chooser' : openPauseMenu() ? 'pause' : false });
@@ -678,8 +688,7 @@ async function boot() {
       soundScene.heading = Math.atan2(cameraMatrix[2], cameraMatrix[0]);
       audio.update(vehicle.audioTelemetry, dt, false, soundScene);
       hudTime += dt; if (hudTime > .1) { updateHud(); hudTime = 0; }
-      // Not in VR: the headset owns its framebuffer and refresh rate.
-      rendering.recordFrame(timestamp, !vr.active && !paused && !document.hidden && document.hasFocus() && !changingJourney);
+      rendering.recordFrame(timestamp, sampling(), true);
       // Paused desktop redraws only when invalidated. VR draws every frame for head tracking.
       const rendered = vr.active ? Boolean(xrFrame) : !document.hidden && (!paused || needsRender);
       if (rendered) {
