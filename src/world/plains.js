@@ -242,7 +242,7 @@ export class PlainsChunk extends LevelChunk {
       // Rows start at the field edge and fade near water and into the haze.
       const [period, depth] = FURROWS[field.kind];
       const dry = smoothstep(6.5, 11, d) * (1 - smoothstep(280, 430, cross));
-      // Faded per vertex near ponds; per-facet depth steps in a sawtooth.
+      // Faded per vertex near ponds. Per-facet depth steps in a sawtooth.
       const damp = cross > 16 && cross < 180 ? p => smoothstep(1.25, 1.7, pondDistance(p.s, p.u).d) : () => 1;
       const along = field.rows !== 'across';
       const bow = (randomAt(field.seed, field.salt + 23) - .5) * 3.2;
@@ -335,8 +335,8 @@ export class PlainsChunk extends LevelChunk {
       const first = Math.floor(centre / (Math.PI * 2) * steps);
       for (const [step, corner] of corners.entries()) {
         const k = ((first + step) % steps + steps) % steps;
-        // Exactly on the drive's end. Short of it leaves crop in the gateway;
-        // past it overlaps the drive at the same height and z-fights.
+        // Exactly on the drive's end. Short of it leaves crop in the gateway.
+        // Past it overlaps the drive at the same height and z-fights.
         rim[k] = [corner[0] - s, corner[1] - u]; opening.add(k);
       }
     }
@@ -375,7 +375,7 @@ export class PlainsChunk extends LevelChunk {
   buildCreek() {
     const creek = plainsCreekAt(this.start + CHUNK_LENGTH / 2);
     if (Math.abs(creek.center - this.start - CHUNK_LENGTH / 2) > CHUNK_LENGTH / 2 + 150) return;
-    // Close to the pond colours; a grey-green creek read as a ditch.
+    // Close to the pond colours. A grey-green creek read as a ditch.
     const vertices = [], colors = [], shallow = new THREE.Color('#6a9cb0'), deep = new THREE.Color('#487a94');
     // Each quad belongs to the chunk its middle falls in, so neighbours don't overlap.
     for (let u = -400; u < 568; u += 4) {
@@ -532,10 +532,10 @@ export class PlainsChunk extends LevelChunk {
       const s0 = Math.max(rowStart + 2.2, this.start), s1 = Math.min(rowEnd + 2.2, this.start + CHUNK_LENGTH - .01);
       for (const side of [-1, 1]) {
         const bands = fieldBands(row, side), gate = farmGate(row, side);
-        // A cross fence owns the corner post; otherwise this line places it.
+        // A cross fence owns the corner post. Otherwise this line places it.
         const corners = [[rowStart + 2.2, rowBoundaryKind(row, side)], [rowEnd + 2.2, rowBoundaryKind(row + 1, side)]]
           .map(([s, kind]) => ({ s, anchor: true, post: kind === 'fence' ? false : undefined }));
-        // The gate brings its own posts; fence rails stop at them.
+        // The gate brings its own posts. Fence rails stop at them.
         const gateSide = gate ? [{ s: gate.s - 2.4, anchor: true, post: false, stop: true }, { s: gate.s + 2.4, anchor: true, post: false }] : [];
         if (s0 < s1) {
           if (roadsideFence(row, side)) fence(along(side * ROAD_RESERVE, s0, s1, 4, gate?.s, rowEnd + 2.3, [...corners, ...gateSide]));
@@ -552,7 +552,7 @@ export class PlainsChunk extends LevelChunk {
           }
         }
         if (gate && inChunk(gate.s)) {
-          // Only worn gates get a track; every gate gets a mailbox.
+          // Only worn gates get a track. Every gate gets a mailbox.
           // Check the shed's ground before drawing a drive to it. A drive that
           // opens onto nothing looks worse than a plain track.
           const shedU = side * gate.reach;
@@ -794,7 +794,7 @@ export class PlainsChunk extends LevelChunk {
     }
   }
   // Keeps scenery off the road reserve, creek, ponds and discoveries.
-  // `onTrack` lets a track's own shed stand in its corridor; `onPond` does the
+  // `onTrack` lets a track's own shed stand in its corridor. `onPond` does the
   // same for a pond's bank trees.
   clearAt(s, u, r = 1, onTrack = false, onPond = false) {
     return Math.abs(u) > r + 6.6 && creekDistance(s, u) > r + 5.5 && plainsDiscoveryClears(s, u, this.discoveries, r)
@@ -818,7 +818,7 @@ export class PlainsChunk extends LevelChunk {
     for (const point of points) {
       if (keepClear && !this.clearAt(point.s, point.u, .3)) { previous = null; continue; }
       const p = this.ground(point.s, point.u);
-      // Points past the chunk end are the next chunk's posts; only the rails are ours.
+      // Points past the chunk end are the next chunk's posts. Only the rails are ours.
       // Corner and gate posts are placed only by the line that owns them.
       if (point.own !== false && point.post !== false) posts.push({ p: [p.x, p.y + .62, p.z], scale: [.26, 1.32, .26], r: [0, -roadFrame(point.s).angle, 0] });
       // Two rails. A single thin wire left the posts reading as specks.
@@ -950,7 +950,7 @@ export class PlainsChunk extends LevelChunk {
     this.scenery.painted.push({ p: [p.x, (low - .3 + high + .05) / 2, p.z], scale: [7.2, high - low + .35, 9.6], r: [0, yaw, 0], color: '#b1a892' });
     this.scenery.sheds.push({ p: [p.x, high + .05, p.z], scale: [1.2, 1.2, 1.2], r: [0, yaw, 0] });
     solidModel(this, plainsDiscoveryAssets.shed, [p.x, p.y, p.z], yaw, 1.2);
-    // Kept dull; a pale tank read as a haystack from the road.
+    // Kept dull. A pale tank read as a haystack from the road.
     const tank = this.ground(s + 6.2, u + (u > 0 ? 2.5 : -2.5));
     this.scenery.tanks.push({ p: [tank.x, tank.y + 1, tank.z], scale: [1.7, 2.1, 1.7], r: [0, random() * 6.28, 0], color: '#6c746f' });
     solidPost(this, tank.x, tank.z, 1.7);
@@ -973,7 +973,7 @@ export class PlainsChunk extends LevelChunk {
     instances(this.group, squareBaleGeometry, strawMaterial, squareBales, 'square-bales');
     instances(this.group, plainsDiscoveryAssets.shed, plainsDiscoveryMaterial, sheds, 'field-sheds');
     instances(this.group, poleGeometry, metalMaterial, tanks, 'water-tanks');
-    // Drop duplicate posts where two lines meet; coincident posts z-fight.
+    // Drop duplicate posts where two lines meet. Coincident posts z-fight.
     const standing = new Set();
     const singles = posts.filter(post => {
       const key = post.p.map(value => Math.round(value * 8)).join() + '/' + Math.round(post.scale[1] * 100);

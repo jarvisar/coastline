@@ -83,7 +83,7 @@ test('snow guardrails and both trestle railings have continuous collision along 
       if (!['guardrails-and-lamps', 'trestle-snow'].includes(mesh.name)) continue;
       for (let i = 0; i < mesh.count; i++) {
         mesh.getMatrixAt(i, matrix); matrix.decompose(p, q, scale);
-        // Guardrail beams are .3 m wide; lamps, posts and arms differ.
+        // Guardrail beams are .3 m wide. Lamps, posts and arms differ.
         if (Math.abs(scale.x - .3) > 1e-5 || scale.y < 1) continue;
         if (mesh.name === 'trestle-snow') timber++; else metal++;
         for (const t of [-.49, 0, .49]) {

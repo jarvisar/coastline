@@ -1,4 +1,4 @@
-// Rendering follows requestAnimationFrame; only the driving simulation is fixed-rate.
+// Rendering follows requestAnimationFrame. Only the driving simulation is fixed-rate.
 export const PHYSICS_STEP = 1 / 60;
 
 export class FrameClock {

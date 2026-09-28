@@ -92,7 +92,7 @@ test('the creek crosses under a bridge with a level channel, banks that hold the
       for (const d of [-CREEK_WATER_HALF_WIDTH, CREEK_WATER_HALF_WIDTH]) assert.ok(plainsGroundHeight(center + d, u) < creek.level, `water ribbon edge floats at ${index}, ${u}`);
       for (const d of [-9, 9]) assert.ok(plainsGroundHeight(center + d, u) > creek.level + .3, `bank under water at ${index}, ${u}`);
     }
-    // Driving sees the deck; the channel is only in the terrain.
+    // Driving sees the deck. The channel is only in the terrain.
     for (const s of [creekCenterS(creek, 0) - 3, creekCenterS(creek, 0), creekCenterS(creek, 0) + 3]) {
       assert.equal(plainsHeight(s, 0), plainsRoadHeight(s));
       assert.ok(plainsGroundHeight(s, 0) < creek.level);

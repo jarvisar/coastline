@@ -122,7 +122,7 @@ test('the swamp world glows around the nearest discoveries in their own colours 
   let disposed = 0, points = 0;
   world.update(24);
   for (const chunk of world.chunks.values()) for (const g of chunk.owned) g.addEventListener('dispose', () => disposed++);
-  // Lantern light is baked and painted on; a point light would cost every lit pixel.
+  // Lantern light is baked and painted on. A point light would cost every lit pixel.
   scene.traverse(object => { if (object.isPointLight) points++; });
   assert.equal(points, 0);
   const sites = swampDiscoveries(-20000, 20000);

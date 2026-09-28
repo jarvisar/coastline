@@ -602,7 +602,7 @@ function roadsideChapel() {
   }
   for (const z of [13, 16.4]) { body.box([8, .8, z], [.5, 1.6, .5], PLINTH); body.box([8, 1.66, z], [.62, .12, .62], CONCRETE); }
 
-  // Live oaks shade the lot and the lawn; shrubs soften the plinth.
+  // Live oaks shade the lot and the lawn. Shrubs soften the plinth.
   liveOak(model, [-12.5, -23.4], 1, 3); liveOak(model, [25.5, -12.5], 1.15, 4); liveOak(model, [3.6, 21.8], .85, 5);
   const shrub = hex('#4b6a3e');
   for (let i = 0; i < 12; i++) {
@@ -650,7 +650,7 @@ function riverboat() {
   body.fan(profile(stations.at(-1)).map(([x, y]) => [x, y, 14]), WHITE.clone().multiplyScalar(.9), [0, 0, 0]);
   body.beam([-4.7, 1.12, -12], [-4.7, 1.12, 14], .2, .18, WOOD); body.beam([4.7, 1.12, -12], [4.7, 1.12, 14], .2, .18, WOOD);
 
-  // Main deck with guards, the saloon, and posts carrying the decks above.
+  // Main deck with guards, the saloon and posts carrying the decks above.
   body.box([0, 1.15, 1], [11.2, .2, 26], DECK);
   for (const side of [-1, 1]) body.box([side * 5.55, 1, 1], [.12, .42, 26], WHITE);
   body.box([0, 2.45, .6], [8, 2.6, 21], WHITE);
@@ -855,7 +855,7 @@ const cypress = hollowCypress(), chapel = roadsideChapel(), boat = riverboat();
 export const swampLandmarkGeometry = {
   'hollow-cypress': cypress, chapel, riverboat: { ...boat, wheel: paddlewheel() },
 };
-// Model scale, the wheel's hub, and the light each lends the scene. Light
+// Model scale, the wheel's hub and the light each lends the scene. Light
 // positions are in model space, `halo` is the strength of its glow sprite.
 // The chapel keeps scale 1 so its lot and drive line up with the road.
 export const SWAMP_LANDMARKS = {

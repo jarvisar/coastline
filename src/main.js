@@ -99,7 +99,7 @@ async function boot() {
     const savedJourneys = Object.fromEntries(Object.entries(JOURNEYS).map(([id, data]) => [id, journeyStart(Number(data.routeNumber))]));
     const vehicle = new DrivingController(JOURNEYS[journey].route, savedJourneys[journey], DEFAULT_CAR); const audio = new DriveAudio();
     const refreshAudioMixer = setupAudioMixer(audio);
-    // Free driving is on by default while off-road collision is trialled.
+    // Free driving is on by default while off-road collision is being tested.
     vehicle.toggleFreeDriving();
     vehicle.setAppearance(journey);
     vehicle.setLights(JOURNEYS[journey].night ?? 0);
@@ -268,7 +268,7 @@ async function boot() {
       if (id === journey && !regenerate) { journeyDialog.close(); return; }
       if (!openChooser()) journeyWasPaused = paused;
       changingJourney = true; paused = true; input.clear(); frameClock.suspend();
-      // Load time isn't representative, and the new route may afford a higher level.
+      // Load time isn't a fair sample, and the new route may support a higher level.
       graphics.relax();
       audio.setPaused(true);
       $('#journey-transition').classList.add('active'); journeyDialog.close(); carDialog.close();

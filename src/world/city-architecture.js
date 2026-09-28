@@ -55,7 +55,7 @@ export function dressSkyline(chunk, b, base, roof, color, lane) {
   const { s0, s1, u0, u1 } = b, target = chunk.scenery.skyline;
   const corners = [[s0, u0], [s1, u0], [s1, u1], [s0, u1]].map(([s, u]) => chunk.at(s, u, 0));
   const glass = color.clone().multiplyScalar(lane < 2 ? .72 : .84), cap = color.clone().multiplyScalar(1.12);
-  // Group more floors at the back; at most sixteen bands per face.
+  // Group more floors at the back. At most sixteen bands per face.
   const rows = Math.min(16, Math.max(3, Math.floor((roof - base) / (lane < 2 ? 6.4 : 9.6))));
   const pitch = (roof - base - 3) / rows;
   for (const [i, j, outward] of [[0, 1, [-1, 0, 0]], [1, 2, [0, 0, -1]], [3, 0, [0, 0, 1]]]) {

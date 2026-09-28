@@ -238,7 +238,7 @@ export function groundHeight(s, u) {
   if (radius < 2.3) {
     // The dry bank is wider than a coarse terrain edge so no face cuts through the rim.
     const basin = pond.level - 3.4 + 5.6 * smoothstep(.3, 1.18, radius);
-    // Uphill bank rises toward the ridge; the seaward side stays low.
+    // Uphill bank rises toward the ridge. The seaward side stays low.
     const bank = smoothstep(.86, 1.5, radius) * smoothstep(pond.u - 8, pond.u + 40, u) * 2.3;
     height = lerp(basin + bank, height, smoothstep(1.35, 2.3, radius));
   }
@@ -247,7 +247,7 @@ export function groundHeight(s, u) {
   return height;
 }
 export function terrainHeight(s, u) {
-  // Driving sees the bridge deck; scenery uses groundHeight for the inlet below.
+  // Driving sees the bridge deck. Scenery uses groundHeight for the inlet below.
   if (Math.abs(u) <= 7) return roadHeight(s);
   return groundHeight(s, u);
 }
@@ -430,7 +430,7 @@ export const coastalDrivingRoute = {
     if (Math.abs(s - bridgeAt(s).center) < 49) return [-4.65, 4.65];
     // Never nearer the cliff edge than 6 m.
     const open = Math.max(drivingCoastOffset(s) + 6, -COAST_VERGE.ocean);
-    // A rail is a hard stop; without one the limit stays soft.
+    // A rail is a hard stop. Without one the limit stays soft.
     return [coastalGuardrail(s) ? Math.max(open, GUARDRAIL_STOP) : open, COAST_VERGE.inland];
   },
   // Sea counts from slightly above the waterline so the car stops on wet sand.

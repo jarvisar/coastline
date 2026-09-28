@@ -8,7 +8,7 @@ import { SaltClouds } from './salt-clouds.js';
 const sun = new THREE.Vector3(...SALT_SUN).normalize();
 
 // Drawn after every opaque object at the far plane, so it only shades pixels
-// nothing else covered: open sky, the view down through a pool, and the flat
+// nothing else covered: open sky, the view down through a pool and the flat
 // past the last chunk. Looking down it follows the ray back to the water
 // plane and reflects it, so pools mirror the same clouds that drift overhead,
 // with the right parallax in every camera.

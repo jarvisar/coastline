@@ -149,7 +149,7 @@ export function cityPosition(s, u, y = cityHeight(s, u)) {
       const near = quayOffset(s) + 1.5;
       if (u < near) {
         // Bridge spans run straight between their bank endpoints. Paving, rails
-        // and supports share this map; the river bed eases back around it.
+        // and supports share this map. The river bed eases back around it.
         const a = positionAt(s, near, y), b = positionAt(s, bridgeFar, y);
         const t = (near - u) / (near - bridgeFar);
         p.x = lerp(p.x, lerp(a.x, b.x, t), weight);

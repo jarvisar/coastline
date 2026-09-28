@@ -82,7 +82,7 @@ function deadTree() {
 
 function surface() { return { positions: [], colors: [], heat: [] }; }
 const projectedArea = (a, b, c) => (b.z - a.z) * (c.x - a.x) - (b.x - a.x) * (c.z - a.z);
-// `heat` is a number, a function of the vertex, or null for meshes without it.
+// `heat` is a number, a function of the vertex or null for meshes without it.
 function triangle(target, a, b, c, color, heat = COLD, upward = true) {
   if (upward && (b.z - a.z) * (c.x - a.x) - (b.x - a.x) * (c.z - a.z) < 0) [b, c] = [c, b];
   for (const p of [a, b, c]) {
@@ -570,7 +570,7 @@ export class VolcanicChunk extends LevelChunk {
   }
   buildCreek() {
     const path = [];
-    // Extend past the jittered seam; projection clips to this chunk's faces.
+    // Extend past the jittered seam. Projection clips to this chunk's faces.
     for (let s = this.start - 8; s <= this.start + CHUNK_LENGTH + 8; s += 4) path.push({ s, ...creekSection(s) });
     this.surfaceFlow(path, 78101);
     const crossing = volcanicCrossing(this.start + 64);

@@ -22,7 +22,7 @@ export class AmbientOcclusion {
     this.hidden = [];
     this.pass = new N8AOPass(scene, camera, 2, 2);
     // N8AO's noise is screen-fixed, so leftover noise crawls as the world scrolls.
-    // More samples and a wide denoise radius quiet it; more resolution or the
+    // More samples and a wide denoise radius quiet it. More resolution or the
     // radius-6 presets make it worse (see scripts/ao-motion-test.mjs).
     // All presets share these so changing quality never recompiles AO shaders.
     Object.assign(this.pass.configuration, {

@@ -140,7 +140,7 @@ function cypress(seed, { lean = 0, limbs = 7, spread = .27, low = .64, mossy = 1
     .map(([y, radius]) => [y, radius, offset(y), 0]);
   const phase = r(1) * TAU;
   bark.lathe(rings, 8, shade, (a, y) => 1 + .42 * (1 - smoothstep(0, .13, y)) * (.5 + .5 * Math.cos(a * 5 + phase)) + (1 - smoothstep(0, .05, y)) * .12 * Math.cos(a * 3 + phase));
-  // Long buttress ridges continue up the trunk; roots spread into the shallows.
+  // Long buttress ridges continue up the trunk. Roots spread into the shallows.
   for (let i = 0; i < 6; i++) {
     const a = phase + i / 6 * TAU, d = .075 + r(400 + i) * .04;
     const foot = [Math.cos(a) * d, -.008, Math.sin(a) * d];
@@ -406,7 +406,7 @@ function gator(seed, basking = false) {
 }
 
 // Two variants of each kind. Every variant costs a draw per chunk for its
-// trunk, crown, reflection and shadow; random turns and sizes hide the repeats.
+// trunk, crown, reflection and shadow. Random turns and sizes hide the repeats.
 export const cypressTrees = [cypress(1), cypress(4, { lean: -.055, limbs: 6, spread: .3, low: .66, mossy: 1.2 })];
 export const oakTrees = [oak(1), tupelo(3)];
 export const snagTrees = [snag(1), snag(3, { tall: .6, limbs: 2, mossy: 0 })];

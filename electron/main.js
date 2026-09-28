@@ -73,7 +73,7 @@ if (options.softwareGl) {
   app.commandLine.appendSwitch('use-angle', 'swiftshader');
   app.commandLine.appendSwitch('enable-unsafe-swiftshader');
 } else {
-  // The game requires WebGL 2; prefer a blocklisted GPU over the software fallback.
+  // The game requires WebGL 2. Prefer a blocklisted GPU over the software fallback.
   app.commandLine.appendSwitch('ignore-gpu-blocklist');
 }
 protocol.registerSchemesAsPrivileged([{
@@ -187,7 +187,7 @@ function createWindow() {
 
 function installMenu() {
   if (process.platform !== 'darwin') { Menu.setApplicationMenu(null); return; }
-  // macOS needs an application menu for Cmd+Q, Cmd+H, and Cmd+M to work.
+  // macOS needs an application menu for Cmd+Q, Cmd+H and Cmd+M to work.
   Menu.setApplicationMenu(Menu.buildFromTemplate([
     { role: 'appMenu' },
     { label: 'View', submenu: [{ role: 'togglefullscreen' }, { type: 'separator' }, { role: 'toggleDevTools' }] },

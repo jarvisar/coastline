@@ -48,8 +48,8 @@ const SOFTWARE_RENDERER = /swiftshader|llvmpipe|softpipe|software|basic render/i
 // Apple GPUs are left out because they aren't slow. Mesa is left out because it
 // also drives discrete cards on Linux.
 const INTEGRATED_RENDERER = /intel|\buhd\b|\biris\b|hd graphics|vega \d|radeon\(tm\) graphics/i;
-// Cards of their own known to draw AO easily: NVIDIA RTX, TITAN and GTX 960 on,
-// AMD Radeon RX, Pro and VII, Intel Arc A and B, and Apple's Pro, Max and Ultra chips.
+// Cards of their own known to draw AO easily. NVIDIA RTX, TITAN and GTX 960 on.
+// AMD Radeon RX, Pro and VII. Intel Arc A and B. Apple's Pro, Max and Ultra chips.
 const STRONG_RENDERERS = [
   /\bRTX\b/, /\bGTX (9[6-8]0|10[5-8]0|16[5-6]0)/, /\bTITAN\b/i,
   /\bRadeon (RX|Pro|VII)\b/, /\bArc\b(\(TM\))? [AB]\d{3}/, /\bApple M\d+ (Pro|Max|Ultra)\b/,

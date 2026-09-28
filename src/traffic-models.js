@@ -18,8 +18,8 @@ export const TRAFFIC_COLORS = ['#d8c7a0', '#e9e5d9', '#577f96', '#829789', '#b34
 
 export const WHEEL = { radius: .43, width: .25, hubRadius: .21, hubWidth: .26, y: .44 };
 
-// Four merged geometries per body. Traffic bakes wheels into details; a driven
-// car gets them separately so they can turn.
+// Four merged geometries per body. Traffic bakes wheels into details.
+// A driven car gets them separately so they can turn.
 export function vehicleGeometry(spec, { separateWheels = false } = {}) {
   const parts = { paint: [], details: [], headlights: [], taillights: [] };
   const wheels = [];
@@ -151,7 +151,7 @@ export function createTrafficModels() {
       }
       return { car, paint, spec };
     },
-    // Swap shared geometry when a pooled car respawns; keep its meshes and paint.
+    // Swap shared geometry when a pooled car respawns. Keep its meshes and paint.
     setModel(vehicle, index) {
       vehicle.spec = TRAFFIC_MODELS[index];
       vehicle.car.name = `traffic-${vehicle.spec.name}`;

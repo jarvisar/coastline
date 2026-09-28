@@ -9,7 +9,7 @@ export const DESERT_DISCOVERY_MILES = {
   windpump: 7.5,
   'cattle-skull': 7.5,
 };
-// Placement success measured across seeds; keep the terrain checks below.
+// Placement success measured across seeds. Keep the terrain checks below.
 const schedule = createDiscoverySchedule(DESERT_DISCOVERY_MILES,
   { 'fuel-stop': .60, windpump: .98, 'cattle-skull': .92 }, 2301, districtSite);
 export const DESERT_DISCOVERY_SPACING = schedule.spacing;

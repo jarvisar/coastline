@@ -25,4 +25,4 @@ npm run test:audio
 npm run review:audio
 ```
 
-Reports and WAV files go to `.artifacts/audio/`. Open `.artifacts/audio/review/index.html` to compare the current sound with `HEAD` at matched volume. Set `AUDIO_BASE_REF` to compare with a different commit. Both scripts use Chrome on Windows; set `TEST_URL` to use a different server address.
+Reports and WAV files go to `.artifacts/audio/`. Open `.artifacts/audio/review/index.html` to compare the current sound with `HEAD` at matched volume. Set `AUDIO_BASE_REF` to compare with a different commit. Both scripts use Chrome on Windows. Set `TEST_URL` to use a different server address.

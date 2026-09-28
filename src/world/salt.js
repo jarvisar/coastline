@@ -160,7 +160,7 @@ export class SaltChunk extends LevelChunk {
         inner[j] = { ...middle }; inner[(j + 1) % n] = { ...middle };
       }
     }
-    // Slivers against the causeway can't hold a mitred rim; shrink those instead.
+    // Slivers against the causeway can't hold a mitred rim. Shrink those instead.
     const inside = inner.every(p => outline.every((v, j) => (p.s - v.s) * dirs[j].ns + (p.u - v.u) * dirs[j].nu > -1e-6));
     if (!inside) {
       const cs = outline.reduce((sum, v) => sum + v.s, 0) / n, cu = outline.reduce((sum, v) => sum + v.u, 0) / n;
@@ -254,7 +254,7 @@ export class SaltChunk extends LevelChunk {
     }
   }
   // Gravel embankment from the shoulder down to the crust, rougher on its
-  // rip-rap face, and continuing under the first polygons so no seam shows.
+  // rip-rap face and continuing under the first polygons so no seam shows.
   buildCauseway() {
     const cross = [6.6, 7.4, 8.3, 9.3, CAUSEWAY_TOE, CAUSEWAY_TOE + 1.3];
     this.bank = surface();

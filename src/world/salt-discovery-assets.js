@@ -184,7 +184,7 @@ function gondola(p) {
   bogie(p, -2.2); bogie(p, 2.2);
   p.box([0, 1.02, 0], [2.2, .28, 6.6], IRON);
   p.box([0, 1.22, 0], [2.4, .14, 6.6], '#5a3a2c');
-  // One side has lost a panel; it lies on the salt nearby.
+  // One side has lost a panel. It lies on the salt nearby.
   for (const x of [-1.16, 1.16]) for (const [a, b] of x < 0 ? [[-3.3, -.4], [1.6, 3.3]] : [[-3.3, 3.3]]) {
     p.box([x, 1.85, (a + b) / 2], [.08, 1.1, b - a], body);
   }

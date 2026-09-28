@@ -25,12 +25,12 @@ export class GamepadInput {
   update({ blocked = false, paused = false, menu = false } = {}) {
     let pads;
     try { pads = Array.from(this.getGamepads()).filter(pad => pad?.connected); }
-    catch { pads = []; } // Gamepad API missing or blocked; other inputs still work.
+    catch { pads = []; } // Gamepad API missing or blocked. Other inputs still work.
     const pad = pads.find(pad => pad.index === this.index) ?? pads.find(pad => pad.mapping === 'standard') ?? pads[0];
     if ((pad?.index ?? null) !== this.index) {
       this.index = pad?.index ?? null; this.state = {}; this.previousButtons = [];
       this.konami.reset();
-      // A replacement pad must start at rest; the first may start with Gas held.
+      // A replacement pad must start at rest. The first may start with Gas held.
       this.requireNeutral = this.connected;
     }
     if (Boolean(pad) !== this.connected) {
@@ -59,7 +59,7 @@ export class GamepadInput {
       this.requireNeutral = blocked || active;
       return;
     }
-    // Konami code on the D-pad plus B/A. Off in menus; held buttons count once.
+    // Konami code on the D-pad plus B/A. Off in menus. Held buttons count once.
     if (paused || menu) this.konami.reset();
     else {
       const presses = buttons.flatMap((down, index) => down && pressed(index) && index < 17 ? [index] : []);

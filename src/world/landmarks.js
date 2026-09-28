@@ -165,7 +165,7 @@ function buildPond(chunk, pond) {
         const color = shallow.clone().lerp(deep, .28 + Math.min(1, depth / 2.8) * .65);
         color.multiplyScalar(.985 + randomAt(row, col + 2201) * .03);
         for (let i = 1; i < polygon.length - 1; i++) {
-          // Terrain cells wind downward; the water is viewed from above.
+          // Terrain cells wind downward. The water is viewed from above.
           for (const p of [polygon[0], polygon[i + 1], polygon[i]]) {
             vertices.push(p.x, pond.level, p.z + chunk.start); colors.push(color.r, color.g, color.b);
           }

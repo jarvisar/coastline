@@ -3,7 +3,7 @@ import { chromium } from '@playwright/test';
 import { mkdir, writeFile } from 'node:fs/promises';
 
 // Deterministic CPU work and GPU upload counts, independent of headless FPS.
-// Use PROFILE_LABEL to compare passes; these timings are not phone frame times.
+// Use PROFILE_LABEL to compare passes. These timings are not phone frame times.
 const label = process.env.PROFILE_LABEL ?? 'current';
 assert.match(label, /^[a-z0-9-]+$/i);
 const directory = `.artifacts/performance/${label}`;

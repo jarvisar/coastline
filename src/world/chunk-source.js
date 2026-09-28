@@ -52,7 +52,7 @@ export class ChunkWorker {
     this.pump();
   }
   // The page builds everything, with stalls, only once no workers are left.
-  // A failed job isn't retried; the page builds that chunk when needed.
+  // A failed job isn't retried. The page builds that chunk when needed.
   drop(lane, retry = false) {
     if (!this.lanes.includes(lane)) return;
     clearTimeout(lane.timeout); lane.worker.terminate();
@@ -126,7 +126,7 @@ class ChunkSource {
   }
   retain(index, chunk) {
     // The evicted chunk is next when reversing. Keep its CPU buffers in the
-    // cache; its GPU resources are still released.
+    // cache. Its GPU resources are still released.
     if (!this.disposed && chunk.sourceData) this.cache.set(index, chunk.sourceData);
   }
   dispose() {

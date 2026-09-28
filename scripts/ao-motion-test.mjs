@@ -80,7 +80,7 @@ try {
   for (const result of results) {
     const label = `${result.display} · ${result.name}`;
     assert.ok(result.darkness > .01, `${label}: contact shading stays visible`);
-    // The old 384 px single-denoise AO measured .0050 and .0042 here.
+    // Low enough to fail the old 384 px single-denoise AO, which measured .0050 and .0042 here.
     assert.ok(result.shimmer < .0035, `${label}: shading at a fixed world point changes under 0.35% a frame`);
   }
 } finally { await browser.close(); }

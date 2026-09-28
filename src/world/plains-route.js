@@ -188,7 +188,7 @@ export function plainsGroundHeight(s, u) {
   // through the flat water where the ground swells.
   return lerp(plain, Math.min(plain, creek.level - 1.8), 1 - smoothstep(3, 8, d));
 }
-// Driving queries see the bridge deck; the terrain sees the channel beneath it.
+// Driving queries see the bridge deck. The terrain sees the channel beneath it.
 export function plainsHeight(s, u) {
   return Math.abs(u) <= 7 ? plainsRoadHeight(s) : plainsGroundHeight(s, u);
 }

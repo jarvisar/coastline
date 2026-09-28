@@ -38,7 +38,7 @@ test('jungle columns stay ordered, the road stays flat and the river sits in its
     const rc = riverCenter(s), hw = riverHalfWidth(s), level = riverLevel(s);
     assert.ok(level < roadHeight(s) - 5 && level > roadHeight(s) - 26, `river level ${level} at ${s}`);
     assert.ok(jungleHeight(s, rc) < level - 1.5, `river bed above the water at ${s}`);
-    // Water may reach a gorge wall's foot; the camera-side bank must stay dry.
+    // Water may reach a gorge wall's foot. The camera-side bank must stay dry.
     assert.ok(jungleHeight(s, rc + hw + 4) > level - .7 && jungleHeight(s, rc - hw - 4) > level + 1, `submerged bank at ${s}`);
     assert.ok(jungleHeight(s, 100) > roadHeight(s) + 5);
     // Camera-side terrain must stay below the line of sight to the road.

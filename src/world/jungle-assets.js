@@ -10,7 +10,7 @@ function geometry(vertices, colors) {
   g.computeVertexNormals(); g.computeBoundingSphere(); return g;
 }
 function tinted(source, tint) {
-  // Merged parts must agree on indexing; the icosahedron lobes are unindexed.
+  // Merged parts must agree on indexing. The icosahedron lobes are unindexed.
   const g = source.index ? source.toNonIndexed() : source;
   if (g !== source) source.dispose();
   const colors = new Float32Array(g.attributes.position.count * 3).fill(tint);

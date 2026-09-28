@@ -20,11 +20,11 @@ function fountain() {
   return p.finish();
 }
 
-// The tower faces -x toward the road; the nave runs back along +x.
+// The tower faces -x toward the road. The nave runs back along +x.
 function clockTower() {
   const p = new Parts();
   p.box([9, 4, 0], [16, 8, 9], stone);
-  // The nave runs along x; the shared gable builder runs its ridge along z.
+  // The nave runs along x. The shared gable builder runs its ridge along z.
   const roof = new Parts();
   roof.gable([0, 0, 0], 9, 16, 8, 12.2, stone, slate, .4);
   p.parts.push(roof.finish().rotateY(Math.PI / 2).translate(9, 0, 0));

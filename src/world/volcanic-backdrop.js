@@ -3,7 +3,7 @@ import { randomAt, lerp, smoothstep } from './route.js';
 import { volcanicPalette } from './volcanic-palette.js';
 
 // Moves with the car like the sky, so it keeps its bearing and never gets
-// closer. It sits past the fog; only road-level cameras see it.
+// closer. It sits past the fog. Only road-level cameras see it.
 const ERUPTION_DIRECTION = new THREE.Vector3(-.36, 0, -.93).normalize();
 const DISTANCE = 900, SIDES = 15, PUFFS = 64;
 // Angle of the crater breach, facing the road.

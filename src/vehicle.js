@@ -362,7 +362,7 @@ export class DrivingController {
     const assist = !this.freeDriving || looseness === 0;
     if (!touch) this.heading += this.steer * this.speed / 3.3 * (.52 * grip / (1 + Math.abs(this.speed) * .105)) * dt;
     let difference = Math.atan2(Math.sin(this.heading - frame.angle), Math.cos(this.heading - frame.angle));
-    // Free driving keeps the chosen heading off-road; normal driving assists bends.
+    // Free driving keeps the chosen heading off-road. Normal driving assists bends.
     if (!touch && assist && Math.abs(this.steer) < .08 && Math.abs(this.speed) > .2 && Math.abs(difference) < 1.15) {
       const laneCorrection = clamp((this.u - 2.4) * .026, -.12, .12) * Math.sign(this.speed);
       this.heading -= (difference + laneCorrection) * Math.min(1, dt * .85);

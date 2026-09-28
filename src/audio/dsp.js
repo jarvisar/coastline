@@ -76,7 +76,7 @@ export function voice(rate, random, {
   const flutterScale = unit(280), wanderScale = unit(6);
   const filters = formants?.map(([frequency, q, gain]) => [bandpass(rate, frequency, q), gain]);
   const air = bandpass(rate, ...breathBand);
-  // Curves run at a 2 kHz control rate; the gain is interpolated between steps.
+  // Curves run at a 2 kHz control rate. The gain is interpolated between steps.
   const control = 16, gainAt = t => level(t) * (trill[1] ? 1 - trill[1] * (.5 + .5 * Math.cos(2 * Math.PI * trill[0] * t)) : 1);
   let phase = random(), step = 0, gain = gainAt(0), next = gain;
   for (let i = 0; i < length; i++) {

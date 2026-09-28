@@ -20,11 +20,11 @@ export const VOLCANIC_DISCOVERY_SPACING = schedule.spacing;
 export const volcanicDiscoveries = schedule.discoveries;
 
 function districtSite(kind, index, desired) {
-  // Keep the destination in its owning chunk; buildings avoid river bridges.
+  // Keep the destination in its owning chunk. Buildings avoid river bridges.
   const center = Math.floor(desired / CHUNK_LENGTH) * CHUNK_LENGTH + 52 + randomAt(index, 81204) * 23;
   const preferredSide = randomAt(index, 81203) < .5 ? -1 : 1;
   if (kind === 'basalt-arch' && randomAt(index,81208) >= .3) {
-    // Arch over the river beside the road; its span runs along the road.
+    // Arch over the river beside the road. Its span runs along the road.
     const crossing = volcanicCrossing(desired), u = preferredSide*(27 + randomAt(index,81209)*8);
     const s = crossingChannel(crossing,u).s;
     return {kind,index,s,u,side:preferredSide,halfS:27,halfU:10,turn:Math.PI/2};

@@ -29,7 +29,7 @@ async function electronDist({ platformName, arch, version }) {
       const zip = await downloadArtifact({ version: electronVersion, platform: platformName, arch: archName, artifactName: 'electron' });
       rmSync(out, { recursive: true, force: true });
       mkdirSync(out, { recursive: true });
-      // Windows ships bsdtar, which reads zip files; the GNU tar on a Git Bash PATH does not.
+      // Windows ships bsdtar, which reads zip files. The GNU tar on a Git Bash PATH does not.
       const bsdtar = path.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'tar.exe');
       execFileSync(existsSync(bsdtar) ? bsdtar : 'tar', ['-xf', zip, '-C', out], { stdio: 'inherit' });
     }
@@ -46,7 +46,7 @@ module.exports = {
   productName,
   copyright: `Copyright Â© ${new Date().getFullYear()} jarvisar`,
   extraMetadata: {
-    // Written into the packaged package.json only; the repository's stays untouched.
+    // Written into the packaged package.json only. The repository's stays untouched.
     description: manifest.description,
     author: { name: 'jarvisar' },
     homepage: 'https://jarvisar.github.io/coastline/',
@@ -69,7 +69,7 @@ module.exports = {
   npmRebuild: false,
   nodeGypRebuild: false,
   // Tells electron-updater where releases live and makes builds emit latest*.yml.
-  // Build scripts pass --publish never; the workflow uploads the files.
+  // Build scripts pass --publish never. The workflow uploads the files.
   publish: { provider: 'github', owner: 'jarvisar', repo: 'coastline' },
   artifactName: '${productName}-${version}-${os}-${arch}.${ext}',
 

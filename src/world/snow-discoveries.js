@@ -13,9 +13,9 @@ export const SNOW_DISCOVERY_MILES = {
 const schedule = createDiscoverySchedule(SNOW_DISCOVERY_MILES,
   { 'cable-car': .60, snowmen: .99 }, 3101, districtSite);
 export const SNOW_DISCOVERY_SPACING = schedule.spacing;
-// Track ropes run this far either side of the line; each carries one cabin.
+// Track ropes run this far either side of the line. Each carries one cabin.
 export const CABLE_ROPE_OFFSET = 3;
-// Cabin floor below the rope, and the clearance kept beneath it.
+// Cabin floor below the rope and the clearance kept beneath it.
 export const CABIN_DROP = 5.2;
 const ROPE_CLEARANCE = 6.5;
 // Pylon on the bench between the guardrail and the bluff rim.
@@ -139,7 +139,7 @@ function cableCarAt(s, index) {
     if (point.y - point.ground > 26) return null;
     i = 0;
   }
-  // Reject lopsided spans; the caller tries the next shelf.
+  // Reject lopsided spans. The caller tries the next shelf.
   const spans = points.slice(1).map((point, i) => point.u - points[i].u);
   if (Math.min(...spans) <= 20 || Math.max(...spans) >= Math.min(...spans) * 2.6) return null;
   // Wide terrain offsets curve away from road normals, so check the rendered

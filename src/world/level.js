@@ -21,7 +21,7 @@ export function geometryFrom(vertices, colors) {
   g.computeVertexNormals(); g.computeBoundingSphere(); g.computeBoundingBox(); return g;
 }
 // Surfaces are height fields, so the winding is forced to face up. Points are
-// route-space positions; `start` shifts them into the chunk. `coordinates`
+// route-space positions. `start` shifts them into the chunk. `coordinates`
 // optionally collects each point's (u, s).
 export function triangle(vertices, colors, a, b, c, color, start, coordinates) {
   if ((b.z - a.z) * (c.x - a.x) - (b.x - a.x) * (c.z - a.z) < 0) [b, c] = [c, b];

@@ -2,13 +2,13 @@
 
 The [website](https://jarvisar.github.io/coastline/) can be installed like a regular app:
 
-- iPhone / iPad: in Safari, tap Share → Add to Home Screen. Leave Open as Web App on if it shows up.
-- Android: in Chrome, tap Install app or Add to Home screen.
+- iPhone / iPad: in Safari, tap `Share` → `Add to Home Screen`. Leave `Open as Web App` on if it shows up.
+- Android: in Chrome, tap `Install app` or `Add to Home screen`.
 - Desktop Chrome / Edge: click the install icon in the address bar or use the browser menu.
 
 The title screen and pause menu also have an install button.
 
-All eight routes work offline once the first visit finishes caching. To get an update, close every Coastline tab and window and reopen it. If you clear your browser storage, you'll need to load it online again. Fullscreen depends on the browser; some keep the system bars visible or need a tap first.
+All routes work offline once the first visit finishes caching. To get an update, close every Coastline tab and window and reopen it. If you clear your browser storage, you'll need to load it online again. Fullscreen depends on the browser. Some keep the system bars visible or need a tap first.
 
 ## Hosting
 
@@ -32,4 +32,4 @@ node scripts/pwa-banner-test.mjs
 node scripts/fullscreen-test.mjs
 ```
 
-These check installing, offline play, updates, subfolder hosting and fullscreen. They use Chrome on Windows or Playwright's Chromium elsewhere; set `CHROME_PATH` to use a different browser. Output goes to `.artifacts/`.
+These check installing, offline play, updates, subfolder hosting and fullscreen. They use Chrome on Windows or Playwright's Chromium elsewhere. Set `CHROME_PATH` to use a different browser. Output goes to `.artifacts/`.

@@ -56,7 +56,7 @@ export function buildNeighborhoods(chunk) {
     for (let i = 0; i < 4; i++) {
       const j = (i + 1) % 4, outward = [[-1, 0, 0], [0, 0, -1], [1, 0, 0], [0, 0, 1]][i];
       chunk.quad(target, [at(i, base), at(j, base), at(j, top), at(i, top)], color.clone().multiplyScalar([1, .9, .82, .94][i]), outward);
-      // The opposite bank faces +u; both ends can be seen while driving.
+      // The opposite bank faces +u. Both ends can be seen while driving.
       if (i === (u1 < 0 ? 0 : 2)) continue;
       const a = corners[i], b = corners[j], length = Math.hypot(b.x - a.x, b.z - a.z);
       const point = (distance, y) => ({ x: lerp(a.x, b.x, distance / length) + outward[0] * .04, y, z: lerp(a.z, b.z, distance / length) + outward[2] * .04 });

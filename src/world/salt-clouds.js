@@ -8,7 +8,7 @@ import { waterClock } from './water.js';
 const TILE = 1024;
 
 // A repeating sky of low, broad cumulus banks. The same closed geometry is
-// reflected beneath the pools; shaded undersides and bright crowns stay aligned.
+// reflected beneath the pools. Shaded undersides and bright crowns stay aligned.
 function cloudGeometry() {
   const parts = [], sun = new THREE.Vector3(...SALT_SUN).normalize();
   const white = new THREE.Color('#fffdf5'), shade = new THREE.Color('#bdcfdf');
@@ -24,7 +24,7 @@ function cloudGeometry() {
       const px = x + (puff / 5 - .5) * width * 1.9;
       const py = y + (crown ? radius * .35 : 0), pz = z + (randomAt(puff, bank * 17 + 8996) - .5) * width * .4;
       for (let i = 0; i < p.count; i++) {
-        // Flatten the underside into a cloud base; upper billows keep their volume.
+        // Flatten the underside into a cloud base. Upper billows keep their volume.
         p.setXYZ(i, px + p.getX(i) * radius * 1.25, py + Math.max(-.32, p.getY(i)) * radius * (crown ? 1 : .48), pz + p.getZ(i) * radius);
       }
       g.computeVertexNormals();

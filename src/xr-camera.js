@@ -5,7 +5,7 @@ const heading = new THREE.Euler(0, 0, 0, 'YXZ');
 const rotation = new THREE.Quaternion();
 const yaw = quaternion => heading.setFromQuaternion(rotation.copy(quaternion), 'YXZ').y;
 
-// The rig follows the game camera; WebXR owns the camera inside it. Moving the
+// The rig follows the game camera. WebXR owns the camera inside it. Moving the
 // rig must never overwrite the headset's tracked pose.
 export class XRCameraRig {
   constructor() {

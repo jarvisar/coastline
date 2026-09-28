@@ -63,7 +63,7 @@ try {
   assert.equal(await page.locator('#autodrive').getAttribute('aria-pressed'), 'false', 'manual steering takes control');
   assert.equal(await page.evaluate(() => window.__coastline.input.state.right), true, 'held steering remains active after takeover');
   await page.keyboard.up('d'); await frames();
-  // D-pad Up also toggles autodrive; that must not break the code.
+  // D-pad Up also toggles autodrive. That must not break the code.
   const konami = [12, 12, 13, 13, 14, 15, 14, 15, 1, 0];
   for (const index of konami) await press(index);
   assert.equal(await page.evaluate(() => window.__coastline.vehicle.rainbow), true);

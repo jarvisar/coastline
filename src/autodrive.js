@@ -4,7 +4,7 @@ import { LaneChange } from './lane-change.js';
 const LANE = 2.4;
 const CLEARANCE = 12;
 const MERGE_CLEARANCE = 8; // rear gap to begin the curved return, which continues opening
-const MARGIN = 1.8;    // seconds still to spare once the pass ends; lower passes more often
+const MARGIN = 1.8;    // seconds still to spare once the pass ends. Lower passes more often
 
 // Two lanes, one passing target. Wait behind traffic until the whole pass fits.
 export class Autodrive {
@@ -32,7 +32,7 @@ export class Autodrive {
       const gap = ahead(lead) - halfLength(lead);
       const closing = Math.max(0, player.speed - lead.speed);
       if (gap < CLEARANCE + player.speed * 1.5 + closing * closing / (2 * touchBraking)) {
-        // Close groups need one pass; don't aim for a gap too small to merge into.
+        // Close groups need one pass. Don't aim for a gap too small to merge into.
         let last = lead;
         for (let i = 0; i < cars.length; i++) {
           for (const car of cars) {

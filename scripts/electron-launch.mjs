@@ -4,7 +4,7 @@ import { createServer } from 'vite';
 
 // Launch the desktop shell from source.
 //
-//   npm run electron:dev             start a Vite dev server and open it in Electron;
+//   npm run electron:dev             start a Vite dev server and open it in Electron.
 //                                    web changes hot-reload inside the window
 //   npm run electron:dev -- --url=http://127.0.0.1:5173
 //                                    attach to a dev server that is already running

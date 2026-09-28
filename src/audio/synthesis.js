@@ -87,7 +87,7 @@ export function createSoundGraph(ctx, prepared = {}) {
   const bed = noiseLayer('lowpass', 440, 45, 0, .83, buses.ambience, .65, windNoise);
   const air = noiseLayer('bandpass', 2300, 600, 6.9, .91, buses.ambience, .65, rainNoise);
   const rain = noiseLayer('lowpass', 4700, 350, 1.2, 1, buses.ambience, .65, rainNoise);
-  // Route loops: water (surf on the coast), panned to its side, and a chorus.
+  // Route loops: water (surf on the coast, panned to its side) and a chorus.
   const waterPan = panner(buses.ambience);
   const waterLevel = gain(0, waterPan);
   const waterTone = filter('lowpass', 8000, waterLevel, .5);

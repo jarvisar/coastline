@@ -70,7 +70,7 @@ export class SoundDirector {
       cutoff: Math.min(16000, Math.max(1400, 16000 * (25 / distance) ** .55)),
     });
   }
-  // Thunder follows lightning after a random delay; longer delays are quieter.
+  // Thunder follows lightning after a random delay. Longer delays are quieter.
   // Distant thunder also plays every 50 to 90 seconds.
   weather(g, scene, now, mix) {
     if (scene?.lightning > .05 && now - this.lastLightning > 6) {

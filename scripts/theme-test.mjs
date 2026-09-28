@@ -59,7 +59,7 @@ try {
               if (!node.textContent.trim() || seen.has(element) || element.closest('svg,script,style,[hidden],#welcome .menu-brand,.loading,#scene')) continue;
               if (!element.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }) || element.closest('button:disabled')) continue;
               const rect = element.getBoundingClientRect(); if (!rect.width || !rect.height) continue;
-              // #app holds hidden panels too; only audit HUD text.
+              // #app holds hidden panels too. Only audit HUD text.
               if (state === 'driving' && !element.closest('.drive-actions,.controls,#stick-help,#toast,#fps-counter')) continue;
               seen.add(element);
               const chain = []; let parent = element, opacity = 1;

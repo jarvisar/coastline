@@ -6,7 +6,7 @@ Download from [Releases](https://github.com/jarvisar/coastline/releases):
 - Linux / Steam Deck: AppImage
 - macOS: `.dmg` or `.zip`, `arm64` for Apple silicon or `x64` for Intel
 
-The builds aren't code-signed. On Windows, click More info → Run anyway. On macOS, right-click the app and choose Open, or run `xattr -cr /Applications/Coastline.app`. On Linux, run `chmod +x Coastline-*.AppImage` first.
+The builds aren't code-signed. On Windows, click `More info` → `Run anyway`. On macOS, right-click the app and choose `Open`, or run `xattr -cr /Applications/Coastline.app`. On Linux, run `chmod +x Coastline-*.AppImage` first.
 
 The Windows installer and AppImage check for updates at launch and install them when you quit. The portable exe and macOS app show a link when an update is available.
 
@@ -14,13 +14,13 @@ The app starts in fullscreen. Use F, F11, Alt+Enter, LB or the pause menu to tog
 
 ## Steam Deck
 
-1. In Desktop Mode, download the AppImage and mark it executable under Properties → Permissions.
+1. In Desktop Mode, download the AppImage and mark it executable under `Properties` → `Permissions`.
 2. Open it once to make sure it runs.
-3. In Steam, go to Games → Add a Non-Steam Game → Browse. Select All Files and add the AppImage.
+3. In Steam, go to `Games` → `Add a Non-Steam Game` → `Browse`. Select `All Files` and add the AppImage.
 4. Set the controller layout to Gamepad or Gamepad with Joystick Trackpad.
-5. Launch it from the Non-Steam tab in Game Mode. Use Exit Game in the Steam menu to quit.
+5. Launch it from the Non-Steam tab in Game Mode. Use `Exit Game` in the Steam menu to quit.
 
-Launch options like `--windowed` or `--seed=4817` go under Properties → Launch Options.
+Launch options like `--windowed` or `--seed=4817` go under `Properties` → `Launch Options`.
 
 ## Launch options
 

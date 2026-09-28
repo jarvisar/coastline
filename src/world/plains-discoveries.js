@@ -23,7 +23,7 @@ export const TURBINE_SPACING = 88;
 function districtSite(kind, index, desired) {
   let site = null;
   const farm = ['farmstead', 'farmhouse', 'barn-silo'].includes(kind);
-  // The creek wanders ~100 m from its crossing; a turbine row is ~200 m long.
+  // The creek wanders ~100 m from its crossing. A turbine row is ~200 m long.
   const creekRoom = kind === 'wind-turbines' ? 270 : 170;
   // Tall kinds go on the far side so they can't block the camera's view of
   // the road. Farms switch sides every three districts.

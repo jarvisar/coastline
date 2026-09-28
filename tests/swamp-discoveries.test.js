@@ -37,7 +37,7 @@ test('landmarks keep clear of bridges; the tree and boat stand in open water, ta
     assert.ok(Math.abs(site.s - swampBridgeAt(site.s).center) >= 120 + site.half, `${site.kind} ${site.index} meets a bridge`);
     if (site.kind === 'chapel' || site.kind === 'fishing-camp') continue;
     assert.ok(swampGround(site.s, site.u) < WATER_LEVEL - 1, `${site.kind} ${site.index} stands on land`);
-    // Near-side trees are kept below the camera's sightline to the road; the landmarks follow the same rule.
+    // Near-side trees are kept below the camera's sightline to the road. The landmarks follow the same rule.
     const height = swampLandmarkGeometry[site.kind].body.boundingBox.max.y * SWAMP_LANDMARKS[site.kind].scale;
     if (site.side < 0) assert.ok(height < -site.u * .72 - 3, `${site.kind} ${site.index} blocks the road`);
   }
@@ -62,10 +62,10 @@ test('the chapel sits square to the road on a level lawn, and its drive opens th
       if (u < 8) assert.ok(swampDriveway(s, .1), 'drive crosses the guardrail line outside its gap');
       if (u < 6.2) near.push(drive.getY(i) - swampRoadHeight(s));
     }
-    // Skirts hang below; the surface itself meets the shoulder.
+    // Skirts hang below. The surface itself meets the shoulder.
     assert.ok(near.length && near.filter(dy => dy > -.3).every(dy => Math.abs(dy - .045) < .02), 'the drive starts level with the road');
     assert.ok(!swampDriveway(site.drive[0] - 20) && !swampDriveway(site.drive[1] + 20));
-    // Level fill under the lot, the chapel and the churchyard; the road itself is untouched.
+    // Level fill under the lot, the chapel and the churchyard. The road itself is untouched.
     for (const [x, z] of [[-10, 0], [-2, 15], [12, 0], [18, 14], [-15, -16], [22, 20]]) {
       const p = new THREE.Vector3(x, 0, z).applyMatrix4(matrix), { s, u } = routeOf(p.x, p.z, site.s, CHAPEL_SETBACK);
       assert.equal(swampPad(s, u)?.amount, 1, `no pad at ${x}, ${z}`);
@@ -88,7 +88,7 @@ test('each discovery has one owning chunk with its meshes, reflections and metad
       for (const name of MESHES[site.kind]) assert.equal(!!restored.group.getObjectByName(name), neighbor === 0, `${name} in chunk ${index + neighbor}`);
       if (neighbor === 0) {
         assert.deepEqual(owned, [site]);
-        // Landmarks share one model; the chunk only owns its instance.
+        // Landmarks share one model. The chunk only owns its instance.
         if (site.kind !== 'fishing-camp') assert.equal(restored.group.getObjectByName(site.kind).geometry, swampLandmarkGeometry[site.kind].body);
         // The chapel stands back on dry land and has no reflection.
         const body = restored.group.getObjectByName(site.kind), mirror = restored.group.getObjectByName(`${site.kind}-reflection`);

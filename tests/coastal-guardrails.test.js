@@ -11,7 +11,7 @@ function railParts(index) {
   const parts = [];
   if (mesh) for (let i = 0; i < mesh.count; i++) {
     const matrix = mesh.instanceMatrix.array, o = i * 16;
-    // Elements 12-14 are the translation; column lengths give the box scale.
+    // Elements 12-14 are the translation. Column lengths give the box scale.
     parts.push({ x: matrix[o + 12], y: matrix[o + 13], z: matrix[o + 14],
       width: Math.hypot(matrix[o], matrix[o + 1], matrix[o + 2]),
       height: Math.hypot(matrix[o + 4], matrix[o + 5], matrix[o + 6]),
