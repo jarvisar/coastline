@@ -4,7 +4,7 @@
 
 Endless driving game built with [Three.js](https://threejs.org/). The road, scenery and sound are all generated in code.
 
-Play it [here](https://coastline.ajarvis.co/), or download the [desktop app](https://github.com/jarvisar/coastline/releases). Supports keyboard, controllers, touch screens and VR through a compatible browser. The website works offline after the first visit and can be installed from your browser.
+Play it [here](https://coastline.jarvisar.com/), or download the [desktop app](https://github.com/jarvisar/coastline/releases). Supports keyboard, controllers, touch screens and VR through a compatible browser. The website works offline after the first visit and can be installed from your browser.
 
 ## Routes
 

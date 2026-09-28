@@ -49,7 +49,7 @@ module.exports = {
     // Written into the packaged package.json only. The repository's stays untouched.
     description: manifest.description,
     author: { name: 'jarvisar' },
-    homepage: 'https://coastline.ajarvis.co/',
+    homepage: 'https://coastline.jarvisar.com/',
     // Electron reads desktopName at startup so Linux desktops can match the window to its launcher.
     desktopName: `${executableName}.desktop`,
   },
