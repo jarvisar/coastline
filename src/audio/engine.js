@@ -1,11 +1,13 @@
+import { channelBuffer } from './textures.js';
+
 // Synthesised engine loop. Each firing drives a pressure pulse into a damped
 // exhaust resonance. Cylinder imbalance and cycle variation avoid a periodic buzz.
-// Three RPM bands each have a coast and a load take.
-export function createEngineBuffer(ctx, profile, rpm, loaded, seed = 0xeca17) {
-  const rate = ctx.sampleRate, cycles = Math.max(8, Math.round(rpm / 120 * 2));
+// Three RPM bands each have a coast and a load take. Plain channel data, so the
+// takes can render in a worker.
+export function engineChannel(rate, profile, rpm, loaded, seed = 0xeca17) {
+  const cycles = Math.max(8, Math.round(rpm / 120 * 2));
   const length = Math.round(cycles * 120 / rpm * rate), overlap = Math.round(rate * .045);
-  const buffer = ctx.createBuffer(1, length, rate), data = buffer.getChannelData(0);
-  const tail = new Float32Array(overlap);
+  const data = new Float32Array(length), tail = new Float32Array(overlap);
   let randomState = seed >>> 0;
   const random = () => { randomState ^= randomState << 13; randomState ^= randomState >>> 17; randomState ^= randomState << 5; return (randomState >>> 0) / 4294967296; };
   const cylinders = profile.cylinders;
@@ -16,6 +18,7 @@ export function createEngineBuffer(ctx, profile, rpm, loaded, seed = 0xeca17) {
   const fastDecay = Math.exp(-1 / (rate * .00032));
   const slowDecay = Math.exp(-1 / (rate * (loaded ? .0032 : .0018)));
   const airDecay = Math.exp(-2 * Math.PI * (loaded ? 1600 : 850) / rate);
+  const dcRate = 1 - Math.exp(-2 * Math.PI * 28 / rate);
   let phase = 0, firing = -1, fast = 0, slow = 0, r1 = 0, r2 = 0, air = 0, dc = 0, previousPulse = 0;
   let cycleGain = 1;
   const step = cycles * cylinders / length;
@@ -38,7 +41,7 @@ export function createEngineBuffer(ctx, profile, rpm, loaded, seed = 0xeca17) {
     previousPulse = pulse; r2 = r1; r1 = resonated;
     air = airDecay * air + (1 - airDecay) * (random() * 2 - 1);
     const raw = pulse * .55 + resonated * .12 + air * (.12 + pulse * .8) * profile.rasp;
-    dc += (raw - dc) * (1 - Math.exp(-2 * Math.PI * 28 / rate));
+    dc += (raw - dc) * dcRate;
     const sample = Math.tanh((raw - dc) * (loaded ? 1.8 : 1.25));
     if (i >= 0 && i < length) data[i] = sample;
     else if (i >= length) tail[i - length] = sample;
@@ -63,8 +66,14 @@ export function createEngineBuffer(ctx, profile, rpm, loaded, seed = 0xeca17) {
     const position = (i + shift + length) % length, a = Math.floor(position), fraction = position - a;
     data[i] = aligned[a] * (1 - fraction) + aligned[(a + 1) % length] * fraction;
   }
-  return buffer;
+  return data;
 }
+export const createEngineBuffer = (ctx, profile, rpm, loaded, seed) => channelBuffer(ctx, ctx.sampleRate, [engineChannel(ctx.sampleRate, profile, rpm, loaded, seed)]);
+
+const bands = profile => [profile.idle, profile.idle + (profile.redline - profile.idle) * .43, profile.redline * .9];
+// The bank's six takes: coast then load for each band.
+export const engineTakes = (rate, profile) => bands(profile).flatMap((rpm, band) =>
+  [false, true].map(loaded => engineChannel(rate, profile, rpm, loaded, 0xeca17 + band * 137 + Number(loaded) * 971)));
 
 export function engineBandWeights(rpm, references) {
   const weights = references.map(() => 0);
@@ -83,16 +92,17 @@ export function createEngineBank(ctx, destination) {
   let current = null, references = [], firstUpdate = true;
   return {
     nodeCount: 12, sourceCount: 6,
-    setProfile(profile) {
+    // `takes` are buffers rendered elsewhere. Without them they're made here.
+    setProfile(profile, takes = null) {
       if (profile === current) return;
       current = profile;
       firstUpdate = true;
-      references = [profile.idle, profile.idle + (profile.redline - profile.idle) * .43, profile.redline * .9];
-      if (!cache.has(profile)) {
+      references = bands(profile);
+      if (!takes && !cache.has(profile)) {
         if (cache.size >= 3) cache.delete(cache.keys().next().value);
-        cache.set(profile, references.flatMap((rpm, band) => [false, true].map(loaded => createEngineBuffer(ctx, profile, rpm, loaded, 0xeca17 + band * 137 + Number(loaded) * 971))));
+        cache.set(profile, engineTakes(ctx.sampleRate, profile).map(data => channelBuffer(ctx, ctx.sampleRate, [data])));
       }
-      const buffers = cache.get(profile);
+      const buffers = takes ?? cache.get(profile);
       const startTime = ctx.currentTime + .005;
       for (let i = 0; i < voices.length; i++) {
         const voice = voices[i];

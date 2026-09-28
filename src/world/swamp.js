@@ -57,7 +57,7 @@ function geometryFrom(vertices, colors, extra = {}) {
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
   if (colors) g.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
   for (const [name, [values, size]] of Object.entries(extra)) g.setAttribute(name, new THREE.Float32BufferAttribute(values, size));
-  g.computeVertexNormals(); g.computeBoundingSphere(); return g;
+  g.computeVertexNormals(); g.computeBoundingSphere(); g.computeBoundingBox(); return g;
 }
 function batch(group, geometry, mat, items, name, shadows, ambientOcclusion) {
   const mesh = new THREE.InstancedMesh(geometry, mat, items.length); mesh.name = name;
@@ -530,7 +530,7 @@ export class SwampWorld extends LevelWorld {
   constructor(scene, chunkSource = null) {
     super(scene, chunkSource, SwampChunk);
     this.effects = new THREE.Group(); this.effects.name = 'swamp-night-effects'; scene.add(this.effects);
-    this.sky = new SwampSky(this.effects);
+    this.sky = new SwampSky(this.effects); this.backdrop = true;
     // Deep water seen through the translucent surface. One sheet follows the
     // car rather than one per chunk, so the overlaps never draw twice. It lies
     // below both water and land: copying the clipped surface instead would
@@ -561,7 +561,7 @@ export class SwampWorld extends LevelWorld {
     this.headlights = new CarHeadlights();
     this.effects.add(this.headlights);
     this.headlights.light.target.position.set(0, -.4, -17);
-    this.headlights.light.intensity = 260; this.headlights.light.distance = 34; this.headlights.light.angle = .42;
+    this.headlights.brightness = this.headlights.light.intensity = 260; this.headlights.light.distance = 34; this.headlights.light.angle = .42;
   }
   update(s) {
     super.update(s);

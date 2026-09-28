@@ -66,10 +66,10 @@ async function boot() {
     let vr;
     const vrStatus = new VRStatus(rendering.vrCamera.camera);
     const hidden = () => vr?.active ? !vr.visible : document.hidden;
-    // Parallel compiling keeps the page responsive while a new route's shaders build.
+    // Covers every chunk already built, so only later arrivals need preparing.
     async function compileScene() {
-      if (renderer.extensions.has('KHR_parallel_shader_compile')) await renderer.compileAsync(scene, rendering.camera);
-      else renderer.compile(scene, rendering.camera);
+      await rendering.compile();
+      world.arrivals.length = 0;
     }
     const fpsCounter = $('#fps-counter');
     let fpsStart = null, fpsFrames = 0;
@@ -94,6 +94,7 @@ async function boot() {
     chunkWorker = new ChunkWorker();
     const { World } = await loadScenery(journey);
     let world = new World(scene, chunkWorker.source(journey));
+    rendering.setScenery(world);
     let changingJourney = true, journeyWasPaused = false;
     const savedJourneys = Object.fromEntries(Object.entries(JOURNEYS).map(([id, data]) => [id, journeyStart(Number(data.routeNumber))]));
     const vehicle = new DrivingController(JOURNEYS[journey].route, savedJourneys[journey], DEFAULT_CAR); const audio = new DriveAudio();
@@ -281,6 +282,7 @@ async function boot() {
         await nextWorld.chunkSource.prepare(nextState.s);
         nextWorld.update(nextState.s);
         world.dispose(); world = nextWorld; journey = id;
+        rendering.setScenery(world);
         savedJourneys[id] = nextState;
         if (regenerate) { time = 0; hudTime = 0; vehicle.wheelSpin = 0; }
         vehicle.setRoute(JOURNEYS[id].route, nextState);
@@ -664,7 +666,9 @@ async function boot() {
       const dt = frameClock.dt;
       if (running) {
         time += dt;
-        world.update(vehicle.s); vehicle.render(frameClock.alpha, world.origin);
+        world.update(vehicle.s);
+        if (world.arrivals.length) rendering.prepare(world.arrivals.splice(0));
+        vehicle.render(frameClock.alpha, world.origin);
         traffic.render(frameClock.alpha, world.origin);
         rendering.update(vehicle.car, dt, world.origin); world.animate(time, vehicle);
       }

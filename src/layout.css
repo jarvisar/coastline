@@ -177,6 +177,11 @@ body[data-journey=jungle] .location { background: #1c3423d1; border-color: #9cbf
   border: 0; border-radius: 8px; background: transparent; backdrop-filter: none;
   font-size: 12px; font-weight: 600; white-space: nowrap;
 }
+/* A blur over the moving canvas is redone every frame, which phones feel.
+   These panels are nearly opaque there, so the blur barely shows. */
+@media (any-pointer: coarse) {
+  .drive-actions, #touch-stick, #stick-help { backdrop-filter: none; }
+}
 .drive-actions button:hover { background: #25473e12; }
 .drive-actions svg { display: block; width: 18px; height: 18px; flex-shrink: 0; }
 .drive-actions kbd { display: none; }

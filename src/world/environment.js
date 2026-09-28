@@ -764,7 +764,7 @@ export class CoastalChunk extends LevelChunk {
 export class CoastalWorld extends LevelWorld {
   constructor(scene, chunkSource = null) {
     super(scene, chunkSource, CoastalChunk);
-    this.sky = new CoastalSky(scene);
+    this.sky = new CoastalSky(scene); this.backdrop = true;
   }
   update(s) {
     super.update(s);

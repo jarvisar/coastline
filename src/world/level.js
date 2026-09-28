@@ -18,7 +18,7 @@ export const matte = (color, extra = {}) => new THREE.MeshLambertMaterial({ colo
 export function geometryFrom(vertices, colors) {
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
   if (colors) g.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-  g.computeVertexNormals(); g.computeBoundingSphere(); return g;
+  g.computeVertexNormals(); g.computeBoundingSphere(); g.computeBoundingBox(); return g;
 }
 // Surfaces are height fields, so the winding is forced to face up. Points are
 // route-space positions; `start` shifts them into the chunk. `coordinates`
@@ -65,6 +65,38 @@ export class LevelChunk {
   dispose() { disposeChunk(this); }
 }
 
+// Bounds of a chunk's meshes relative to the chunk group, which only ever moves
+// with the render origin. Spheres already cover any movement: moving meshes pad
+// theirs, or turn frustum culling off and are left out. Boxes don't, so one is
+// only used for a mesh that can't move: a box from its static build, fixed
+// instances and a shader that leaves positions alone. Shader hooks that only pass
+// values to the fragment shader don't mention the vertex position or projection.
+const box = new THREE.Box3(), sphere = new THREE.Sphere(), matrix = new THREE.Matrix4();
+const view = new THREE.Frustum(), light = new THREE.Frustum();
+const reshapes = material => material.isShaderMaterial || (material.onBeforeCompile !== THREE.Material.prototype.onBeforeCompile
+  && /transformed|gl_Position|mvPosition/.test(material.onBeforeCompile.toString()));
+const still = (object, source) => Boolean(source.boundingBox) && !reshapes(object.material)
+  && object.instanceMatrix?.usage !== THREE.DynamicDrawUsage;
+function chunkBounds(group) {
+  const bounds = [], offset = group.position;
+  group.updateMatrixWorld(true);
+  group.traverse(object => {
+    if (!object.isMesh || !object.frustumCulled || !object.visible || Array.isArray(object.material)) return;
+    const source = object.isInstancedMesh ? object : object.geometry;
+    if (!source.boundingSphere) source.computeBoundingSphere();
+    sphere.copy(source.boundingSphere).applyMatrix4(object.matrixWorld);
+    if (!Number.isFinite(sphere.radius)) return;
+    sphere.center.sub(offset);
+    let fixed = null;
+    if (still(object, source)) {
+      fixed = box.copy(source.boundingBox).applyMatrix4(object.matrixWorld).clone();
+      fixed.min.sub(offset); fixed.max.sub(offset);
+    }
+    bounds.push({ object, box: fixed, center: sphere.center.clone(), radius: sphere.radius, fogged: object.material.fog === true });
+  });
+  return bounds;
+}
+
 // Also releases chunks built in a worker, which arrive as plain objects.
 export function disposeChunk(chunk) {
   chunk.group.removeFromParent();
@@ -76,6 +108,39 @@ export class LevelWorld {
   constructor(scene, chunkSource, Chunk) {
     this.scene = scene; this.chunkSource = chunkSource; this.Chunk = Chunk;
     this.chunks = new Map(); this.origin = 0; this.center = null;
+    // Chunk groups added since the renderer last compiled their shaders.
+    this.arrivals = [];
+    // Set by routes with a painted sky or a far backdrop, which fogged scenery
+    // still hides, so it has to keep drawing. See cull().
+    this.backdrop = false;
+    this.culled = [];
+  }
+  // Hides chunk meshes that can't show, before each draw. Three.js culls with
+  // bounding spheres, and a terrain strip hundreds of metres wide has one that
+  // reaches far off-screen, so boxes catch more. Driving views also fog to the
+  // background colour by `far` metres of view depth (0 in overhead views), so a
+  // mesh wholly beyond that shows nothing either. A caster stays while it can
+  // still shade the view. Each hidden mesh saves its draws, twice over in VR.
+  cull(camera, shadowCamera, far) {
+    for (const object of this.culled) object.visible = true;
+    this.culled.length = 0;
+    view.setFromProjectionMatrix(matrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
+    light.setFromProjectionMatrix(matrix.multiplyMatrices(shadowCamera.projectionMatrix, shadowCamera.matrixWorldInverse));
+    const fog = far > 0 && !this.backdrop, e = camera.matrixWorldInverse.elements;
+    for (const chunk of this.chunks.values()) {
+      const offset = chunk.group.position;
+      for (const bound of chunk.bounds ??= chunkBounds(chunk.group)) {
+        sphere.center.addVectors(bound.center, offset); sphere.radius = bound.radius;
+        if (bound.box) { box.min.addVectors(bound.box.min, offset); box.max.addVectors(bound.box.max, offset); }
+        let hidden = bound.box ? !view.intersectsBox(box) : false;
+        if (!hidden && fog && bound.fogged) {
+          const { x, y, z } = sphere.center;
+          hidden = -(e[2] * x + e[6] * y + e[10] * z + e[14]) - bound.radius > far;
+        }
+        if (hidden && bound.object.castShadow && (bound.box ? light.intersectsBox(box) : light.intersectsSphere(sphere))) hidden = false;
+        if (hidden && bound.object.visible) { bound.object.visible = false; this.culled.push(bound.object); }
+      }
+    }
   }
   // Keeps the chunks around `s` built. The render origin moves in 1024 m steps.
   update(s) {

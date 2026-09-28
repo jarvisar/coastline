@@ -112,6 +112,8 @@ class ChunkSource {
     }
     this.owner.pump();
   }
+  // True while a worker still owes this chunk.
+  building(index) { return this.pending.has(index); }
   take(index) {
     const data = this.cache.get(index); this.cache.delete(index);
     const task = this.pending.get(index); if (task) this.owner.cancel(task);

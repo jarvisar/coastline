@@ -31,7 +31,7 @@ try {
     });
     records.push(state);
     assert.equal(state.chunks, state.resident); assert.ok(state.geometries <= 185);
-    assert.equal(state.textures, state.softShading ? 9 : 3, 'three scenery textures, plus six reusable AO textures when it is on');
+    assert.equal(state.textures, state.softShading ? 10 : 4, 'three scenery textures and the shadow shader compile target, plus six reusable AO textures when it is on');
     await page.screenshot({ path: `.artifacts/scenery-${s}.png` });
   }
   assert.ok(records.at(-1).geometries <= records[1].geometries + 2, 'returning to the same bridge must not leak GPU resources');

@@ -124,7 +124,8 @@ export class SnowChunk extends LevelChunk {
       const a = p(s, low), b = p(s + 2, low), c = p(s, high), d = p(s + 2, high);
       triangle(vertices, null, a, b, c, null, this.start); triangle(vertices, null, b, d, c, null, this.start);
     }
-    this.addMesh(geometryFrom(vertices), mat, name);
+    // Flat on the road, so their shadows would only land on themselves.
+    this.addMesh(geometryFrom(vertices), mat, name).castShadow = false;
   }
   buildRoad() {
     this.ribbon([[-7, 7]], .025, snowBankMaterial, 'plowed-snow-shoulders');

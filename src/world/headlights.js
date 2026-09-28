@@ -23,13 +23,17 @@ const up = new THREE.Vector3(0, 1, 0);
 export class CarHeadlights extends THREE.Group {
   constructor() {
     super();
-    this.light = new THREE.SpotLight('#ffe0a6', 170, 18, .64, .8, 1.5);
+    // Full beam. Routes may retune it.
+    this.brightness = 170;
+    this.light = new THREE.SpotLight('#ffe0a6', this.brightness, 18, .64, .8, 1.5);
     this.light.position.set(0, 1.03, -2.02); this.light.target.position.set(0, -1, -8);
     this.light.map = headlightPattern(); this.light.castShadow = false;
     this.add(this.light, this.light.target);
   }
   follow(vehicle) {
-    this.visible = vehicle.carId !== 'formula';
+    // Dimmed rather than hidden: a hidden light changes the light count, which
+    // recompiles every lit shader.
+    this.light.intensity = vehicle.carId === 'formula' ? 0 : this.brightness;
     this.position.copy(vehicle.car.position); this.quaternion.copy(vehicle.car.quaternion);
     this.light.shadow.camera.up.copy(up).applyQuaternion(vehicle.car.quaternion);
   }

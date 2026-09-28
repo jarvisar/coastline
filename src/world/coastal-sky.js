@@ -30,7 +30,8 @@ export class CoastalSky {
           #include <colorspace_fragment>
         }` });
     this.dome = new THREE.Mesh(this.domeGeometry, this.domeMaterial); this.dome.name = 'coastal-sky-dome';
-    this.dome.renderOrder = -1000; this.dome.frustumCulled = false; this.dome.userData.ambientOcclusion = false;
+    // Drawn after the opaque scenery at the far plane, so it only shades open sky.
+    this.dome.renderOrder = 1000; this.dome.frustumCulled = false; this.dome.userData.ambientOcclusion = false;
     // Fully faded fog is the visible horizon, so match the dome to it.
     this.dome.onBeforeRender = (renderer, scene) => { if (scene.fog) this.domeMaterial.uniforms.horizon.value.copy(scene.fog.color); };
     this.group.add(this.dome);

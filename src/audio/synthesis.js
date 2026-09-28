@@ -1,39 +1,18 @@
 import { AMBIENCE, ENGINES } from './profiles.js';
 import { createEngineBank } from './engine.js';
-import { createTextureBuffer } from './textures.js';
+import { channelBuffer, createTextureBuffer, noiseChannels } from './textures.js';
 import { AudioAssets } from './assets.js';
 
-// 12 s of looping stereo pink noise shared by all the noise layers.
-export function createNoiseBuffer(ctx, seed = 0x71ca9) {
-  const length = Math.ceil(ctx.sampleRate * 12), overlap = Math.ceil(ctx.sampleRate * .15);
-  const buffer = ctx.createBuffer(2, length, ctx.sampleRate);
-  let state = seed >>> 0;
-  for (let channel = 0; channel < 2; channel++) {
-    const data = buffer.getChannelData(channel), tail = new Float32Array(overlap);
-    let b0 = 0, b1 = 0, b2 = 0;
-    for (let i = 0; i < length + overlap; i++) {
-      state ^= state << 13; state ^= state >>> 17; state ^= state << 5;
-      const white = (state >>> 0) / 2147483648 - 1;
-      b0 = .99765 * b0 + white * .099046;
-      b1 = .963 * b1 + white * .2965164;
-      b2 = .57 * b2 + white * 1.0526913;
-      const sample = (b0 + b1 + b2 + white * .1848) * .18;
-      if (i < length) data[i] = sample; else tail[i - length] = sample;
-    }
-    // Crossfade the overrun tail into the start so the loop is seamless.
-    for (let i = 0; i < overlap; i++) {
-      const phase = i / (overlap - 1) * Math.PI / 2;
-      data[i] = tail[i] * Math.cos(phase) + data[i] * Math.sin(phase);
-    }
-  }
-  return buffer;
-}
+export const createNoiseBuffer = (ctx, seed) => channelBuffer(ctx, ctx.sampleRate, noiseChannels(ctx.sampleRate, seed));
 
 const BUSES = ['engine', 'road', 'ambience', 'traffic', 'music'];
 // Dry one-shots every route shares, and how many variants of each.
 const DRY = { thud: 2, crash: 2, clunk: 1 };
 
-export function createSoundGraph(ctx) {
+// `prepared` holds loops rendered in a worker ({ noise, road, wind, rain } and
+// `engine: { profile, buffers }`), so building the graph doesn't stall a frame.
+// Anything missing is made here.
+export function createSoundGraph(ctx, prepared = {}) {
   const nodes = [], sources = [];
   const keep = node => { nodes.push(node); return node; };
   const gain = (value, destination) => {
@@ -71,8 +50,8 @@ export function createSoundGraph(ctx) {
   const echo = keep(ctx.createDelay(1)); echo.delayTime.value = .12; echo.connect(echoTone);
   const echoFeedback = gain(0, echo); echoTone.connect(echoFeedback);
   buses.engine.connect(echo); buses.road.connect(echo);
-  const pink = createNoiseBuffer(ctx);
-  const contactNoise = createTextureBuffer(ctx, 'road'), windNoise = createTextureBuffer(ctx, 'wind'), rainNoise = createTextureBuffer(ctx, 'rain');
+  const pink = prepared.noise ?? createNoiseBuffer(ctx);
+  const contactNoise = prepared.road ?? createTextureBuffer(ctx, 'road'), windNoise = prepared.wind ?? createTextureBuffer(ctx, 'wind'), rainNoise = prepared.rain ?? createTextureBuffer(ctx, 'rain');
   const noiseLayer = (type, frequency, low, offset, rate = 1, destination = buses.road, q = .65, buffer = pink) => {
     const level = gain(0, destination);
     const shape = filter(type, frequency, level, q);
@@ -84,7 +63,7 @@ export function createSoundGraph(ctx) {
   const engineLevel = gain(0, buses.engine);
   const engineFilter = filter('lowpass', 420, engineLevel);
   const engineBank = createEngineBank(ctx, engineFilter);
-  engineBank.setProfile(ENGINES.coast);
+  engineBank.setProfile(prepared.engine?.profile ?? ENGINES.coast, prepared.engine?.buffers);
   // Cheap harmonic waves for traffic. The player's engine uses the engine bank.
   const waves = new Map(Object.values(ENGINES).map(profile => {
     const harmonics = new Float32Array([0, ...profile.harmonics]);
@@ -185,11 +164,7 @@ export function createSoundGraph(ctx) {
   // are shared by all routes. Sounds that aren't ready yet are skipped.
   const assets = new AudioAssets(), calls = new Map();
   let journey = null, disposed = false, ready = Promise.resolve();
-  const toBuffer = ({ rate, channels }) => {
-    const buffer = ctx.createBuffer(channels.length, channels[0].length, rate);
-    channels.forEach((data, i) => buffer.copyToChannel(data, i));
-    return buffer;
-  };
+  const toBuffer = ({ rate, channels }) => channelBuffer(ctx, rate, channels);
   function setScene(id) {
     if (id === journey) return ready;
     journey = id; assets.cancel();
@@ -234,7 +209,7 @@ export function createSoundGraph(ctx) {
     traffic, pads, playPad, releasePad, play, silenceEvents, setScene, buffer,
     get ready() { return ready; },
     get mallet() { return buffer('mallet'); },
-    setEngine(profile) { engineBank.setProfile(profile); },
+    setEngine(profile, buffers) { engineBank.setProfile(profile, buffers); },
     // Both loop slots are swapped per route but always there.
     nodeCount: nodes.length + engineBank.nodeCount, sourceCount: sources.length + engineBank.sourceCount + 2,
     dispose() {

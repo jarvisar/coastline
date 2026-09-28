@@ -43,7 +43,7 @@ function geometry(data, extra = null) {
   g.setAttribute('position', new THREE.Float32BufferAttribute(data.positions, 3));
   if (data.colors) g.setAttribute('color', new THREE.Float32BufferAttribute(data.colors, 3));
   if (extra) for (const [name, values, size] of extra) g.setAttribute(name, new THREE.Float32BufferAttribute(values, size));
-  g.computeVertexNormals(); g.computeBoundingSphere();
+  g.computeVertexNormals(); g.computeBoundingSphere(); g.computeBoundingBox();
   return g;
 }
 function instances(group, source, material, items, name, { shadow = true, occlusion = true, mirror = false } = {}) {
@@ -443,7 +443,7 @@ export class SaltChunk extends LevelChunk {
 export class SaltWorld extends LevelWorld {
   constructor(scene, chunkSource = null) {
     super(scene, chunkSource, SaltChunk);
-    this.sky = new SaltSky(scene);
+    this.sky = new SaltSky(scene); this.backdrop = true;
   }
   update(s) {
     super.update(s);

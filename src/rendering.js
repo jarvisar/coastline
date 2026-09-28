@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { fitSunShadow, stabilizeShadowFiltering } from './shadows.js';
+import { shadowCasterStandIns } from './world/shadow-depth.js';
 import { ThirdPersonCamera } from './third-person-camera.js';
 import { FirstPersonCamera } from './first-person-camera.js';
 import { AmbientOcclusion } from './ambient-occlusion.js';
@@ -88,8 +89,27 @@ const ROUTE_LIGHTING = {
   },
 };
 
+// Three.js runs every point and spot light's full equation on every lit pixel,
+// even where the light has faded to nothing, and night routes have up to 13.
+// Past a light's range, or outside a spot's cone, its colour is exactly zero,
+// so skipping the work there changes nothing on screen.
+function skipUnlitLights() {
+  if (THREE.ShaderChunk.lights_fragment_begin.includes('if ( directLight.visible ) RE_Direct')) return;
+  THREE.ShaderChunk.lights_pars_begin = THREE.ShaderChunk.lights_pars_begin.replace(
+    /light\.color = pointLight\.color;\s*light\.color \*= getDistanceAttenuation\( lightDistance, pointLight\.distance, pointLight\.decay \);/,
+    `if ( pointLight.distance > 0.0 && lightDistance >= pointLight.distance ) {
+      light.color = vec3( 0.0 );
+    } else {
+      light.color = pointLight.color;
+      light.color *= getDistanceAttenuation( lightDistance, pointLight.distance, pointLight.decay );
+    }`);
+  THREE.ShaderChunk.lights_fragment_begin = THREE.ShaderChunk.lights_fragment_begin.replaceAll(
+    'RE_Direct( directLight,', 'if ( directLight.visible ) RE_Direct( directLight,');
+}
+
 export function createRendering(canvas, graphics = new Graphics()) {
   stabilizeShadowFiltering();
+  skipUnlitLights();
   // Multisampling is fixed when the context is created, so the starting level decides it.
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: graphics.antialias, powerPreference: 'high-performance' });
   let canvasWidth, canvasHeight, pixelRatio;
@@ -225,7 +245,13 @@ export function createRendering(canvas, graphics = new Graphics()) {
     renderer.toneMappingExposure = lighting.exposure;
   }
   setJourney('coast');
+  let scenery = null;
   function draw(viewCamera, stereo = false) {
+    // Hides chunk meshes that can't show (LevelWorld.cull). Driving views fog to
+    // the background colour, so scenery past the fog goes too. Overhead fog has
+    // its own colour, which still shows. The margin covers the eyes' offset from
+    // the headset camera.
+    scenery?.cull(viewCamera, sun.shadow.camera, activeCamera().isPerspectiveCamera ? scene.fog.far + 1 : 0);
     // Hide the car for the whole first-person draw, shadows and AO included.
     // Restored in finally so a render error can't leave it hidden.
     const car = views[view].firstPerson ? followedCar : null;
@@ -238,7 +264,8 @@ export function createRendering(canvas, graphics = new Graphics()) {
   }
   function render(frame, beforeXRRender) {
     if (renderer.xr.isPresenting) {
-      const pose = frame?.getViewerPose(renderer.xr.getReferenceSpace());
+      // The rig only reads the pose to recentre.
+      const pose = vrCamera.centered ? null : frame?.getViewerPose(renderer.xr.getReferenceSpace());
       vrCamera.update(activeCamera(), pose);
       renderer.xr.updateCamera(vrCamera.camera);
       beforeXRRender?.();
@@ -247,9 +274,36 @@ export function createRendering(canvas, graphics = new Graphics()) {
       draw(vrCamera.camera, true);
     } else draw(activeCamera());
   }
+  // compile() leaves out the shadow pass, which draws into a render target with
+  // no fog. Both change program keys, so compile its stand-ins the same way.
+  const shadowTarget = new THREE.WebGLRenderTarget(1, 1);
+  function compileShadows(root, camera) {
+    const target = renderer.getRenderTarget(), fog = scene.fog;
+    renderer.setRenderTarget(shadowTarget); scene.fog = null;
+    try { renderer.compile(shadowCasterStandIns(root), camera, scene); }
+    finally { renderer.setRenderTarget(target); scene.fog = fog; }
+  }
+  // Call after the route's lights and fog are set up. Parallel compiling keeps
+  // the page responsive while the shaders build.
+  async function compile() {
+    const camera = activeCamera();
+    compileShadows(scene, camera);
+    if (renderer.extensions.has('KHR_parallel_shader_compile')) await renderer.compileAsync(scene, camera);
+    else renderer.compile(scene, camera);
+  }
+  // Chunks arrive hundreds of metres out, before anything in them is drawn.
+  // Compiling them then keeps a rare feature's shader link off the frame that shows it.
+  function prepare(groups) {
+    const camera = activeCamera();
+    for (const group of groups) {
+      if (!group.parent) continue; // Already dropped from the window.
+      compileShadows(group, camera);
+      renderer.compile(group, camera, scene);
+    }
+  }
   function setView(index) { view = index; updateFog(); thirdPerson.snap(); firstPerson.snap(); return views[view].label; }
   let desktopView;
   function enterVR() { desktopView = view; setView(views.findIndex(view => view.thirdPerson)); }
   function exitVR() { if (desktopView !== undefined) setView(desktopView); desktopView = undefined; }
-  return { renderer, scene, graphics, ambientOcclusion, vrCamera, render, enterVR, exitVR, toggleAO() { return graphics.toggleAmbientOcclusion(); }, get camera() { return activeCamera(); }, update, resize, recordFrame, setJourney, get viewLabel() { return views[view].label; }, toggleView() { return setView((view + 1) % views.length); }, snap() { initialized = false; thirdPerson.snap(); firstPerson.snap(); } };
+  return { renderer, scene, graphics, ambientOcclusion, vrCamera, render, compile, prepare, setScenery(world) { scenery = world; }, enterVR, exitVR, toggleAO() { return graphics.toggleAmbientOcclusion(); }, get camera() { return activeCamera(); }, update, resize, recordFrame, setJourney, get viewLabel() { return views[view].label; }, toggleView() { return setView((view + 1) % views.length); }, snap() { initialized = false; thirdPerson.snap(); firstPerson.snap(); } };
 }

@@ -37,7 +37,7 @@ try {
       const audio = new DriveAudio(); audio.context = ctx; audio.graph = createSoundGraph(ctx); audio.enabled = true;
       audio.mix = { master: .72, engine: .8, road: .7, ambience: .85, traffic: .65, music: item.solo?.includes('music') ? .7 : 0, night: false };
       audio.setJourney(item.journey); audio.syncOutput();
-      await audio.graph.ready;
+      await Promise.all([audio.graph.ready, audio.loading]);
       const route = JOURNEYS[item.journey].route;
       let s = journeyStart(Number(JOURNEYS[item.journey].routeNumber)).s;
       if (item.bridge) s = route.bridge(s + 200).start - 100;

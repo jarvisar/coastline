@@ -41,6 +41,9 @@ export class Traffic {
   constructor(scene, route, s, journey = 'coast') {
     this.enabled = true;
     this.group = new THREE.Group(); this.group.name = 'traffic'; scene.add(this.group);
+    // Beams stay outside the group that hides with traffic. A hidden light changes
+    // the light count, which recompiles every lit shader, so they go dark instead.
+    this.beams = new THREE.Group(); this.beams.name = 'traffic-beams'; scene.add(this.beams);
     this.models = createTrafficModels();
     this.poseRotation = new THREE.Euler(0, 0, 0, 'YXZ');
     // A few shared shadowless spotlights, moved to the nearest cars.
@@ -67,6 +70,7 @@ export class Traffic {
     if (this.enabled === enabled) return;
     this.enabled = enabled;
     this.group.visible = enabled;
+    if (!enabled) for (const { light } of this.headlightRigs) light.intensity = 0;
     if (enabled) {
       this.reset(this.route, player.s);
       this.clearNear(player);
@@ -82,7 +86,7 @@ export class Traffic {
     for (const car of this.pool) car.car.visible = car.index < fleet;
     for (const { rig } of this.headlightRigs) {
       rig.removeFromParent();
-      if (BEAMS.has(journey)) this.group.add(rig);
+      if (BEAMS.has(journey)) this.beams.add(rig);
     }
     this.lastPlayerS = s; this.models.setLights(JOURNEYS[journey]?.night ?? 0);
     const span = 1080 / Math.ceil(fleet / 2);
@@ -201,7 +205,7 @@ export class Traffic {
   }
   render(alpha, origin = 0) {
     if (!this.enabled) return;
-    this.group.position.z = origin;
+    this.group.position.z = this.beams.position.z = origin;
     for (const car of this.vehicles) {
       car.car.position.lerpVectors(car.previousPosition, car.position, clamp(alpha, 0, 1));
       car.car.quaternion.slerpQuaternions(car.previousQuaternion, car.quaternion, clamp(alpha, 0, 1));
@@ -222,7 +226,7 @@ export class Traffic {
     }
   }
   dispose() {
-    this.group.removeFromParent(); this.models.dispose();
+    this.group.removeFromParent(); this.beams.removeFromParent(); this.models.dispose();
     for (const { light } of this.headlightRigs) light.dispose();
   }
 }

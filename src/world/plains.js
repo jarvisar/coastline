@@ -69,7 +69,7 @@ function geometry(vertices, colors, furrows) {
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
   if (colors) g.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
   if (furrows) g.setAttribute('furrow', new THREE.Float32BufferAttribute(furrows, 3));
-  g.computeVertexNormals(); g.computeBoundingSphere(); return g;
+  g.computeVertexNormals(); g.computeBoundingSphere(); g.computeBoundingBox(); return g;
 }
 function triangle(vertices, colors, a, b, c, color, start, furrows, furrowAt) {
   if ((b.z - a.z) * (c.x - a.x) - (b.x - a.x) * (c.z - a.z) < 0) [b, c] = [c, b];

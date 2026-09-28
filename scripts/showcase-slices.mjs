@@ -4,13 +4,18 @@ import { fileURLToPath } from 'node:url';
 import { chromium } from '@playwright/test';
 import { createServer } from 'vite';
 
-// The showcase omits the city. Featured routes share a seed, camera angle and
-// full landscape framing; salt uses a nearby wetter stretch to show its pools.
-const routes = ['coast', 'desert', 'snow', 'jungle', 'plains', 'volcanic', 'salt', 'swamp'];
-const position = Number(process.env.POSITION ?? -1100);
-if (!Number.isFinite(position)) throw new Error('POSITION must be a finite road distance.');
-const saltPosition = Number(process.env.SALT_POSITION ?? position + 80);
-if (!Number.isFinite(saltPosition)) throw new Error('SALT_POSITION must be a finite road distance.');
+// Every route shares a seed, camera angle and full landscape framing. A few
+// move along their own road to frame something worth showing: sea stacks off
+// the coast, a river bridge in the city and the salt flat's wetter pools.
+// Every slice's road is still lined up with the coast road at POSITION.
+const routes = ['coast', 'desert', 'snow', 'jungle', 'city', 'plains', 'volcanic', 'salt', 'swamp'];
+const distance = (name, fallback) => {
+  const value = Number(process.env[name] ?? fallback);
+  if (!Number.isFinite(value)) throw new Error(`${name} must be a finite road distance.`);
+  return value;
+};
+const position = distance('POSITION', -1100);
+const positions = { coast: distance('COAST_POSITION', position - 220), city: distance('CITY_POSITION', position + 220), salt: distance('SALT_POSITION', position + 80) };
 const root = fileURLToPath(new URL('../', import.meta.url));
 const output = resolve(root, process.env.OUTPUT ?? 'showcase/scene-slices.png');
 // The preview doubles as the website's wide install screenshot. A run sent
@@ -44,69 +49,72 @@ try {
   await page.waitForFunction(() => window.__coastline && !window.__coastline.changingJourney && document.querySelector('#loading.loaded'));
   await page.click('#start');
   await page.evaluate(() => { if (!window.__coastline.paused) window.__coastline.action('pause'); });
+  const capture = (route, index, position) => page.evaluate(async ({ route, index, position, width, height, sliceWidth, padding }) => {
+    const a = window.__coastline;
+    await a.changeJourney(route);
+    if (!a.paused) a.action('pause');
+    await a.world.chunkSource.prepare(position);
+    a.world.update(position);
+    a.vehicle.s = position; a.vehicle.reset(); a.vehicle.render(1, a.world.origin);
+    for (let i = 0; a.rendering.viewLabel !== 'Scenic view' && i < 6; i++) a.rendering.toggleView();
+    a.rendering.snap(); a.rendering.update(a.vehicle.car, 10, a.world.origin); a.rendering.resize();
+    a.world.animate(8.5, a.vehicle);
+    const Vector3 = a.rendering.camera.position.constructor;
+    const point = s => {
+      const p = a.vehicle.route.position(s, 0);
+      return new Vector3(p.x, p.y, p.z + a.world.origin);
+    };
+    // Each route renders its own slice of one shared scenic window.
+    const target = point(position).add(new Vector3(-24, 0, -46));
+    const offset = new Vector3(-220, 245, 260);
+    const camera = a.rendering.camera;
+    camera.up.set(0, 1, 0);
+    camera.position.copy(target).add(offset); camera.lookAt(target);
+    const worldHeight = 235, worldWidth = worldHeight * width / height;
+    camera.left = -worldWidth / 2; camera.right = worldWidth / 2;
+    camera.top = worldHeight / 2; camera.bottom = -camera.top;
+    camera.updateProjectionMatrix(); camera.updateMatrixWorld();
+    camera.userData.focusDistance = offset.length();
+    const curve = [];
+    for (let s = position - 900; s <= position + 900; s += .5) {
+      const p = point(s).project(camera);
+      curve.push({ s, x: (p.x + 1) * width / 2, y: (1 - p.y) * height / 2 });
+    }
+    curve.sort((a, b) => a.x - b.x);
+    const worldSliceWidth = worldWidth * sliceWidth / width;
+    camera.left = -worldWidth / 2 + index * worldSliceWidth;
+    camera.right = camera.left + worldSliceWidth;
+    camera.top = worldHeight * (.5 + padding / height); camera.bottom = -camera.top;
+    camera.updateProjectionMatrix();
+    // Move the route's default car to the road at the slice's horizontal
+    // centre, without moving the shared landscape framing with it.
+    const carX = (index + .5) * sliceWidth;
+    const right = curve.findIndex(p => p.x >= carX);
+    if (right < 1) throw new Error(`No road crossing the centre of ${route}`);
+    const leftPoint = curve[right - 1], rightPoint = curve[right];
+    const t = (carX - leftPoint.x) / (rightPoint.x - leftPoint.x);
+    a.vehicle.s = leftPoint.s + (rightPoint.s - leftPoint.s) * t;
+    a.vehicle.reset(); a.vehicle.u = 0; a.vehicle.update(0, {});
+    a.vehicle.render(1, a.world.origin); a.world.animate(8.5, a.vehicle);
+    const carScreen = a.vehicle.car.position.clone().project(camera);
+    if (Math.abs(carScreen.x) > .02 || Math.abs(carScreen.y) > 1) throw new Error(`Car is outside the centre of ${route}`);
+    const { fitSunShadow } = await import('/src/shadows.js');
+    const sun = a.rendering.scene.children.find(object => object.isDirectionalLight);
+    fitSunShadow(camera, sun, target.y, a.world.origin);
+    // Read the canvas straight after rendering, with no UI.
+    a.rendering.render();
+    return { src: a.rendering.renderer.domElement.toDataURL('image/png'), curve };
+  }, { route, index, position, width, height, sliceWidth, padding });
+  // The coast road at the shared position sets where every slice's road runs.
+  const reference = (await capture('coast', 0, position)).curve;
   const images = [];
   for (const [index, route] of routes.entries()) {
-    images.push(await page.evaluate(async ({ route, index, position, width, height, sliceWidth, padding }) => {
-      const a = window.__coastline;
-      await a.changeJourney(route);
-      if (!a.paused) a.action('pause');
-      await a.world.chunkSource.prepare(position);
-      a.world.update(position);
-      a.vehicle.s = position; a.vehicle.reset(); a.vehicle.render(1, a.world.origin);
-      for (let i = 0; a.rendering.viewLabel !== 'Scenic view' && i < 6; i++) a.rendering.toggleView();
-      a.rendering.snap(); a.rendering.update(a.vehicle.car, 10, a.world.origin); a.rendering.resize();
-      a.world.animate(8.5, a.vehicle);
-      const Vector3 = a.rendering.camera.position.constructor;
-      const point = s => {
-        const p = a.vehicle.route.position(s, 0);
-        return new Vector3(p.x, p.y, p.z + a.world.origin);
-      };
-      // Each route renders its own slice of one shared scenic window.
-      const target = point(position).add(new Vector3(-24, 0, -46));
-      const offset = new Vector3(-220, 245, 260);
-      const camera = a.rendering.camera;
-      camera.up.set(0, 1, 0);
-      camera.position.copy(target).add(offset); camera.lookAt(target);
-      const worldHeight = 235, worldWidth = worldHeight * width / height;
-      camera.left = -worldWidth / 2; camera.right = worldWidth / 2;
-      camera.top = worldHeight / 2; camera.bottom = -camera.top;
-      camera.updateProjectionMatrix(); camera.updateMatrixWorld();
-      camera.userData.focusDistance = offset.length();
-      const curve = [];
-      for (let s = position - 900; s <= position + 900; s += .5) {
-        const p = point(s).project(camera);
-        curve.push({ s, x: (p.x + 1) * width / 2, y: (1 - p.y) * height / 2 });
-      }
-      curve.sort((a, b) => a.x - b.x);
-      const worldSliceWidth = worldWidth * sliceWidth / width;
-      camera.left = -worldWidth / 2 + index * worldSliceWidth;
-      camera.right = camera.left + worldSliceWidth;
-      camera.top = worldHeight * (.5 + padding / height); camera.bottom = -camera.top;
-      camera.updateProjectionMatrix();
-      // Move the route's default car to the road at the slice's horizontal
-      // centre, without moving the shared landscape framing with it.
-      const carX = (index + .5) * sliceWidth;
-      const right = curve.findIndex(p => p.x >= carX);
-      if (right < 1) throw new Error(`No road crossing the centre of ${route}`);
-      const leftPoint = curve[right - 1], rightPoint = curve[right];
-      const t = (carX - leftPoint.x) / (rightPoint.x - leftPoint.x);
-      a.vehicle.s = leftPoint.s + (rightPoint.s - leftPoint.s) * t;
-      a.vehicle.reset(); a.vehicle.u = 0; a.vehicle.update(0, {});
-      a.vehicle.render(1, a.world.origin); a.world.animate(8.5, a.vehicle);
-      const carScreen = a.vehicle.car.position.clone().project(camera);
-      if (Math.abs(carScreen.x) > .02 || Math.abs(carScreen.y) > 1) throw new Error(`Car is outside the centre of ${route}`);
-      const { fitSunShadow } = await import('/src/shadows.js');
-      const sun = a.rendering.scene.children.find(object => object.isDirectionalLight);
-      fitSunShadow(camera, sun, target.y, a.world.origin);
-      // Read the canvas straight after rendering, with no UI.
-      a.rendering.render();
-      return { src: a.rendering.renderer.domElement.toDataURL('image/png'), curve };
-    }, { route, index, position: route === 'salt' ? saltPosition : position, width, height, sliceWidth, padding }));
+    images.push(await capture(route, index, positions[route] ?? position));
     console.log(`Captured ${route}`);
   }
   if (errors.length) throw new Error(errors.join('\n'));
   const composite = await browser.newPage();
-  const result = await composite.evaluate(async ({ images, width, height, sliceWidth, padding }) => {
+  const result = await composite.evaluate(async ({ images, reference, width, height, sliceWidth, padding }) => {
     const canvas = document.createElement('canvas'); canvas.width = width; canvas.height = height;
     const ctx = canvas.getContext('2d');
     const roadY = (curve, x) => {
@@ -123,7 +131,7 @@ try {
       // salt slice's nearby capture position.
       for (let x = 0; x < sliceWidth; x++) {
         const globalX = i * sliceWidth + x;
-        const shift = roadY(capture.curve, globalX + .5) - roadY(images[0].curve, globalX + .5);
+        const shift = roadY(capture.curve, globalX + .5) - roadY(reference, globalX + .5);
         maxShift = Math.max(maxShift, Math.abs(shift));
         if (Math.abs(shift) > padding) throw new Error('Elevation correction exceeds capture padding');
         ctx.drawImage(img, x, padding + shift, 1, height, globalX, 0, 1, height);
@@ -133,7 +141,7 @@ try {
     preview.getContext('2d').drawImage(canvas, 0, 0, preview.width, preview.height);
     return { png: canvas.toDataURL('image/png').split(',')[1], preview: preview.toDataURL('image/png').split(',')[1],
       screenshot: preview.toDataURL('image/jpeg', .85).split(',')[1], maxShift };
-  }, { images, width, height, sliceWidth, padding });
+  }, { images, reference, width, height, sliceWidth, padding });
   await mkdir(dirname(output), { recursive: true });
   await writeFile(output, Buffer.from(result.png, 'base64'));
   await writeFile(output.replace(/\.png$/i, '') + '-preview.png', Buffer.from(result.preview, 'base64'));

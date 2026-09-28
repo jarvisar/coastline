@@ -1,6 +1,14 @@
 import * as THREE from 'three';
 
-const PAGE_SIZE = 6;
+const PAGE_SIZE = 6, WIDTH = 1024;
+
+function panelTexture(height) {
+  const canvas = globalThis.document?.createElement('canvas');
+  if (canvas) { canvas.width = WIDTH; canvas.height = height; }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
 
 // Immersive sessions can't show DOM menus, so the same actions go to this canvas
 // menu, driven by stick/A or by pointing with a trigger.
@@ -9,40 +17,37 @@ export class VRStatus {
     this.camera = camera; this.model = null; this.selected = 0;
     this.signature = ''; this.regions = []; this.triggers = new Map();
     this.raycaster = new THREE.Raycaster(); this.transform = new THREE.Matrix4();
+    // Built up front so a route's shader compile covers the panel, rather than
+    // a frame in the headset. The pause pill never changes, so it has its own
+    // texture and switching between it and the menu uploads nothing.
+    this.menu = panelTexture(1024); this.pill = panelTexture(256); this.pillDrawn = false;
+    this.mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: this.menu, depthTest: false, depthWrite: false, toneMapped: false, fog: false }));
+    this.mesh.renderOrder = 1000; this.mesh.frustumCulled = false; this.mesh.visible = false;
+    this.camera.add(this.mesh);
+    this.pointer = new THREE.Mesh(new THREE.CircleGeometry(.009, 16), new THREE.MeshBasicMaterial({ color: '#ffe6a5', depthTest: false, depthWrite: false, toneMapped: false, fog: false }));
+    this.pointer.renderOrder = 1001; this.pointer.visible = false;
+    this.camera.add(this.pointer);
   }
   update(model) {
     if (model?.id !== this.model?.id) this.selected = 0;
     this.model = model;
     if (!model) {
-      if (this.mesh) this.mesh.visible = false;
-      if (this.pointer) this.pointer.visible = false;
+      this.mesh.visible = false; this.pointer.visible = false;
       this.signature = ''; this.triggers.clear(); return;
     }
     this.selected = Math.min(this.selected, Math.max(0, model.items.length - 1));
     const signature = JSON.stringify([model.id, model.title, model.items.map(item => item.label), this.selected]);
     if (signature === this.signature) return;
     this.signature = signature;
-    if (!this.mesh) {
-      this.canvas = document.createElement('canvas');
-      // Fixed texture size across button/menu transitions.
-      this.canvas.width = 1024; this.canvas.height = 1024;
-      this.texture = new THREE.CanvasTexture(this.canvas);
-      this.texture.colorSpace = THREE.SRGBColorSpace;
-      this.mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: this.texture, depthTest: false, depthWrite: false, toneMapped: false, fog: false }));
-      this.mesh.renderOrder = 1000; this.mesh.frustumCulled = false;
-      this.camera.add(this.mesh);
-      this.pointer = new THREE.Mesh(new THREE.CircleGeometry(.009, 16), new THREE.MeshBasicMaterial({ color: '#ffe6a5', depthTest: false, depthWrite: false, toneMapped: false, fog: false }));
-      this.pointer.renderOrder = 1001; this.pointer.visible = false;
-      this.camera.add(this.pointer);
-    }
-    const driving = model.id === 'driving';
+    const driving = model.id === 'driving', texture = driving ? this.pill : this.menu;
     this.contentHeight = driving ? 256 : 1024;
     this.mesh.scale.set(driving ? .48 : 1.65, driving ? .12 : 1.65, 1);
     this.mesh.position.set(driving ? .75 : 0, driving ? -.55 : 0, -2.4);
-    const ctx = this.canvas.getContext('2d');
-    ctx.setTransform(1, 0, 0, driving ? 4 : 1, 0, 0);
-    ctx.fillStyle = '#183b34'; ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+    this.mesh.material.map = texture; this.mesh.visible = true;
     this.regions = [];
+    if (driving && this.pillDrawn) { this.regions.push({ x: 16, y: 16, width: 992, height: 224, activate: () => this.activate() }); return; }
+    const ctx = texture.image.getContext('2d');
+    ctx.fillStyle = '#183b34'; ctx.fillRect(0, 0, WIDTH, this.contentHeight);
     const row = (label, x, y, width, height, activate, selected = false) => {
       ctx.fillStyle = selected ? '#e78858' : '#31574e'; ctx.fillRect(x, y, width, height);
       ctx.fillStyle = selected ? '#183b34' : '#f6f5ea';
@@ -52,6 +57,7 @@ export class VRStatus {
     };
     if (driving) {
       row('Ⅱ  Pause', 16, 16, 992, 224, () => this.activate());
+      this.pillDrawn = true;
     } else {
       ctx.fillStyle = '#f6f5ea'; ctx.font = 'bold 54px sans-serif'; ctx.textAlign = 'center';
       ctx.fillText(model.title, 512, 78, 920);
@@ -70,7 +76,7 @@ export class VRStatus {
       ctx.fillText(model.id === 'loading' ? 'Your drive will be ready shortly' : 'Stick ↑↓: choose · A: select · B: back / resume', 512, 950);
       ctx.fillText('Point + trigger to select · Left stick click: pause', 512, 994);
     }
-    this.texture.needsUpdate = true; this.mesh.visible = true;
+    texture.needsUpdate = true;
   }
   move(amount) {
     const count = this.model?.items.length ?? 0;
@@ -86,7 +92,7 @@ export class VRStatus {
     this.update(this.model);
   }
   point(frame, referenceSpace, rig, enabled) {
-    if (!this.mesh?.visible || !frame) return;
+    if (!this.mesh.visible || !frame) return;
     this.pointer.visible = false;
     this.mesh.updateWorldMatrix(true, false);
     let activate;
@@ -105,7 +111,7 @@ export class VRStatus {
       this.raycaster.ray.direction.set(0, 0, -1).transformDirection(this.transform);
       const hit = this.raycaster.intersectObject(this.mesh, false)[0];
       if (!hit) continue;
-      const x = hit.uv.x * this.canvas.width, y = (1 - hit.uv.y) * this.contentHeight;
+      const x = hit.uv.x * WIDTH, y = (1 - hit.uv.y) * this.contentHeight;
       const region = this.regions.find(region => x >= region.x && x <= region.x + region.width && y >= region.y && y <= region.y + region.height);
       if (region) {
         this.pointer.position.copy(hit.point); this.camera.worldToLocal(this.pointer.position);

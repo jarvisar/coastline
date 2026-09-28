@@ -133,7 +133,7 @@ function geometry(data, weathered = false, join = false) {
   }
   if (weathered) softenNormals(g, normal => .08 + .65 * clamp((normal.y - .55) / .35, 0, 1));
   if (weathered || join) joinCoplanarFaces(g);
-  g.computeBoundingSphere(); return g;
+  g.computeBoundingSphere(); g.computeBoundingBox(); return g;
 }
 function instances(group, name, geometry, material, items, shadow = true) {
   if (!items.length) return;
@@ -1523,7 +1523,7 @@ export class VolcanicChunk extends LevelChunk {
 export class VolcanicWorld extends LevelWorld {
   constructor(scene, chunkSource = null) {
     super(scene, chunkSource, VolcanicChunk);
-    this.atmosphere = new VolcanicAtmosphere(scene);
+    this.atmosphere = new VolcanicAtmosphere(scene); this.backdrop = true;
   }
   animate(time) {
     volcanicClock.value = time;

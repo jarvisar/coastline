@@ -55,7 +55,8 @@ export class VolcanicAtmosphere {
           #include <colorspace_fragment>
         }` });
     this.sky = new THREE.Mesh(this.skyGeometry, this.skyMaterial); this.sky.name = 'volcanic-ash-sky';
-    this.sky.renderOrder = -1000; this.sky.frustumCulled = false; this.sky.userData.ambientOcclusion = false; this.group.add(this.sky);
+    // Drawn after the opaque scenery at the far plane, so it only shades open sky.
+    this.sky.renderOrder = 1000; this.sky.frustumCulled = false; this.sky.userData.ambientOcclusion = false; this.group.add(this.sky);
     this.backdrop = new VolcanicBackdrop(this.group);
     const count = ASH + EMBERS, colors = [], sizes = [], kinds = [];
     this.seeds = new Float32Array(count * 4);

@@ -3,6 +3,8 @@ import { createSoundGraph } from './audio/synthesis.js';
 import { AMBIENCE, MIX_CHANNELS, MIX_PRESETS, engineFor, sanitizeMix } from './audio/profiles.js';
 import { SoundDirector } from './audio/director.js';
 import { Surroundings } from './audio/space.js';
+import { AudioAssets } from './audio/assets.js';
+import { channelBuffer } from './audio/textures.js';
 
 const STORAGE_KEY = 'coastline-audio-v1';
 // Axle to axle, for the second thump over a bridge joint.
@@ -19,6 +21,9 @@ export class DriveAudio {
     this.mix = sanitizeMix(null);
     try { this.mix = sanitizeMix(JSON.parse(globalThis.localStorage?.getItem(STORAGE_KEY) ?? 'null')); } catch { /* Storage is optional. */ }
     this.trafficSlots = Array(4).fill(null); this.impactSerial = 0; this.lastImpact = -Infinity; this.shiftSerial = 0;
+    // Noise loops and engine takes render in a worker, so turning sound on or
+    // changing car never stalls a frame. `loading` settles once they're in.
+    this.bank = new AudioAssets(); this.engines = new Map(); this.loading = Promise.resolve();
   }
   get audible() { return this.enabled && !this.paused && !this.hidden && !this.disposed; }
   get preset() { return Object.keys(MIX_PRESETS).find(id => Object.keys(this.mix).every(key => this.mix[key] === MIX_PRESETS[id][key])) ?? 'custom'; }
@@ -47,8 +52,26 @@ export class DriveAudio {
   setCar(id, force = false) {
     if (!force && this.car === id) return;
     this.car = id; this.profile = engineFor(id, this.journey);
-    this.model.setProfile(this.profile); this.graph?.setEngine(this.profile); this.shiftSerial = 0;
+    this.model.setProfile(this.profile); this.shiftSerial = 0;
     this.targets = new WeakMap();
+    if (this.graph) this.loadEngine(this.profile);
+  }
+  // The last three engines' takes are kept.
+  engineTakes(profile) {
+    if (!this.engines.has(profile)) {
+      if (this.engines.size >= 3) this.engines.delete(this.engines.keys().next().value);
+      const ctx = this.context;
+      this.engines.set(profile, this.bank.render({ type: 'engine', rate: ctx.sampleRate, profile })
+        .then(({ rate, channels }) => channels.map(data => channelBuffer(ctx, rate, [data]))));
+    }
+    return this.engines.get(profile);
+  }
+  // The old engine keeps running until the new one's takes arrive.
+  loadEngine(profile) {
+    this.loading = this.engineTakes(profile).then(buffers => {
+      if (profile !== this.profile || !this.graph || this.disposed) return;
+      this.graph.setEngine(profile, buffers); this.targets = new WeakMap();
+    });
   }
   reset() {
     this.model.reset(); this.surroundings.reset(); this.lastUpdate = -Infinity; this.lastAmbience = -Infinity; this.shiftSerial = 0;
@@ -61,7 +84,7 @@ export class DriveAudio {
     const revision = ++this.revision;
     this.enabled = !this.enabled;
     try {
-      if (this.enabled) { this.ensureContext(); await this.wake(); }
+      if (this.enabled) { this.ensureContext(); await this.wake(); await this.loading; }
       this.syncOutput();
     } catch (error) {
       if (revision === this.revision) { this.enabled = false; this.syncOutput(); }
@@ -69,17 +92,26 @@ export class DriveAudio {
     }
     return this.enabled;
   }
+  // The context starts inside the user's gesture. The graph follows once its
+  // loops are rendered.
   ensureContext() {
-    if (!this.context) {
-      const AudioContext = window.AudioContext || window.webkitAudioContext;
-      if (!AudioContext) throw new Error('Web Audio is unavailable');
-      const ctx = new AudioContext({ latencyHint: 'interactive' });
-      try { this.graph = createSoundGraph(ctx); this.context = ctx; }
-      catch (error) { void ctx.close().catch(() => {}); throw error; }
-      this.graph.setScene(this.journey);
-      this.setCar(this.car, true);
-      this.update({}, 1 / 60, true);
-    }
+    if (this.context) return;
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContext) throw new Error('Web Audio is unavailable');
+    this.context = new AudioContext({ latencyHint: 'interactive' });
+    this.loading = this.buildGraph(this.context);
+  }
+  async buildGraph(ctx) {
+    const profile = this.profile ?? engineFor(this.car, this.journey);
+    const loop = job => this.bank.render({ ...job, rate: ctx.sampleRate }).then(({ rate, channels }) => channelBuffer(ctx, rate, channels));
+    const [noise, road, wind, rain, buffers] = await Promise.all([loop({ type: 'noise' }),
+      ...['road', 'wind', 'rain'].map(kind => loop({ type: 'texture', kind })), this.engineTakes(profile)]);
+    if (this.disposed || this.context !== ctx) return;
+    try { this.graph = createSoundGraph(ctx, { noise, road, wind, rain, engine: { profile, buffers } }); }
+    catch (error) { this.context = null; void ctx.close().catch(() => {}); throw error; }
+    this.graph.setScene(this.journey);
+    this.setCar(this.car, true);
+    this.update({}, 1 / 60, true);
   }
   async wake() {
     clearTimeout(this.suspendTimer); this.suspendTimer = null;
@@ -219,7 +251,7 @@ export class DriveAudio {
   async dispose() {
     if (this.disposed) return;
     this.disposed = true; this.enabled = false; ++this.revision;
-    clearTimeout(this.suspendTimer); this.graph?.dispose();
+    clearTimeout(this.suspendTimer); this.graph?.dispose(); this.bank.dispose();
     if (this.context && this.context.state !== 'closed') await this.context.close();
     this.graph = null; this.context = null;
   }

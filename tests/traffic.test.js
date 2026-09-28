@@ -341,10 +341,14 @@ test('route changes reuse resources, switch lamps, and disposal releases the fle
   traffic.reset(snowDrivingRoute, 2000, 'snow'); assert.ok(headlights.emissiveIntensity > 2);
   traffic.respawn(car, 2020); traffic.render(.5, 1024);
   const { rig, light } = traffic.headlightRigs[0];
-  assert.equal(rig.parent, traffic.group);
+  assert.equal(rig.parent, traffic.beams);
   assert.deepEqual(rig.position, car.car.position);
   assert.deepEqual(rig.quaternion.toArray(), car.car.quaternion.toArray());
   assert.ok(light.intensity > 0); assert.equal(light.castShadow, false);
+  // Turning traffic off darkens the beams without removing them, so the light count holds.
+  traffic.setEnabled(false, { s: 2020 });
+  assert.ok(traffic.beams.visible && traffic.headlightRigs.every(entry => entry.light.intensity === 0 && entry.rig.parent === traffic.beams));
+  traffic.setEnabled(true, { s: 2020, u: 2.4, speed: 0 });
   traffic.reset(desertDrivingRoute, -4000, 'desert'); assert.ok(headlights.emissiveIntensity < 1);
   assert.ok(traffic.headlightRigs.every(({ rig }) => rig.parent === null));
   assert.equal(car.car.children[0].geometry, geometry);

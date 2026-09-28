@@ -78,14 +78,16 @@ const streaming = await page.evaluate(async () => {
     a.vehicle.s = s; a.vehicle.reset();
     await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     const { behind, ahead } = a.graphics.settings.chunks;
+    // An off-screen edge chunk can still be on its way from a worker.
+    for (let i = 0; i < 120 && a.world.chunks.size !== behind + ahead + 1; i++) await new Promise(requestAnimationFrame);
     records.push({ s, chunks: a.world.chunks.size, resident: behind + ahead + 1, geometries: a.rendering.renderer.info.memory.geometries, textures: a.rendering.renderer.info.memory.textures, origin: a.world.origin, carZ: a.vehicle.car.position.z });
   }
   a.vehicle.s = 215; a.vehicle.reset(); a.rendering.snap();
   return records;
 });
 // Streaming holds exactly the window the quality level asks for.
-// Textures: three for scenery plus six fixed AO textures.
-for (const record of streaming) { assert.equal(record.chunks, record.resident); assert.ok(record.geometries <= 185); assert.ok(record.textures <= 9); assert.ok(Math.abs(record.carZ) < 1030); }
+// Textures: three for scenery, the shadow shader compile target and six fixed AO textures.
+for (const record of streaming) { assert.equal(record.chunks, record.resident); assert.ok(record.geometries <= 185); assert.ok(record.textures <= 10); assert.ok(Math.abs(record.carZ) < 1030); }
 await page.waitForTimeout(700);
 await page.screenshot({ path: '.artifacts/coastline-driving.png' });
 // Held input is released when the window loses focus.

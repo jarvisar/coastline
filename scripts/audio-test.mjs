@@ -13,7 +13,8 @@ try {
   assert.equal(await page.evaluate(() => window.__coastline.audio.context), null);
   // Sound lives on the pause screen, but M still toggles it while driving.
   await page.keyboard.press('KeyM');
-  await page.waitForFunction(() => window.__coastline.audio.context?.state === 'running');
+  // The graph follows once its loops have rendered in a worker.
+  await page.waitForFunction(() => window.__coastline.audio.context?.state === 'running' && window.__coastline.audio.graph);
   const graphSize = await page.evaluate(() => {
     const a = window.__coastline.audio;
     window.originalAudioContext = a.context;
@@ -141,7 +142,8 @@ try {
       const audio = new DriveAudio(); audio.context = ctx; audio.graph = createSoundGraph(ctx); audio.enabled = true;
       const g = audio.graph;
       audio.setJourney('city'); audio.setCar(ENGINES[kind] ? kind : 'sports');
-      await g.ready;
+      // Engine takes render in a worker, like the route's calls.
+      await Promise.all([g.ready, audio.loading]);
       audio.mix = { master: 1, engine: 0, road: 0, ambience: 0, traffic: 0, music: 0, night: kind === 'night' };
       if (ENGINES[kind]) audio.mix.engine = 1;
       else if (['music', 'traffic'].includes(kind)) audio.mix[kind] = 1;
@@ -192,8 +194,7 @@ try {
   await mobile.locator('#audio-mixer').screenshot({ path: '.artifacts/audio/mixer-mobile.png' });
   await mobile.locator('#audio-mixer-toggle').tap();
   await mobile.locator('#sound').tap();
-  await mobile.waitForFunction(() => window.__coastline.audio.context);
-  assert.equal(await mobile.locator('#sound').getAttribute('aria-pressed'), 'true');
+  await mobile.waitForFunction(() => window.__coastline.audio.context && document.querySelector('#sound').getAttribute('aria-pressed') === 'true');
   await mobile.locator('#resume').tap();
   await mobile.waitForFunction(() => window.__coastline.audio.context.state === 'running');
   await mobile.locator('#pause').tap();

@@ -2,7 +2,7 @@
 
 ## Loading
 
-The world is split into chunks that are built as you drive. Chunk building runs in up to three web workers: one per spare CPU core, but only two on devices reporting under 4 GB of memory and one under 2 GB. If a worker crashes or doesn't respond for 20 seconds, it gets dropped and its job moves to another worker. Chunks are only built on the main thread if every worker has failed.
+The world is split into chunks that are built as you drive. Chunk building runs in up to three web workers: one per spare CPU core, but only two on devices reporting under 4 GB of memory and one under 2 GB. If a worker crashes or doesn't respond for 20 seconds, it gets dropped and its job moves to another worker. Chunks are only built on the main thread if every worker has failed. If a worker is late with a chunk at the far edge of the view, that chunk is left out until it's ready instead.
 
 Routes are loaded when you first pick them. The installed website caches all of them for offline play.
 
@@ -10,8 +10,13 @@ A few other things that keep frame times down:
 
 - Static scenery only updates its matrices when a chunk is added or the world origin shifts.
 - Snow and rain are animated in shaders instead of on the CPU.
-- Route shaders are compiled after the new route's lighting, fog and traffic are set up.
+- Route shaders are compiled after the new route's lighting, fog and traffic are set up. Each new chunk's shaders, shadows included, are compiled when it arrives, before any of it is on screen.
+- Lights are dimmed rather than hidden, since changing the number of lights recompiles every shader.
+- Point and spot lights skip pixels they can't reach.
+- Chunk meshes are culled with bounding boxes as well as spheres. In the driving views, routes that fade into a plain sky also skip anything past the fog.
 - The Basic preset uses a single shadow lookup instead of nine.
+- Sound's noise loops and engines are made in a worker, so turning sound on or changing car doesn't stall the drive.
+- Touch screens skip the blur behind the driving controls.
 
 ## Auto quality
 
@@ -26,11 +31,12 @@ With the dev server running:
 ```sh
 npm run profile:performance
 npm run profile:driving
+npm run profile:frames
 ```
 
-Reports and screenshots go to `.artifacts/performance/`. The driving profiler records CPU time, buffer uploads and draw calls on all eight routes.
+Reports and screenshots go to `.artifacts/performance/`. The driving profiler records CPU time, buffer uploads and draw calls on all nine routes. The frame profiler autodrives each route on your real graphics card and lists slow frames with their likely cause, like a shader link, a chunk arriving or garbage collection. Run it on a quiet machine.
 
-Both accept `TEST_URL`, `CHROME_PATH` and `PROFILE_LABEL` (to keep runs in separate folders). `profile:performance` also accepts `PROFILE_QUALITY` (`high`, `balanced`, `smooth` or `basic`) and `PROFILE_MOBILE=1` to simulate a phone screen.
+All three accept `TEST_URL`, `CHROME_PATH` and `PROFILE_LABEL` (to keep runs in separate folders). `profile:performance` and `profile:frames` also accept `PROFILE_QUALITY` (`high`, `balanced`, `smooth` or `basic`) and `PROFILE_MOBILE=1` to simulate a phone screen. `profile:frames` takes `PROFILE_ROUTES`, `PROFILE_SECONDS` and `PROFILE_THROTTLE`, which slows the CPU like a phone. Throttling adds long frames of its own, so only compare medians with it on.
 
 ## Tests
 

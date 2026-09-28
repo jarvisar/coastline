@@ -189,10 +189,12 @@ test('night effects remain bounded, animate deterministically and dispose on lea
   }
   for (let i = -50; i < 50; i++) assert.equal(lampAt(i).y, snowRoadHeight(lampAt(i).s) + 7.6);
   assert.equal(world.headlights.visible, true);
+  // The beam goes dark rather than hiding, so the light count and shaders hold.
   car.setCar('formula'); world.animate(14, car);
-  assert.equal(world.headlights.visible, false, 'the Formula car has no headlight beam');
+  assert.equal(world.headlights.light.intensity, 0, 'the Formula car has no headlight beam');
+  assert.equal(world.headlights.visible, true);
   car.setCar('auto'); world.animate(15, car);
-  assert.equal(world.headlights.visible, true, 'switching back restores road car headlights');
+  assert.ok(world.headlights.light.intensity > 0, 'switching back restores road car headlights');
   world.dispose(); assert.equal(scene.children.length, 0); assert.ok(disposed >= 55);
 });
 

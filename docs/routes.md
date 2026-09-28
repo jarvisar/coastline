@@ -35,7 +35,7 @@ export class SwampWorld extends LevelWorld {
 
 A chunk builds one 128 m slice of road. It can run in a web worker, so it can't touch the page. Materials and geometry shared between chunks must be passed to `registerChunkResources` so the worker can refer to them by name. Geometry made for one chunk goes through `addMesh` or into `this.owned`, so it gets released with the chunk.
 
-The world keeps the chunks around the car built. Anything that follows the car, like a sky, rain or pooled lights, goes on the world. Override `update(s)`, `animate()` and `dispose()` for those and call `super` first.
+The world keeps the chunks around the car built. Anything that follows the car, like a sky, rain or pooled lights, goes on the world. Override `update(s)`, `animate()` and `dispose()` for those and call `super` first. A world with a sky dome or a far backdrop sets `this.backdrop = true`, so scenery hidden in the fog keeps drawing in front of it. Keep the number of lights fixed while driving: dim a light to 0 instead of hiding it, since a change in the light count recompiles every shader.
 
 `level.js` also has `geometryFrom`, `triangle` and `instances` for building meshes and `material` and `matte` for flat-shaded materials.
 

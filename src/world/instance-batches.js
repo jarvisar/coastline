@@ -26,8 +26,10 @@ const center = new Vector3(), extent = new Vector3();
 
 // Three.js unions instance spheres in order, which leaves a loose off-centre
 // bound on long batches. Keep a centred enclosing sphere when it is smaller.
+// The box is for the renderer's tighter culling (LevelWorld.cull).
 // Call before adding any animation margin to the batch.
 export function computeInstanceBounds(mesh) {
+  mesh.computeBoundingBox();
   mesh.computeBoundingSphere();
   if (!mesh.count || !Number.isFinite(mesh.boundingSphere.radius)) return;
   const geometrySphere = mesh.geometry.boundingSphere;

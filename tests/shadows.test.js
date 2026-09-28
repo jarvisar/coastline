@@ -103,3 +103,24 @@ test('jungle shadows follow valley elevation without enlarging the shadow map co
     }
   }
 });
+
+test('shadow warm-up stand-ins match each caster\'s depth program', async () => {
+  const { stableShadowDepth, shadowCasterStandIns } = await import('../src/world/shadow-depth.js');
+  const plain = new THREE.BufferGeometry(); plain.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(9), 3));
+  const shaded = new THREE.BoxGeometry();
+  const group = new THREE.Group(), casters = [];
+  for (const [geometry, material, instanced, colored] of [[shaded, new THREE.MeshLambertMaterial(), false, false], [shaded, new THREE.MeshLambertMaterial({ side: THREE.DoubleSide }), true, false],
+    [plain, new THREE.MeshLambertMaterial(), true, true], [shaded, new THREE.MeshLambertMaterial(), true, true]]) {
+    const mesh = instanced ? new THREE.InstancedMesh(geometry, material, 2) : new THREE.Mesh(geometry, material);
+    if (colored) mesh.setColorAt(0, new THREE.Color());
+    mesh.castShadow = true; stableShadowDepth(mesh); group.add(mesh); casters.push(mesh);
+  }
+  const receiver = new THREE.Mesh(shaded, new THREE.MeshLambertMaterial()); receiver.receiveShadow = true; group.add(receiver);
+  const standIns = shadowCasterStandIns(group).children;
+  assert.equal(standIns.length, casters.length, 'one stand-in per depth program, none for receivers');
+  for (const caster of casters) {
+    assert.ok(standIns.some(standIn => standIn.material === caster.customDepthMaterial && Boolean(standIn.isInstancedMesh) === Boolean(caster.isInstancedMesh)
+      && Boolean(standIn.instanceColor) === Boolean(caster.instanceColor) && Boolean(standIn.geometry.attributes.normal) === Boolean(caster.geometry.attributes.normal)));
+  }
+  assert.equal(shadowCasterStandIns(group).children.length, casters.length, 'stand-ins are reused, not rebuilt');
+});

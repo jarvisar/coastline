@@ -180,3 +180,26 @@ test('the resident window follows the quality level, and reaches the worker', as
     assert.deepEqual(prefetchOffsets(1, 3), [0, 1, -1, 2, 3, 4, -2]);
   } finally { world.dispose(); setResidentWindow(); }
 });
+
+test('a late edge chunk waits for its worker while driving, but a jump builds the whole window', async () => {
+  const { updateResidentChunks, residentWindow } = await import('../src/world/resident.js');
+  const { behind, ahead } = residentWindow(), size = behind + ahead + 1;
+  class Chunk { constructor(index) { this.index = index; this.group = new THREE.Group(); } dispose() { this.group.removeFromParent(); } }
+  let owed = new Set();
+  const chunkSource = { take: () => null, building: index => owed.has(index), prefetch() {}, retain() {} };
+  const world = { scene: new THREE.Scene(), chunks: new Map(), center: null, chunkSource, arrivals: [] };
+  updateResidentChunks(world, 0, Chunk);
+  assert.equal(world.chunks.size, size, 'the first window is built whole');
+  // Driving into the next chunk while a worker is still on the new far edge.
+  owed = new Set([1 + ahead]);
+  updateResidentChunks(world, 1, Chunk);
+  assert.ok(!world.chunks.has(1 + ahead) && world.waiting, 'the off-screen edge waits for its worker');
+  owed.clear();
+  updateResidentChunks(world, 1, Chunk);
+  assert.ok(world.chunks.has(1 + ahead) && !world.waiting, 'and joins once the worker is done');
+  // A jump builds every chunk straight away, even ones a worker still owes.
+  owed = new Set([40 + ahead, 40 - behind]);
+  updateResidentChunks(world, 40, Chunk);
+  assert.equal(world.chunks.size, size);
+  assert.equal(world.arrivals.length, size + 1 + size, 'every added group is queued for shader warm-up');
+});

@@ -17,11 +17,19 @@ export function setResidentWindow({ behind, ahead } = DEFAULT) {
 }
 
 // Take each chunk from the worker if it's ready, otherwise build it here.
+// Building one here can stall for a second on a phone. When driving into the
+// next chunk, an edge chunk two or more away is off-screen, so while a worker is
+// still on it, it's left out and checked again next frame. After a jump the whole
+// window is built at once.
 export function updateResidentChunks(world, center, Chunk) {
-  if (center === world.center && world.windowAt === generation) return;
-  const { behind, ahead } = resident;
+  if (center === world.center && world.windowAt === generation && !world.waiting) return;
+  const { behind, ahead } = resident, driving = world.center !== null && Math.abs(center - world.center) <= 1;
+  world.waiting = false;
   for (let i = center - behind; i <= center + ahead; i++) {
-    if (!world.chunks.has(i)) { const chunk = world.chunkSource?.take(i) ?? new Chunk(i); world.chunks.set(i, chunk); world.scene.add(chunk.group); }
+    if (world.chunks.has(i)) continue;
+    const edge = i === center - behind || i === center + ahead;
+    if (driving && edge && Math.abs(i - center) > 1 && world.chunkSource?.building?.(i)) { world.waiting = true; continue; }
+    const chunk = world.chunkSource?.take(i) ?? new Chunk(i); world.chunks.set(i, chunk); world.scene.add(chunk.group); world.arrivals?.push(chunk.group);
   }
   for (const [i, chunk] of world.chunks) if (i < center - behind || i > center + ahead) { world.chunkSource?.retain(i, chunk); chunk.dispose(); world.chunks.delete(i); }
   world.center = center; world.windowAt = generation;

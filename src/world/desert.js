@@ -32,12 +32,12 @@ function triangle(positions, colors, a, b, c, color, start, upward = true) {
   if (upward && (b.z - a.z) * (c.x - a.x) - (b.x - a.x) * (c.z - a.z) < 0) [b, c] = [c, b];
   for (const p of [a, b, c]) { positions.push(p.x, p.y, p.z + start); if (colors) colors.push(color.r, color.g, color.b); }
 }
-function instances(group, source, material, items, name) {
+function instances(group, source, material, items, name, shadows = true) {
   if (!items.length) return;
-  for (const part of splitBatch(items)) batch(group, source, material, part, name);
+  for (const part of splitBatch(items)) batch(group, source, material, part, name, shadows);
 }
 
-function batch(group, source, material, items, name) {
+function batch(group, source, material, items, name, shadows) {
   const mesh = new THREE.InstancedMesh(source, material, items.length);
   if (name) mesh.name = name;
   items.forEach((item, index) => {
@@ -46,7 +46,7 @@ function batch(group, source, material, items, name) {
     transform.scale.set(...item.scale); transform.updateMatrix(); mesh.setMatrixAt(index, transform.matrix);
     if (item.color) mesh.setColorAt(index, new THREE.Color(item.color));
   });
-  mesh.castShadow = true; mesh.receiveShadow = true; mesh.instanceMatrix.needsUpdate = true;
+  mesh.castShadow = shadows; mesh.receiveShadow = true; mesh.instanceMatrix.needsUpdate = true;
   if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
   computeInstanceBounds(mesh); group.add(mesh);
 }
@@ -488,7 +488,8 @@ export class DesertChunk extends LevelChunk {
     instances(this.group, bushGeometry, plantMaterial, scrub, 'desert-scrub-pockets');
     instances(this.group, grassGeometry, plantMaterial, grasses, 'desert-dry-grass');
     instances(this.group, slabGeometry, rockMaterial, slabs, 'desert-fractured-slabs');
-    instances(this.group, stoneGeometry, rockMaterial, gravel, 'desert-stone-chips');
+    // Gravel is too small for its shadows to show.
+    instances(this.group, stoneGeometry, rockMaterial, gravel, 'desert-stone-chips', false);
   }
   buildForeground() {
     const random = seededRandom(this.index + 75231);

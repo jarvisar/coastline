@@ -152,7 +152,8 @@ test('the swamp world glows around the nearest discoveries in their own colours 
     const road = positionAt(s, 0);
     assert.deepEqual(world.basin.position.toArray(), [road.x, -48, road.z + world.origin]);
   }
-  car.setCar('formula'); world.animate(13, car); assert.equal(world.headlights.visible, false);
-  car.setCar('auto'); world.animate(14, car); assert.equal(world.headlights.visible, true);
+  // The racer has no lamps. Its beam goes dark but stays in the scene, so the light count holds.
+  car.setCar('formula'); world.animate(13, car); assert.equal(world.headlights.visible, true); assert.equal(world.headlights.light.intensity, 0);
+  car.setCar('auto'); world.animate(14, car); assert.equal(world.headlights.light.intensity, 260);
   world.dispose(); assert.equal(scene.children.length, 0); assert.ok(disposed >= 40);
 });

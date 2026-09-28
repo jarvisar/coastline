@@ -35,6 +35,7 @@
     "test:performance": "node scripts/performance-test.mjs",
     "profile:performance": "node scripts/performance-profile.mjs",
     "profile:driving": "node scripts/driving-profile.mjs",
+    "profile:frames": "node scripts/frame-profile.mjs",
     "test:weather": "node scripts/weather-test.mjs",
     "electron:web": "vite build --outDir dist-electron",
     "electron:dev": "node scripts/electron-launch.mjs",
