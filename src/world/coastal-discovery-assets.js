@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { registerChunkResources } from './chunk-resources.js';
 import { waterClock } from './water.js';
+import { cloudShaded, addCloudShadows } from './coastal-clouds.js';
 
 // Colours are baked into merged geometry to avoid extra draw calls.
 export class Parts {
@@ -126,10 +127,10 @@ export const discoveryAssets = {
 };
 // Lambert shading looks the same as physical shading on these rough surfaces
 // and costs much less per pixel.
-export const discoveryMaterial = new THREE.MeshLambertMaterial({vertexColors: true, flatShading: true});
-export const timberMaterial = new THREE.MeshLambertMaterial({color: '#a49678', flatShading: true});
-export const footingMaterial = new THREE.MeshLambertMaterial({color: '#b7b6a5', flatShading: true});
-export const pathMaterial = new THREE.MeshLambertMaterial({color: '#c4c5b6', side: THREE.DoubleSide});
+export const discoveryMaterial = cloudShaded(new THREE.MeshLambertMaterial({vertexColors: true, flatShading: true}), 'faceted');
+export const timberMaterial = cloudShaded(new THREE.MeshLambertMaterial({color: '#a49678', flatShading: true}), 'faceted');
+export const footingMaterial = cloudShaded(new THREE.MeshLambertMaterial({color: '#b7b6a5', flatShading: true}), 'faceted');
+export const pathMaterial = cloudShaded(new THREE.MeshLambertMaterial({color: '#c4c5b6', side: THREE.DoubleSide}), 'path');
 function swimmingMaterial(whale = false) {
   const material = discoveryMaterial.clone();
   material.onBeforeCompile = shader => {
@@ -142,6 +143,7 @@ function swimmingMaterial(whale = false) {
       transformed.y += transformed.x * sin(coastTime * 0.43 + phase) * 0.04;
       ${whale ? 'transformed.z += sin(coastTime * 0.12 + phase) * 2.5;' : ''}
     `);
+    addCloudShadows(shader);
   };
   material.customProgramCacheKey = () => `coastal-swimmer-${whale ? 'whale' : 'boat'}-v1`;
   return material;

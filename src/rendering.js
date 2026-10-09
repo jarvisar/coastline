@@ -9,6 +9,7 @@ import { XRCameraRig } from './xr-camera.js';
 import { volcanicPalette } from './world/volcanic-palette.js';
 import { saltPalette, SALT_SUN, SALT_LIGHT } from './world/salt-palette.js';
 import { swampPalette, SWAMP_SUN, SWAMP_LIGHT } from './world/swamp-palette.js';
+import { coastPalette, COAST_SUN, COAST_LIGHT } from './world/coastal-palette.js';
 
 // Overhead follow rates per second. Ground settles fast so steering feels
 // immediate. Height stays slow so the view doesn't bob over terrain.
@@ -19,14 +20,12 @@ const FOLLOW_GROUND = 8, FOLLOW_HEIGHT = 3;
 // resident chunks must always reach past thirdFar.
 const ROUTE_LIGHTING = {
   coast: {
-    // Blue fill and a near-neutral sun keep the ocean cyan. The sun is about 43°
-    // up over the sea so shadows fall inland, slightly brighter to keep flat meadows lit.
-    background: '#b5dff5', exposure: 1.02,
-    sky: { color: '#c4e5ff', ground: '#365544', intensity: 1.12 },
-    sun: { color: '#fff1da', intensity: 3.1, offset: [-190, 215, 125] },
+    background: coastPalette.horizon, exposure: COAST_LIGHT.exposure,
+    sky: { color: coastPalette.skyLight, ground: coastPalette.groundLight, intensity: COAST_LIGHT.sky },
+    sun: { color: coastPalette.sun, intensity: COAST_LIGHT.sun, offset: COAST_SUN },
     // The coast range is 100-250 m inland and should show through the haze.
     // The sea mesh reaches 420 m offshore.
-    fog: { color: '#b9def3', near: 600, far: 1150, thirdNear: 190, thirdFar: 380 },
+    fog: { color: coastPalette.fog, near: 600, far: 1150, thirdNear: 190, thirdFar: 380 },
   },
   desert: {
     background: '#dfb399', exposure: .92,

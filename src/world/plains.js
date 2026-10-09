@@ -7,7 +7,7 @@ import { CHUNK_LENGTH, randomAt, seededRandom, smoothstep, lerp, positionAt, roa
 import { PLAINS_STEP, PLAINS_COLUMNS, PLAINS_COLUMN_COUNT, ROAD_RESERVE, plainsVertex, plainsRowStep, plainsPosition, plainsRoadHeight, plainsGroundHeight,
   plainsCreekAt, creekCenterS, creekDistance, CREEK_WATER_HALF_WIDTH, BRIDGE_HALF_LENGTH, fieldAt, fieldRowAt, fieldBoundary, fieldBands,
   rowBoundaryKind, bandBoundaryKind, roadsideFence, farmGate, farmTrackClears, fieldCorner, pondsNear, pondDistance, pondEdge, headlandDistance, plainsNoise } from './plains-route.js';
-import { createWaterMaterial, createPondMaterial, animateWater } from './water.js';
+import { createLakeMaterial, createPondMaterial, animateWater } from './water.js';
 import { terrainSampler } from './coastal-assets.js';
 import { plainsTrees, baleGeometry, squareBaleGeometry, cowGeometry, rushGeometry, stalkGeometry, wheatGeometry, crowGeometry, crowMaterial } from './plains-assets.js';
 import { plainsDiscoveries, plainsDiscoveryClears } from './plains-discoveries.js';
@@ -38,7 +38,7 @@ const centerMaterial = material('#e6c04a', { flatShading: false });
 const dirtMaterial = material('#ffffff', { vertexColors: true, flatShading: false, side: THREE.DoubleSide });
 // Flat shaded so the light shows the bank's relief.
 const bankMaterial = matte('#ffffff', { vertexColors: true, side: THREE.DoubleSide });
-const waterMaterial = createWaterMaterial(true);
+const waterMaterial = createLakeMaterial();
 const pondMaterial = createPondMaterial();
 const leavesMaterial = matte('#ffffff', { vertexColors: true });
 const barkMaterial = matte('#6a563f');

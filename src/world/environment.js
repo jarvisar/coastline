@@ -3,33 +3,40 @@ import * as THREE from 'three';
 import { registerChunkResources } from './chunk-resources.js';
 import { finalizeChunkTransforms } from './chunk-transforms.js';
 import { LevelChunk, LevelWorld, geometryFrom } from './level.js';
-import { CHUNK_LENGTH, TERRAIN_STEP, randomAt, seededRandom, roadFrame, roadX, roadHeight, coastOffset, shorelineOffset, terrainColumns, terrainCell, terrainVertex, positionAt, pondAt, pondRadius, ravineAmount, groundHeight, rockCover, cliffRib, bridgeAt, coastalGrove, rangeInfluence, wildflowers, icePlant, coastalGuardrail, GUARDRAIL_OFFSET, overlookAt, overlookWidth, clamp, lerp, smoothstep } from './route.js';
-import { createWaterMaterial, createSurfMaterial, createRockWashMaterial, animateWater } from './water.js';
+import { CHUNK_LENGTH, TERRAIN_STEP, randomAt, seededRandom, roadFrame, roadX, roadHeight, coastOffset, shorelineOffset, beachWidth, terrainColumns, terrainCell, terrainVertex, positionAt, pondAt, pondRadius, ravineAmount, groundHeight, rockCover, bridgeAt, coastalGrove, wildflowers, icePlant, coastalGuardrail, GUARDRAIL_OFFSET, overlookAt, overlookWidth, coastRange, lerp, smoothstep } from './route.js';
+import { createSurfMaterial, createRockWashMaterial, animateWater } from './water.js';
+import { createOceanMaterial } from './coastal-water.js';
+import { addCloudShadows, cloudShaded } from './coastal-clouds.js';
 import { buildLandmarks } from './landmarks.js';
 import { CoastalBirds } from './birds.js';
-import { coastalCrags, coastalPines, coastalCypress, coastalMontereyPine, coastalScrub, coastalSedge, terrainSampler } from './coastal-assets.js';
+import { coastalCrags, coastalRedwoods, coastalCypress, coastalOak, coastalScrub, coastalSedge, terrainSampler } from './coastal-assets.js';
 import { coastalDiscoveries, discoveryClearsPlanting } from './coastal-discoveries.js';
 import { buildCoastalDiscoveries } from './coastal-discovery-scenery.js';
 import { discoveryAssets, discoveryMaterial } from './coastal-discovery-assets.js';
 import { buildCoastalSea } from './coastal-sea.js';
 import { CoastalSky } from './coastal-sky.js';
+import { groundColor } from './coastal-ground.js';
 import { solidModel, solidPost, solidRocks, solidSpan } from './colliders.js';
 
 // Matte scenery uses Lambert shading. It looks the same as physical shading on
 // rough surfaces and costs much less per pixel. Roads keep physical shading for
 // their faint sheen, as do water and metal.
-const terrainMaterial = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
-const waterMaterial = createWaterMaterial();
-const roadMaterial = new THREE.MeshStandardMaterial({ color: '#424e58', roughness: 1 });
-const shoulderMaterial = new THREE.MeshStandardMaterial({ color: '#b9b9a7', roughness: 1 });
-const lineMaterial = new THREE.MeshStandardMaterial({ color: '#f3ecd2', roughness: 1 });
-const centerMaterial = new THREE.MeshStandardMaterial({ color: '#ecc967', roughness: 1 });
+const terrainMaterial = cloudShaded(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }), 'terrain');
+const waterMaterial = createOceanMaterial();
+const roadMaterial = cloudShaded(new THREE.MeshStandardMaterial({ color: '#424e58', roughness: 1 }), 'road');
+const shoulderMaterial = cloudShaded(new THREE.MeshStandardMaterial({ color: '#b9b9a7', roughness: 1 }), 'road');
+const lineMaterial = cloudShaded(new THREE.MeshStandardMaterial({ color: '#f3ecd2', roughness: 1 }), 'road');
+const centerMaterial = cloudShaded(new THREE.MeshStandardMaterial({ color: '#ecc967', roughness: 1 }), 'road');
 const foamMaterial = createSurfMaterial();
-const rollingSurfMaterial = createSurfMaterial(true);
 const rockWashMaterial = createRockWashMaterial();
-const pineMaterial = new THREE.MeshLambertMaterial({ color: '#ffffff', vertexColors: true, flatShading: true });
-const trunkMaterial = new THREE.MeshLambertMaterial({ color: '#78664a' });
-const rockMaterial = new THREE.MeshLambertMaterial({ color: '#ffffff', flatShading: true });
+const foliageMaterial = cloudShaded(new THREE.MeshLambertMaterial({ color: '#ffffff', vertexColors: true, flatShading: true }), 'foliage');
+// Trunks and benches share one white material and take their colour per instance.
+const trunkMaterial = cloudShaded(new THREE.MeshLambertMaterial({ color: '#ffffff' }), 'plain');
+const TREES = {
+  cypress: ['#4a6a40', '#527248', '#45633c'], oak: ['#637842', '#6c8049', '#5a6f3e'], redwood: ['#40644a', '#476b50', '#3c5e45'],
+  bark: '#5d5247', redwoodBark: '#6e4433',
+};
+const rockMaterial = cloudShaded(new THREE.MeshLambertMaterial({ color: '#ffffff', flatShading: true }), 'faceted');
 const cragMaterial = new THREE.MeshLambertMaterial({ color: '#ffffff', vertexColors: true, flatShading: true });
 cragMaterial.onBeforeCompile = shader => {
   shader.vertexShader = 'varying float vStoneHeight;\n' + shader.vertexShader;
@@ -46,26 +53,26 @@ cragMaterial.onBeforeCompile = shader => {
     #include <color_fragment>
     diffuseColor.rgb *= mix(vec3(0.46, 0.57, 0.58), vec3(1.0), smoothstep(0.1, 2.5, vStoneHeight));
   `);
+  addCloudShadows(shader);
 };
 cragMaterial.customProgramCacheKey = () => 'coastal-tidal-stone-v1';
-const postMaterial = new THREE.MeshLambertMaterial({ color: '#f4e9cd' });
-const blossomMaterial = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
+const postMaterial = cloudShaded(new THREE.MeshLambertMaterial({ color: '#f4e9cd' }), 'plain');
+const blossomMaterial = cloudShaded(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }), 'terrain');
 const trunkGeometry = new THREE.CylinderGeometry(.16, .25, 1, 5);
 const rockGeometry = new THREE.DodecahedronGeometry(1, 0);
 const postGeometry = new THREE.BoxGeometry(.22, 1.25, .25);
 const capGeometry = new THREE.BoxGeometry(.235, .18, .265);
-const capMaterial = new THREE.MeshLambertMaterial({ color: '#466050' });
+const capMaterial = cloudShaded(new THREE.MeshLambertMaterial({ color: '#466050' }), 'plain');
 const railGeometry = new THREE.BoxGeometry(1, 1, 1);
-const railMaterial = new THREE.MeshStandardMaterial({ color: '#aeb9b8', roughness: .72, metalness: .18 });
+const railMaterial = cloudShaded(new THREE.MeshStandardMaterial({ color: '#aeb9b8', roughness: .72, metalness: .18 }), 'metal');
 const matrix = new THREE.Object3D();
 const shades = list => list.map(color => new THREE.Color(color));
-const PETALS = { poppy: shades(['#f28a1c', '#f7a12c', '#eb771a']), lupine: shades(['#6d5fd4', '#7e6fe0', '#5d5abf']), mustard: shades(['#f4d43b', '#eec72d']),
-  ice: shades(['#e2559c', '#d9468e', '#ee6cab']), cream: new THREE.Color('#f4eedb'), iceYellow: new THREE.Color('#f1d24a'),
-  goldfields: new THREE.Color('#e8cf4f'), radish: new THREE.Color('#d9c6d6') };
+const PETALS = { poppy: shades(['#f28a1c', '#f7a12c', '#eb771a']), lupine: shades(['#6f6cc4', '#7c7bcf', '#615fae']), mustard: shades(['#f4d43b', '#eec72d']),
+  ice: shades(['#e2559c', '#d9468e', '#ee6cab']), cream: new THREE.Color('#f4eedb'), iceYellow: new THREE.Color('#f1d24a') };
 registerChunkResources('coast', { terrainMaterial, waterMaterial, roadMaterial, shoulderMaterial, lineMaterial, centerMaterial,
-  foamMaterial, rollingSurfMaterial, rockWashMaterial, pineMaterial, trunkMaterial, rockMaterial, cragMaterial,
+  foamMaterial, rockWashMaterial, foliageMaterial, trunkMaterial, rockMaterial, cragMaterial,
   postMaterial, capMaterial, trunkGeometry, rockGeometry, postGeometry, capGeometry,
-  coastalPines, coastalCrags, coastalCypress, coastalMontereyPine, coastalScrub, coastalSedge, railGeometry, railMaterial, blossomMaterial });
+  coastalRedwoods, coastalCrags, coastalCypress, coastalOak, coastalScrub, coastalSedge, railGeometry, railMaterial, blossomMaterial });
 
 function addTriangle(positions, colors, a, b, c, color, start) {
   // Surfaces are height fields, so force upward-facing winding.
@@ -154,97 +161,11 @@ export class CoastalChunk extends LevelChunk {
       return vertices.get(key);
     };
     const columns = terrainColumns(this.start).length;
-    const meadow = new THREE.Color('#88a746'), fern = new THREE.Color('#527b3e'), dryGrass = new THREE.Color('#b7b56e');
-    const stone = new THREE.Color('#c4bba5'), coolStone = new THREE.Color('#829095'), fracture = new THREE.Color('#505d63');
-    const cliffStone = new THREE.Color('#d9c9ad'), coolCliff = new THREE.Color('#81929b'), dust = new THREE.Color('#b7af7c');
-    const goldGrass = new THREE.Color('#c4ad5e'), poppyTurf = new THREE.Color('#a9a543'), lupineTurf = new THREE.Color('#6d8c62'), mustardTurf = new THREE.Color('#b3b24a');
-    const iceLeaf = new THREE.Color('#7f9f3a'), iceRed = new THREE.Color('#98734c');
-    const stoneLight = new THREE.Vector3(-190, 215, 125).normalize();
-    const sunSide = new THREE.Vector2(-190, 125).normalize(), shadedTurf = new THREE.Color('#46693a');
     for (let row = firstRow; row < firstRow + CHUNK_LENGTH / TERRAIN_STEP; row++) {
       for (let col = 0; col < columns - 1; col++) {
         const seedCol = col > 8 ? col - 1 : col;
         terrainCell(row, col, vertex).forEach((tri, j) => {
-          const r = randomAt(row * 2 + j, seedCol + 191);
-          let color, meadowFace = false;
-          const s = tri.reduce((sum, p) => sum + p.s, 0) / 3;
-          const u = tri.reduce((sum, p) => sum + p.u, 0) / 3;
-          const edgeA = new THREE.Vector3(tri[1].x - tri[0].x, tri[1].y - tri[0].y, tri[1].z - tri[0].z);
-          const edgeB = new THREE.Vector3(tri[2].x - tri[0].x, tri[2].y - tri[0].y, tri[2].z - tri[0].z);
-          const longestEdgeSq = Math.max(edgeA.lengthSq(), edgeB.lengthSq(), edgeA.clone().sub(edgeB).lengthSq());
-          const normal = edgeA.cross(edgeB);
-          const sliver = normal.length() < longestEdgeSq * .12;
-          normal.normalize();
-          if (normal.y < 0) normal.negate();
-          const steep = Math.abs(normal.y) < .59;
-          const y = tri.reduce((sum, p) => sum + p.y, 0) / 3;
-          // Roadside greens blend into hillside colour over roughly 90 m.
-          const vergeBlend = smoothstep(8, 100, Math.abs(u));
-          const grassU = u * vergeBlend;
-          const meadowMix = .5 + .28 * Math.sin(s / 75 + grassU / 80) + .2 * Math.sin(s / 150 - grassU / 140);
-          const shoreFace = col <= 6 || (ravineAmount(s, u) > .65 && u < 35);
-          // Sand only on low gentle ground. Rim turf skips steep cliff slivers.
-          const sandyFace = shoreFace && normal.y > .78 && Math.max(...tri.map(p => p.y)) < 3.5;
-          const grassyLedge = tri.rimTurf && normal.y > .5 && !(sliver && normal.y < .7) && ravineAmount(s, u) < .12;
-          const coastalRock = col >= 7 && col <= 9 && !grassyLedge;
-          const grassyShelf = col >= 10 && col <= 11 && ravineAmount(s, u) < .12;
-          // Inland rock follows summits and rock patches. Elsewhere only sheer facets show.
-          const cover = col >= 12 ? rockCover(s, u) : 0;
-          const inlandRock = !grassyShelf && ((steep && u > coastOffset(s) - 10 && (normal.y < .44 || (ravineAmount(s, u) > .05 && normal.y < .55))) || cover + (r - .5) * .08 > .48);
-          const exposure = clamp(normal.dot(stoneLight), 0, 1);
-          if (sandyFace) {
-            color = new THREE.Color('#e9d8b3').lerp(new THREE.Color('#94aaa1'), 1 - smoothstep(-.3, 1.5, y));
-          } else if (shoreFace || coastalRock || (!grassyLedge && (col <= 9 || inlandRock))) {
-            if (col <= 10) {
-              // Colour by sun exposure, darker near the waterline.
-              const weathering = randomAt(Math.floor((s + y * .2) / 14), 1641);
-              color = fracture.clone().lerp(coolCliff, smoothstep(.02, .3, exposure));
-              color.lerp(cliffStone, smoothstep(.4, .88, exposure) * .8 + weathering * .16);
-              color.multiplyScalar(lerp(.8, 1, smoothstep(1.2, 4.5, y)));
-            } else {
-              const weathering = randomAt(Math.floor(s / 21) * 7 + Math.floor(u / 17), 1642);
-              color = fracture.clone().lerp(coolStone, smoothstep(.02, .32, exposure));
-              color.lerp(stone, smoothstep(.36, .9, exposure) * .78 + weathering * .12 + r * .1);
-              color.multiplyScalar(.96 + .06 * smoothstep(20, 70, cover * 60 + (y - 30)));
-              // Low-cover faces blend toward grass. Summits stay bare rock.
-              color.lerp(dryGrass, (1 - smoothstep(.45, .85, cover)) * smoothstep(.48, .85, normal.y) * .38);
-            }
-          } else {
-            meadowFace = true;
-            // Same turf palette on both sides of the road.
-            color = fern.clone().lerp(meadow, clamp(meadowMix * .7 + r * .07 + .18, 0, 1));
-            const grove = lerp(coastalGrove(s, 0), coastalGrove(s, u), vergeBlend);
-            color.lerp(fern, smoothstep(.34, .88, grove) * .34);
-            // In the coast range, sun-facing slopes go gold and shaded ones stay green.
-            const range = rangeInfluence(u);
-            if (range > 0) {
-              const facing = normal.x * sunSide.x + normal.z * sunSide.y;
-              color.lerp(goldGrass, smoothstep(.04, .3, facing) * range * .72);
-              color.lerp(shadedTurf, smoothstep(.02, .25, -facing) * range * .62);
-            }
-            const height = y - roadFrame(s).y;
-            color.lerp(dryGrass, smoothstep(.45, .95, exposure) * smoothstep(12, 90, height) * .28);
-            color.lerp(goldGrass, smoothstep(45, 100, height) * (1 - smoothstep(.38, .7, grove)) * (.16 + exposure * .2));
-            // Blossoms are separate geometry. Keep this tint subtle or drifts look like bare soil.
-            const bloom = wildflowers(s, u);
-            color.lerp(poppyTurf, bloom.poppy * .3).lerp(lupineTurf, bloom.lupine * .3).lerp(mustardTurf, bloom.mustard * .3);
-            const mat = tri.rimTurf || (col === 10 && u < coastOffset(s) + 5) ? icePlant(s) * clamp(1 - ravineAmount(s, u) * 3, 0, 1) : 0;
-            color.lerp(r > .8 ? iceRed : iceLeaf, mat * (.5 + r * .12));
-            if (tri.rimTurf) color.lerp(dust, smoothstep(.45, .9, cliffRib(s, 1)) * (.35 + r * .4) * (1 - mat));
-          }
-          // Small random variation so flat shading still defines the facets.
-          color.multiplyScalar(sandyFace || meadowFace ? .985 + r * .03 : col > 9 && !steep ? .95 + r * .1 : .97 + r * .06);
-          let tint = color;
-          if (meadowFace && u > 7 && pondRadius(s, u) < 2.6) {
-            const pond = pondAt(s);
-            // Damp tint is per vertex so the bank fades smoothly, not in solid rings.
-            tint = p => {
-              const damp = (1 - smoothstep(.65, 2.3, pondRadius(p.s, p.u, pond)))
-                * (1 - smoothstep(pond.level + .5, pond.level + 12, p.y));
-              return color.clone().lerp(fern, damp * .18);
-            };
-          }
-          addTriangle(positions, colors, ...tri, tint, this.start);
+          addTriangle(positions, colors, ...tri, groundColor(tri, col, randomAt(row * 2 + j, seedCol + 191)), this.start);
         });
       }
     }
@@ -252,7 +173,7 @@ export class CoastalChunk extends LevelChunk {
     this.sampleGround = terrainSampler(this.terrain);
   }
   buildWater() {
-    const positions = [], colors = [];
+    const positions = [], shore = [], cove = [];
     const step = 16, firstRow = this.start / step;
     const seaPoint = (row, col) => {
       const s = row * step + (randomAt(row, col + 717) - .5) * 9;
@@ -262,42 +183,39 @@ export class CoastalChunk extends LevelChunk {
     for (let row = firstRow; row < firstRow + CHUNK_LENGTH / step; row++) for (let col = 0; col < 32; col++) {
       const a = seaPoint(row, col), b = seaPoint(row + 1, col), c = seaPoint(row, col + 1), d = seaPoint(row + 1, col + 1);
       const triangles = randomAt(row, col + 613) > .5 ? [[a, b, c], [b, d, c]] : [[a, b, d], [a, d, c]];
-      triangles.forEach((tri, t) => {
-        const u = tri.reduce((sum, v) => sum + v.u, 0) / 3;
-        const s = tri.reduce((sum, v) => sum + v.s, 0) / 3;
-        const depth = clamp((shorelineOffset(s) - u) / 155, 0, 1);
-        const color = new THREE.Color('#71cfc7').lerp(new THREE.Color('#277f9e'), smoothstep(0, .52, depth));
-        color.lerp(new THREE.Color('#205879'), smoothstep(.28, 1, depth));
-        color.multiplyScalar(.94 + randomAt(row * 2 + t, col + 819) * .13);
-        addTriangle(positions, colors, ...tri, color, this.start);
-      });
-    }
-    const ocean = this.addMesh(geometryFrom(positions, colors), waterMaterial);
-    ocean.name = 'animated-ocean'; ocean.geometry.boundingSphere.radius += .5;
-    for (let line = 0; line < 4; line++) {
-      const foam = [], flow = [], edges = [];
-      for (let s = this.start; s < this.start + CHUNK_LENGTH; s += 2) {
-        if (ravineAmount(s, 0) > .15) continue;
-        if (line > 0 && randomAt(Math.floor(s / 6), line + 19) > .8) continue;
-        const offset = line === 0 ? -1.1 : 16;
-        const width = line === 0 ? 5.8 + Math.sin(s * .31) * 1.5 : 3.4 + Math.sin(s * .18 + line) * 1.3;
-        const at = (t, du) => positionAt(t, shorelineOffset(t) - offset + Math.sin(t * .21 + line) * 1.1 + du, .17);
-        const a = at(s, 0), b = at(s + 2, 0), c = at(s, -width), d = at(s + 2, -width);
-        a.edge = b.edge = 0; c.edge = d.edge = 1;
-        for (let triangle of [[a, c, b], [b, c, d]]) {
-          const [p, q, r] = triangle;
-          if ((q.z - p.z) * (r.x - p.x) - (q.x - p.x) * (r.z - p.z) < 0) triangle = [p, r, q];
-          for (const v of triangle) { foam.push(v.x, v.y, v.z + this.start); edges.push(v.edge); }
+      for (let tri of triangles) {
+        if ((tri[1].z - tri[0].z) * (tri[2].x - tri[0].x) - (tri[1].x - tri[0].x) * (tri[2].z - tri[0].z) < 0) tri = [tri[0], tri[2], tri[1]];
+        for (const p of tri) {
+          positions.push(p.x, p.y, p.z + this.start);
+          shore.push(shorelineOffset(p.s) - p.u);
+          cove.push(smoothstep(9, 20, beachWidth(p.s)));
         }
-        for (let vertex = 0; vertex < 6; vertex++) flow.push(1, 0, line / 3);
       }
-      const geo = geometryFrom(foam);
-      geo.setAttribute('surfEdge', new THREE.Float32BufferAttribute(edges, 1));
-      if (line > 0) geo.setAttribute('surfFlow', new THREE.Float32BufferAttribute(flow, 3));
-      geo.boundingSphere.radius += 12;
-      const surf = this.addMesh(geo, line === 0 ? foamMaterial : rollingSurfMaterial);
-      surf.name = line === 0 ? 'shore-wash' : 'rolling-breakers';
     }
+    const geometry = geometryFrom(positions);
+    geometry.setAttribute('shore', new THREE.Float32BufferAttribute(shore, 1));
+    geometry.setAttribute('cove', new THREE.Float32BufferAttribute(cove, 1));
+    const ocean = this.addMesh(geometry, waterMaterial);
+    ocean.name = 'animated-ocean'; ocean.geometry.boundingSphere.radius += .5;
+    // Breakers further out are drawn by the sea itself. This band is the wash
+    // running up the sand.
+    const foam = [], edges = [];
+    for (let s = this.start; s < this.start + CHUNK_LENGTH; s += 2) {
+      if (ravineAmount(s, 0) > .15) continue;
+      const width = 5.8 + Math.sin(s * .31) * 1.5;
+      const at = (t, du) => positionAt(t, shorelineOffset(t) + 1.1 + Math.sin(t * .21) * 1.1 + du, .17);
+      const a = at(s, 0), b = at(s + 2, 0), c = at(s, -width), d = at(s + 2, -width);
+      a.edge = b.edge = 0; c.edge = d.edge = 1;
+      for (let triangle of [[a, c, b], [b, c, d]]) {
+        const [p, q, r] = triangle;
+        if ((q.z - p.z) * (r.x - p.x) - (q.x - p.x) * (r.z - p.z) < 0) triangle = [p, r, q];
+        for (const v of triangle) { foam.push(v.x, v.y, v.z + this.start); edges.push(v.edge); }
+      }
+    }
+    const wash = geometryFrom(foam);
+    wash.setAttribute('surfEdge', new THREE.Float32BufferAttribute(edges, 1));
+    wash.boundingSphere.radius += 12;
+    this.addMesh(wash, foamMaterial).name = 'shore-wash';
   }
   ribbon(ranges, lift, material, dashed = false) {
     const positions = [];
@@ -342,43 +260,56 @@ export class CoastalChunk extends LevelChunk {
   }
   buildScenery() {
     const random = seededRandom(this.index + 8913);
-    const trunks = [], foliage = [[], []], scrub = [[], []], blooms = [], rocks = [], posts = [], caps = [], rails = [], benches = [], walls = [], shields = [], cypresses = [], monterey = [], sedges = [], stacks = [[], [], []];
+    const trunks = [], redwoods = [[], []], scrub = [[], []], rocks = [], posts = [], caps = [], rails = [], benches = [], walls = [], shields = [], cypresses = [], oaks = [], sedges = [], stacks = [[], [], []];
     const rockWashVertices = [], rockWashCoords = [];
     const canGrow = (s, u) => !(u < 0 && u > -overlookWidth(s) - 3) && pondRadius(s, u) > 1.15 && ravineAmount(s, u) < .13 && groundHeight(s, u) > 2 && discoveryClearsPlanting(s, u, this.discoveries);
     const hillSlope = (s, u) => Math.hypot(groundHeight(s, u + 1) - groundHeight(s, u - 1), groundHeight(s + 1, u) - groundHeight(s - 1, u)) / 2;
-    const green = ['#315c48', '#406747', '#52744e', '#294e40', '#607e4d', '#3e624b'];
-    const uplandGreen = ['#254e40', '#305b45', '#40664b', '#29483e'];
-    const bushColors = ['#6a8652', '#829357', '#547c56', '#94a365'];
-    const rockColors = ['#b9b39f', '#a5b1b0', '#c7bba2', '#929fa1', '#b7b6a9'];
-    const outcropColors = ['#9ca8a6', '#bab5a5', '#8c9c9d', '#acada2'];
+    const pick = list => list[Math.floor(random() * list.length)];
+    const bushColors = ['#617448', '#6b7d4e', '#8c9772', '#5a6d43'];
+    const rockColors = ['#b8ab92', '#a89d88', '#c4b597', '#9d968a', '#b3a991'];
+    const outcropColors = ['#a99f8b', '#bcaf94', '#9a9283', '#b0a58f'];
     const planted = (s, u) => {
       const p = positionAt(s, u);
       p.y = this.sampleGround(p.x, p.z + this.start) ?? p.y;
       return p;
+    };
+    // Cypress holds the bluffs, oaks the lower slopes and redwoods the shaded
+    // canyons further up.
+    const cypress = (p, size, s) => {
+      // The models lean toward +x, so turning them by the road's angle leans them inland.
+      const turn = -roadFrame(s).angle + (random() - .5) * .8;
+      cypresses.push({ p: [p.x, p.y - .2, p.z + this.start], scale: [size * .9, size * .85, size * .9], r: [0, turn, 0], color: pick(TREES.cypress) });
+      solidModel(this, coastalCypress.bark, cypresses.at(-1).p, turn, size * .9, true);
+    };
+    const oak = (p, size) => {
+      const turn = random() * Math.PI * 2;
+      oaks.push({ p: [p.x, p.y - .2, p.z + this.start], scale: [size, size * .78, size], r: [0, turn, 0], color: pick(TREES.oak) });
+      solidModel(this, coastalOak.bark, oaks.at(-1).p, turn, size, true);
     };
     for (let i = 0; i < 475; i++) {
       const s = this.start + random() * CHUNK_LENGTH;
       let u = 12 + random() ** .8 * 170;
       if (i < 13) u = lerp(coastOffset(s) + 7, -13, random());
       const grove = coastalGrove(s, u);
-      const upland = smoothstep(45, 85, u);
       if (grove < (u < 0 ? .58 : .51) || random() > smoothstep(.46, .71, grove)) continue;
       if (!canGrow(s, u) || rockCover(s, u) > .42 || hillSlope(s, u) > 1.35) continue;
       const p = planted(s, u);
       const maturity = u < 0 ? .7 : (.76 + smoothstep(.47, .72, grove) * .37) * (1 - rockCover(s, u) * .22);
       const size = (5.8 + random() * 6.8) * maturity;
-      const y = p.y - .25; const rotation = random() * Math.PI;
-      if (u < 58 && (u < 0 || i % 4 === 0)) {
-        const item = { p: [p.x, y, p.z + this.start], scale: [size * .85, size, size * .85], r: [0, rotation, 0], color: green[i % green.length] };
-        (u < 0 ? cypresses : monterey).push(item);
-        solidModel(this, (u < 0 ? coastalCypress : coastalMontereyPine).bark, item.p, rotation, size * .85, true);
-        continue;
-      }
-      trunks.push({ p: [p.x, y + size * .29, p.z + this.start], scale: [size * .35, size * .6, size * .35] });
-      solidPost(this, p.x, p.z + this.start, size * .09);
-      const palette = upland > .5 ? uplandGreen : green;
-      const color = palette[Math.floor(random() * palette.length)];
-      foliage[i % 2].push({ p: [p.x, y, p.z + this.start], scale: [size, size, size], r: [0, rotation, 0], color });
+      if (u < 0) { cypress(p, size, s); continue; }
+      // Oaks by the road stay small so their crowns don't hang over the lanes.
+      if (u < 45 || coastRange(s, u).spur > .55) { oak(p, size * .9 * lerp(.55, 1, smoothstep(12, 26, u))); continue; }
+      const y = p.y - .25;
+      trunks.push({ p: [p.x, y + size * .4, p.z + this.start], scale: [size * .32, size * .8, size * .32], color: TREES.redwoodBark });
+      solidPost(this, p.x, p.z + this.start, size * .08);
+      redwoods[i % 2].push({ p: [p.x, y, p.z + this.start], scale: [size * .8, size * 1.1, size * .8], r: [0, random() * Math.PI, 0], color: pick(TREES.redwood) });
+    }
+    // Lone oaks out on the open grass.
+    const savanna = seededRandom(this.index + 77213);
+    for (let i = 0; i < 14; i++) {
+      const s = this.start + savanna() * CHUNK_LENGTH, u = 18 + savanna() * 150, size = 5.5 + savanna() * 4;
+      if (savanna() > .5 || coastalGrove(s, u) > .5 || !canGrow(s, u) || rockCover(s, u) > .25 || hillSlope(s, u) > 1.1) continue;
+      oak(planted(s, u), size);
     }
     // Scrub grows in clumps: a lead mound plus smaller companions.
     const clumpRandom = seededRandom(this.index + 30931);
@@ -395,7 +326,7 @@ export class CoastalChunk extends LevelChunk {
         const t = s + Math.cos(angle) * reach, v = u + Math.sin(angle) * reach;
         if (!canGrow(t, v)) continue;
         const q = planted(t, v), small = size * (.42 + clumpRandom() * .3);
-        scrub[(i + k + 1) % 2].push({ p: [q.x, q.y - small * .08, q.z + this.start], scale: [small, small * .8, small], r: [0, angle, 0], color: k ? '#99a779' : color });
+        scrub[(i + k + 1) % 2].push({ p: [q.x, q.y - small * .08, q.z + this.start], scale: [small, small * .8, small], r: [0, angle, 0], color: k ? '#8a9470' : color });
       }
     }
     let seaStackTop = 0;
@@ -408,6 +339,8 @@ export class CoastalChunk extends LevelChunk {
       const u = sea ? shorelineOffset(s) - (i === 0 ? 35 : 6) - random() ** 1.7 * (i === 0 ? 45 : 34) : (i < 35 ? coastOffset(s) + random() * 5 : 12 + random() * 140);
       if (sea && this.discoveries.some(site => site.kind !== 'lighthouse' && Math.hypot(s - site.s, u - site.u) < site.radius + 10)) continue;
       if (!sea && !canGrow(s, u)) continue;
+      // Boulders gather where the ground is rocky. Spread evenly they look sprinkled on.
+      if (i >= 35 && randomAt(this.index * 61 + i, 4471) > .3 + rockCover(s, u) * 2) continue;
       const p = planted(s, u);
       const size = sea ? (i === 0 ? 8 + random() * 2.5 : hero ? 3.2 + random() * 2.8 : .8 + random() * 2.2) : .7 + random() * 3.1;
       const height = size * (hero ? 1.1 + random() * .72 : .8 + random() * .65);
@@ -432,7 +365,7 @@ export class CoastalChunk extends LevelChunk {
         if (i === 0) {
           // The tallest stack gets scrub and a cypress placed on its real crown.
           const crown = crownOf(rock, coastalCrags[variant]), tree = 3.6 + randomAt(this.index, 5101) * 1.6;
-          const item = { p: [crown.x, crown.y - .35, crown.z], scale: [tree, tree, tree], r: [0, -.5 + randomAt(this.index, 5102) * .6, 0], color: green[3] };
+          const item = { p: [crown.x, crown.y - .35, crown.z], scale: [tree, tree, tree], r: [0, -roadFrame(s).angle - .3 + randomAt(this.index, 5102) * .6, 0], color: TREES.cypress[0] };
           cypresses.push(item);
           solidModel(this, coastalCypress.bark, item.p, item.r[1], tree, true);
           seaStackTop = Math.max(seaStackTop, crown.y + tree);
@@ -505,19 +438,6 @@ export class CoastalChunk extends LevelChunk {
       geometry.boundingSphere.radius += .5;
       this.addMesh(geometry, rockWashMaterial).name = 'sea-stack-wash';
     }
-    // These wildflowers only grow beside shrubs.
-    for (let patch = 0; patch < 28; patch++) {
-      const s = this.start + random() * CHUNK_LENGTH;
-      const u = patch % 2 ? 10 + random() * 20 : lerp(coastOffset(s) + 3, -9, random());
-      if (!canGrow(s, u)) continue;
-      const center = planted(s, u);
-      const besideShrub = scrub.flat().some(shrub => Math.hypot(shrub.p[0] - center.x, shrub.p[2] - center.z - this.start) < shrub.scale[0] + 3);
-      for (let flower = 0; flower < 12; flower++) {
-        const t = s + (random() - .5) * 4, v = u + (random() - .5) * 3;
-        if (!canGrow(t, v) || Math.abs(v) < 8) continue;
-        if (besideShrub) blooms.push({ s: t, u: v, color: patch % 3 ? PETALS.goldfields : PETALS.radish });
-      }
-    }
     // Route 1 shields on a world-space schedule, clear of the viaducts.
     for (let k = Math.floor((this.start - 520) / 700); k * 700 + 320 < this.start + CHUNK_LENGTH; k++) {
       const s = k * 700 + 320 + randomAt(k, 5131) * 200;
@@ -552,7 +472,7 @@ export class CoastalChunk extends LevelChunk {
         const s = overlook.center + ds, p = planted(s, -20), angle = -roadFrame(s).angle;
         const part = (u, y, along, scale) => {
           const q = positionAt(s + along, -20 + u, p.y + y);
-          benches.push({p: [q.x, q.y, q.z + this.start], scale, r: [0, angle, 0]});
+          benches.push({p: [q.x, q.y, q.z + this.start], scale, r: [0, angle, 0], color: '#8a6d4e'});
         };
         part(0, .78, 0, [.95, .16, 3.2]);
         part(.42, 1.25, 0, [.13, .65, 3.2]);
@@ -612,9 +532,7 @@ export class CoastalChunk extends LevelChunk {
       const s = this.start + 8 + detailRandom() * 112;
       const u = lerp(coastOffset(s) + 6, -13, detailRandom());
       if (!canGrow(s, u) || u > -11) continue;
-      const p = planted(s, u), size = 6.5 + detailRandom() * 4;
-      cypresses.push({ p: [p.x, p.y - .12, p.z + this.start], scale: [size, size, size], r: [0, -.6 + detailRandom() * .5, 0], color: green[i % green.length] });
-      solidModel(this, coastalCypress.bark, cypresses.at(-1).p, cypresses.at(-1).r[1], size, true);
+      cypress(planted(s, u), 7 + detailRandom() * 4.5, s);
     }
     // Find the water's edge on the rendered faces so shore plants and stones meet
     // the bank the water was clipped against, even at a chunk boundary.
@@ -666,19 +584,19 @@ export class CoastalChunk extends LevelChunk {
       }
     }
     this.seaStackTop = seaStackTop;
-    this.buildBlossoms(canGrow, blooms);
+    this.buildBlossoms(canGrow);
     makeInstances(this.group, trunkGeometry, trunkMaterial, trunks);
-    coastalPines.forEach((shape, i) => { const mesh = makeInstances(this.group, shape, pineMaterial, foliage[i]); if (mesh) mesh.name = 'coastal-firs'; });
-    makeInstances(this.group, coastalCypress.bark, trunkMaterial, cypresses.map(({ color, ...item }) => item));
-    const cypress = makeInstances(this.group, coastalCypress.leaves, pineMaterial, cypresses);
-    if (cypress) cypress.name = 'headland-cypresses';
-    makeInstances(this.group, coastalMontereyPine.bark, trunkMaterial, monterey.map(({color, ...item}) => item));
-    const pines = makeInstances(this.group, coastalMontereyPine.leaves, pineMaterial, monterey);
-    if (pines) pines.name = 'monterey-pines';
-    const rushes = makeInstances(this.group, coastalSedge, pineMaterial, sedges, false);
+    coastalRedwoods.forEach((shape, i) => { const mesh = makeInstances(this.group, shape, foliageMaterial, redwoods[i]); if (mesh) mesh.name = 'canyon-redwoods'; });
+    makeInstances(this.group, coastalCypress.bark, trunkMaterial, cypresses.map(item => ({ ...item, color: TREES.bark })));
+    const headland = makeInstances(this.group, coastalCypress.leaves, foliageMaterial, cypresses);
+    if (headland) headland.name = 'headland-cypresses';
+    makeInstances(this.group, coastalOak.bark, trunkMaterial, oaks.map(item => ({ ...item, color: TREES.bark })));
+    const groves = makeInstances(this.group, coastalOak.leaves, foliageMaterial, oaks);
+    if (groves) groves.name = 'live-oaks';
+    const rushes = makeInstances(this.group, coastalSedge, foliageMaterial, sedges, false);
     if (rushes) { rushes.name = 'pond-shore-sedges'; rushes.userData.ambientOcclusion = false; }
     coastalCrags.forEach((shape, i) => { const mesh = makeInstances(this.group, shape, cragMaterial, stacks[i]); if (mesh) mesh.name = 'tidal-sea-stacks'; });
-    coastalScrub.forEach((shape, i) => { const mesh = makeInstances(this.group, shape, pineMaterial, scrub[i]); if (mesh) mesh.name = 'coastal-scrub'; });
+    coastalScrub.forEach((shape, i) => { const mesh = makeInstances(this.group, shape, foliageMaterial, scrub[i]); if (mesh) mesh.name = 'coastal-scrub'; });
     // Small inland stones read as speckles, so drop them here after generation.
     // Filtering late keeps the seed sequence for later scenery unchanged.
     makeInstances(this.group, rockGeometry, rockMaterial, rocks.filter(rock => rock.scale[0] >= 1 || rock.p[1] < 4));
@@ -693,7 +611,7 @@ export class CoastalChunk extends LevelChunk {
     const wall = makeInstances(this.group, railGeometry, rockMaterial, walls);
     if (wall) wall.name = 'overlook-stone-wall';
   }
-  buildBlossoms(canGrow, extra) {
+  buildBlossoms(canGrow) {
     // Petals are small flat triangles draped on the rendered faces so they don't
     // float or sink.
     const positions = [], colors = [], random = seededRandom(this.index + 70411);
@@ -731,21 +649,23 @@ export class CoastalChunk extends LevelChunk {
       const cs = s + 2, cu = u + 2;
       if (Math.abs(cu) < 8 || (cu < 0 && cu < coastOffset(cs) + 2)) continue;
       const bloom = wildflowers(cs, cu), total = bloom.poppy + bloom.lupine + bloom.mustard;
-      if (total < .06 || !canGrow(cs, cu) || rockCover(cs, cu) > .3) continue;
+      // Petals only fill the heart of each drift. The ground tint carries its
+      // edges, so the meadows don't get sprinkled with lone petals.
+      const core = smoothstep(.4, .75, total);
+      if (core < .05 || !canGrow(cs, cu) || rockCover(cs, cu) > .3) continue;
       // The road's mapping is effectively linear across one 4 m cell.
       const origin = positionAt(s, u), along = positionAt(s + 4, u), across = positionAt(s, u + 4);
-      const count = Math.floor(total * 28 + random());
+      const count = Math.floor(core * 18 + random());
       for (let i = 0; i < count; i++) {
         const pick = random() * total;
         const kind = pick < bloom.poppy ? 'poppy' : pick < bloom.poppy + bloom.lupine ? 'lupine' : 'mustard';
-        const colorsOf = PETALS[kind], color = random() < .06 ? PETALS.cream : colorsOf[Math.floor(random() * colorsOf.length)];
+        const colorsOf = PETALS[kind], color = random() < .03 ? PETALS.cream : colorsOf[Math.floor(random() * colorsOf.length)];
         const a = random(), b = random();
         if (u + b * 4 < 0 && u + b * 4 < coastOffset(s + a * 4) + 1.5) continue;
         petal(origin.x + (along.x - origin.x) * a + (across.x - origin.x) * b,
-          origin.z + (along.z - origin.z) * a + (across.z - origin.z) * b, .28 + random() * .16, color);
+          origin.z + (along.z - origin.z) * a + (across.z - origin.z) * b, .32 + random() * .18, color);
       }
     }
-    for (const bloom of extra) petalAt(bloom.s, bloom.u, .22 + random() * .1, bloom.color);
     for (let s = this.start; s < this.start + CHUNK_LENGTH; s += 1.5) {
       const mat = icePlant(s + .75);
       if (mat < .05 || ravineAmount(s, coastOffset(s)) > .1) continue;
@@ -764,7 +684,7 @@ export class CoastalChunk extends LevelChunk {
 export class CoastalWorld extends LevelWorld {
   constructor(scene, chunkSource = null) {
     super(scene, chunkSource, CoastalChunk);
-    this.sky = new CoastalSky(scene); this.backdrop = true;
+    this.sky = new CoastalSky(scene, waterMaterial); this.backdrop = true;
   }
   update(s) {
     super.update(s);

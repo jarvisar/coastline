@@ -1,11 +1,12 @@
 import * as THREE from 'three';
 import { registerChunkResources } from './chunk-resources.js';
-import { bridgeAt, pondAt, pondRadius, roadHeight, groundHeight, positionAt, terrainCell, terrainColumns, randomAt, smoothstep, TERRAIN_STEP, CHUNK_LENGTH } from './route.js';
+import { bridgeAt, pondAt, pondRadius, roadHeight, groundHeight, positionAt, terrainCell, terrainColumns, smoothstep, TERRAIN_STEP, CHUNK_LENGTH } from './route.js';
 import { createPondMaterial } from './water.js';
+import { cloudShaded } from './coastal-clouds.js';
 
-const bridgeMaterial = new THREE.MeshLambertMaterial({ color: '#d8c9ab', emissive: '#766b54', emissiveIntensity: .08, flatShading: true, side: THREE.DoubleSide });
-const lakeMaterial = createPondMaterial();
-const bankMaterial = new THREE.MeshLambertMaterial({vertexColors: true, flatShading: true, transparent: true, depthWrite: false});
+const bridgeMaterial = cloudShaded(new THREE.MeshLambertMaterial({ color: '#d8c9ab', emissive: '#766b54', emissiveIntensity: .08, flatShading: true, side: THREE.DoubleSide }), 'bridge');
+const lakeMaterial = cloudShaded(createPondMaterial(), 'pond');
+const bankMaterial = cloudShaded(new THREE.MeshLambertMaterial({vertexColors: true, flatShading: true, transparent: true, depthWrite: false}), 'bank');
 registerChunkResources('landmarks', { bridgeMaterial, lakeMaterial, bankMaterial });
 
 function geometry(vertices, colors, colorSize = 3) {
@@ -126,7 +127,7 @@ function buildBridge(chunk, bridge) {
 function buildPond(chunk, pond) {
   if (pond.center + pond.rs * 1.5 < chunk.start || pond.center - pond.rs * 1.5 > chunk.start + CHUNK_LENGTH) return;
   const vertices = [], colors = [], bankVertices = [], bankColors = [];
-  const shallow = new THREE.Color('#6eaaa2'), deep = new THREE.Color('#397d88');
+  const shallow = new THREE.Color('#5a95b4'), deep = new THREE.Color('#2c6690');
   const dampEarth = new THREE.Color('#697b4b');
   const marginWidth = p => .28 + .2 * Math.sin(p.s / 11 + p.u / 7);
   const clip = (polygon, distance) => {
@@ -160,13 +161,13 @@ function buildPond(chunk, pond) {
         }
         const polygon = clip(triangle, p => pond.level - p.y);
         if (polygon.length < 3) continue;
-        // One colour per terrain facet. Smooth shading gives an airbrushed cyan halo.
-        const depth = polygon.reduce((sum, p) => sum + pond.level - p.y, 0) / polygon.length;
-        const color = shallow.clone().lerp(deep, .28 + Math.min(1, depth / 2.8) * .65);
-        color.multiplyScalar(.985 + randomAt(row, col + 2201) * .03);
+        // Darkens smoothly with depth. A colour per facet showed the terrain
+        // triangles through the water like cracked glass. The shallow tone stays
+        // close to the deep one so the rim doesn't glow cyan.
         for (let i = 1; i < polygon.length - 1; i++) {
           // Terrain cells wind downward. The water is viewed from above.
           for (const p of [polygon[0], polygon[i + 1], polygon[i]]) {
+            const color = shallow.clone().lerp(deep, .3 + smoothstep(0, 2.6, pond.level - p.y) * .7);
             vertices.push(p.x, pond.level, p.z + chunk.start); colors.push(color.r, color.g, color.b);
           }
         }

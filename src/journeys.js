@@ -13,8 +13,8 @@ import { swampDrivingRoute } from './world/swamp-route.js';
 // Each route's scenery loads separately, through world/scenery.js.
 export const JOURNEYS = {
   coast: {
-    title: 'Pacific Coast', label: 'PACIFIC COAST', routeNumber: '1', route: coastalDrivingRoute, themeColor: '#c2e7e8',
-    introduction: 'Drive the Pacific Coast through green hills and ocean views.',
+    title: 'Pacific Coast', label: 'PACIFIC COAST', routeNumber: '1', route: coastalDrivingRoute, themeColor: '#cfe3ee',
+    introduction: 'Drive the Pacific Coast past golden hills, sea stacks and open ocean.',
     sound: 'Ocean and engine sounds on',
     canvas: 'A low-poly coastal landscape. Drive with WASD or the arrow keys.',
   },

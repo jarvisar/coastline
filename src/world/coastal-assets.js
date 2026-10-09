@@ -53,66 +53,96 @@ function crag(seed) {
   return geometryFrom(vertices, colors);
 }
 
-function pine(seed) {
-  const vertices = [], colors = [];
-  for (let layer = 0; layer < 4; layer++) {
-    const sides = 7, base = .17 + layer * .18, radius = .32 - layer * .064;
-    const tip = [.025 * layer, base + .43 - layer * .035, 0];
+// Coast redwood: a tall, narrow spire of drooping tiers. The trunk is a
+// separate instance so it can take the redwood bark colour.
+function redwood(seed) {
+  const vertices = [], colors = [], tiers = 5, sides = 7;
+  for (let tier = 0; tier < tiers; tier++) {
+    const t = tier / (tiers - 1), base = .14 + tier * .27;
+    const radius = (.4 - t * .26) * (.85 + randomAt(seed * 7 + tier, 3101) * .3);
+    const tip = [(randomAt(seed, tier + 3102) - .5) * .04, base + .36 - t * .05, 0];
+    const rim = Array.from({ length: sides }, (_, i) => {
+      const angle = (i + randomAt(i + seed * 13, tier + 3103) * .4) / sides * Math.PI * 2 + tier * .9;
+      const r = radius * (.8 + randomAt(i + seed * 17, tier + 3104) * .35);
+      return [Math.cos(angle) * r, base - .07 + (randomAt(i, tier + seed * 11 + 3105) - .5) * .05, Math.sin(angle) * r];
+    });
     for (let i = 0; i < sides; i++) {
-      const at = j => {
-        const angle = j / sides * Math.PI * 2 + layer * .73;
-        const r = radius * (.77 + randomAt(j % sides + seed * 13, layer + 316) * .4);
-        return [Math.cos(angle) * r + layer * .02, base + (randomAt(j % sides, layer + seed * 11) - .5) * .055, Math.sin(angle) * r];
-      };
-      const a = at(i), b = at((i + 1) % sides);
-      vertices.push(...a, ...tip, ...b, ...a, ...b, layer * .02, base, 0);
-      const tint = new THREE.Color('#ffffff').multiplyScalar(.72 + layer * .07 + randomAt(i, seed + 315) * .1);
-      for (let k = 0; k < 6; k++) colors.push(tint.r, tint.g, tint.b);
+      const a = rim[i], b = rim[(i + 1) % sides];
+      vertices.push(...a, ...tip, ...b, ...a, ...b, tip[0], base + .02, tip[2]);
+      const lit = .76 + t * .14 + randomAt(i, seed + tier * 7 + 3106) * .08;
+      for (let k = 0; k < 3; k++) colors.push(lit, lit, lit * .97);
+      for (let k = 0; k < 3; k++) colors.push(.56, .56, .56);
     }
   }
   return geometryFrom(vertices, colors);
 }
 
-function coastalTree(pine = false) {
-  const bark = [], leaves = [], up = new THREE.Vector3(0, 1, 0);
+// Crown lobes shaded lighter on top so a single instance colour reads as foliage.
+// Flattened cypress plates get away with a 36-face dodecahedron. Round oak
+// crowns need the 80-face icosahedron or their big facets look cut.
+function lobe(scale, position, salt = 0, round = false) {
+  const g = round ? new THREE.IcosahedronGeometry(1, 1) : new THREE.DodecahedronGeometry(1, 0);
+  g.scale(...scale); g.translate(...position);
+  const colors = [], normals = g.attributes.normal;
+  for (let j = 0; j < normals.count; j += 3) {
+    const up = (normals.getY(j) + normals.getY(j + 1) + normals.getY(j + 2)) / 3;
+    const shade = .72 + Math.max(0, up) * .28 + randomAt(j, salt + 916) * .04;
+    for (let k = 0; k < 3; k++) colors.push(shade, shade, shade * .96);
+  }
+  g.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  return g;
+}
+function limbs() {
+  const bark = [], up = new THREE.Vector3(0, 1, 0);
   const branch = (from, to, width) => {
     const a = new THREE.Vector3(...from), b = new THREE.Vector3(...to), direction = b.clone().sub(a);
     const g = new THREE.CylinderGeometry(width * .58, width, direction.length(), 5, 1, true);
     g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(up, direction.clone().normalize()));
     g.translate(...a.add(b).multiplyScalar(.5).toArray()); bark.push(g);
   };
-  const lean = pine ? .13 : .32;
-  branch([0, -.09, 0], [lean * .3, .33, .04], .075);
-  branch([lean * .3, .33, .04], [lean, .65, -.02], .055);
-  branch([lean, .65, -.02], [lean + .06, pine ? 1 : .81, .01], .034);
-  for (let i = 0; i < (pine ? 5 : 6); i++) {
-    const angle = i * 2.4, radius = .18 + randomAt(i, 910) * (pine ? .21 : .4);
-    const height = pine ? .63 + i * .085 : .7 + randomAt(i, 911) * .16;
-    const crown = [lean + Math.cos(angle) * radius + (pine ? 0 : .12), height, Math.sin(angle) * radius * .8];
-    const fork = [crown[0] * .73, height - .13, crown[2] * .6];
-    branch([lean * .7, .36 + i * .042, 0], fork, .035 - i * .002);
-    branch(fork, crown, .019);
-    const g = new THREE.IcosahedronGeometry(1, 1);
-    g.scale(.29 + randomAt(i, 912) * .14, .16 + randomAt(i, 913) * .08, .26 + randomAt(i, 914) * .12);
-    g.rotateY(angle); g.translate(...crown);
-    const colors = [], normals = g.attributes.normal;
-    for (let j = 0; j < normals.count; j += 3) {
-      const up = (normals.getY(j) + normals.getY(j + 1) + normals.getY(j + 2)) / 3;
-      const shade = .76 + Math.max(0, up) * .23 + randomAt(j, i + 916) * .04;
-      for (let k = 0; k < 3; k++) colors.push(shade, shade, shade * .96);
-    }
-    g.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-    leaves.push(g);
-  }
+  return { bark, branch };
+}
+function merged(bark, leaves) {
   const result = { bark: mergeGeometries(bark), leaves: mergeGeometries(leaves) };
   for (const part of [...bark, ...leaves]) part.dispose();
   return result;
 }
 
+// Monterey cypress, sheared flat by the sea wind. The crown streams toward +x,
+// which the scenery turns inland, and the top is clipped level.
+function cypress() {
+  const { bark, branch } = limbs(), leaves = [];
+  branch([0, -.09, 0], [.1, .3, .02], .08);
+  branch([.1, .3, .02], [.26, .55, -.02], .058);
+  const plates = [
+    [-.08, .62, .04, .3, .09, .26], [.24, .7, -.12, .38, .1, .3], [.3, .66, .22, .34, .09, .28],
+    [.56, .64, .02, .36, .09, .3], [.32, .79, .04, .42, .08, .36], [.02, .74, -.18, .26, .08, .22],
+  ];
+  plates.forEach(([x, y, z, sx, sy, sz], i) => {
+    branch([.2 + x * .2, .45 + i * .015, z * .3], [x * .85, y - .05, z * .8], .03);
+    leaves.push(lobe([sx, sy, sz], [x, y, z], i * 31));
+  });
+  return merged(bark, leaves);
+}
+
+// Coast live oak: a short trunk forking into a broad, rounded crown.
+function oak() {
+  const { bark, branch } = limbs(), leaves = [];
+  branch([0, -.08, 0], [.03, .27, 0], .075);
+  leaves.push(lobe([.46, .3, .44], [.02, .66, 0], 7, true));
+  for (let i = 0; i < 3; i++) {
+    const angle = i * 2.1 + .4 + randomAt(i, 3111) * .3, radius = .32 + randomAt(i, 3112) * .08;
+    const crown = [Math.cos(angle) * radius, .5 + randomAt(i, 3113) * .08, Math.sin(angle) * radius];
+    branch([.03, .25, 0], [crown[0] * .8, crown[1] - .06, crown[2] * .8], .04);
+    leaves.push(lobe([.36 + randomAt(i, 3114) * .06, .26, .34], crown, i * 17, true));
+  }
+  return merged(bark, leaves);
+}
+
 export const coastalCrags = [crag(1), crag(2), crag(3)];
-export const coastalPines = [pine(1), pine(2)];
-export const coastalCypress = coastalTree();
-export const coastalMontereyPine = coastalTree(true);
+export const coastalRedwoods = [redwood(1), redwood(2)];
+export const coastalCypress = cypress();
+export const coastalOak = oak();
 
 function scrub(seed) {
   // Low mound of overlapping lobes, lighter on top. The base sits at y = 0.

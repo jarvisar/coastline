@@ -30,7 +30,7 @@ export function journeyStart(routeNumber) {
   return { s: Math.floor((randomAt(routeNumber, 1910) - .5) * 40000), distance: 0 };
 }
 function drivingCoastOffset(s) { return -28 - 8 * Math.sin(s / 107 + .8) - 4 * Math.sin(s / 43) - 3 * Math.sin(s / 23 + 2); }
-function coastNoise(s, span, salt) {
+export function coastNoise(s, span, salt) {
   const cell = Math.floor(s / span), t = smoothstep(0, 1, s / span - cell);
   return lerp(randomAt(cell, salt), randomAt(cell + 1, salt), t);
 }
@@ -70,9 +70,15 @@ export function beachWidth(s) {
 }
 export function shorelineOffset(s) { return coastOffset(s) - 10 - beachWidth(s) - 2.4; }
 
-function coastalShoulder(s) {
-  return (coastNoise(s, 83, 1611) * 14 - 5) * smoothstep(-18, -29, coastOffset(s));
+// How far the bench falls from the road to the cliff crown. Sloping toward the
+// sea keeps the water in sight from the driving views. The verge tests cap how
+// much of this can happen inside the drivable shoulder.
+function benchDrop(s, coast = coastOffset(s)) {
+  return Math.min(8, (-7 - coast) * .26) * (.75 + .5 * coastNoise(s, 83, 1611));
 }
+// Bench profile from the road edge (0) to the crown (1). Flat by the road,
+// steepest just before the edge.
+const benchFall = t => t * t;
 
 export function cliffRib(s, height = 0) {
   // Tilted joints. Sampling one field at several heights keeps buttresses
@@ -124,7 +130,7 @@ export function pondRadius(s, u, pond = pondAt(s)) {
   const angle = Math.atan2(y, x);
   return Math.hypot(x, y) / (1 + .13 * Math.sin(angle * 3 + pond.index) + .055 * Math.sin(angle * 2 + pond.index * .7));
 }
-function fieldNoise(s, u, span, salt) {
+export function fieldNoise(s, u, span, salt) {
   const cs = Math.floor(s / span), cu = Math.floor(u / span);
   const ts = smoothstep(0, 1, s / span - cs), tu = smoothstep(0, 1, u / span - cu);
   const at = (i, j) => randomAt(i * 1031 + j, salt);
@@ -171,15 +177,20 @@ export function coastalGrove(s, u) {
   const habitat = fieldNoise(s, u, 54, 1751) * .72 + fieldNoise(s, u, 23, 1752) * .28;
   if (u < 30) return habitat;
   const { spur, rise } = coastRange(s, u);
-  // The sun is toward falling s, so a slope that climbs with s faces it.
-  const sunward = clamp((coastRange(s + 5, u).height - coastRange(s - 5, u).height) / 10 * 1.8, -1, 1);
+  // The afternoon sun is out over the sea and a little toward rising s, so
+  // slopes climbing inland face it. These are the gold, open ones.
+  const alongS = (coastRange(s + 5, u).height - coastRange(s - 5, u).height) / 10;
+  const alongU = (coastRange(s, u + 5).height - coastRange(s, u - 5).height) / 10;
+  const sunward = clamp((alongU * .93 - alongS * .38) * 1.8, -1, 1);
   const forest = .5 - sunward * .38 + (1 - spur) * .2 - spur * .22 + (habitat - .5) * .35;
   return lerp(habitat, forest, smoothstep(30, 85, u) * Math.min(1, rise * 4));
 }
 // 0 on the terrace, 1 where the coast range sets the ground colour.
 export const rangeInfluence = u => smoothstep(28, 90, u);
 export function wildflowers(s, u) {
-  const open = (1 - smoothstep(.44, .6, coastalGrove(s, u))) * smoothstep(8.5, 15, Math.abs(u));
+  // Spring flowers belong on the green bench. Up on the gold range they read as
+  // a different season.
+  const open = (1 - smoothstep(.44, .6, coastalGrove(s, u))) * smoothstep(8.5, 15, Math.abs(u)) * (1 - smoothstep(30, 70, u) * .95);
   const poppy = smoothstep(.57, .76, fieldNoise(s, u, 43, 1781)) * open;
   const lupine = smoothstep(.58, .78, fieldNoise(s + 17, u, 61, 1782)) * open * (1 - poppy * .8);
   const mustard = smoothstep(.6, .8, fieldNoise(s, u - 23, 79, 1783)) * open * smoothstep(24, 60, u) * (1 - Math.max(poppy, lupine) * .8);
@@ -213,10 +224,10 @@ function baseTerrainHeight(s, u, radius) {
   if (u < beach - 7) return -3.2;
   if (u < beach) return lerp(-3.2, 1.2, smoothstep(beach - 7, beach, u));
   if (u < coast - 10) return 1.2;
-  if (u < coast) return lerp(1.2, h + 1.2 + ripple + coastalShoulder(s), smoothstep(coast - 10, coast, u));
+  if (u < coast) return lerp(1.2, h + ripple - benchDrop(s, coast), smoothstep(coast - 10, coast, u));
   if (u < -7) {
-    const shelf = h + (1.2 + ripple) * smoothstep(-7, coast, u)
-      + (u < -18 ? coastalShoulder(s) * smoothstep(-18, Math.min(-18.01, coast), u) : 0);
+    const t = smoothstep(-7, coast, u);
+    const shelf = h + ripple * t - benchDrop(s, coast) * benchFall(t);
     // Overlook aprons flatten to road height and blend back into the bluff.
     const overlook = overlookAt(s);
     const apron = overlook.enabled ? 1 - smoothstep(32, 48, Math.abs(s - overlook.center)) : 0;

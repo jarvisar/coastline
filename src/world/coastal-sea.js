@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { registerChunkResources } from './chunk-resources.js';
 import { CHUNK_LENGTH, randomAt, positionAt, roadFrame, shorelineOffset } from './route.js';
 import { waterClock } from './water.js';
+import { addCloudShadows } from './coastal-clouds.js';
 import { Parts } from './coastal-discovery-assets.js';
 
 // Sloops are placed from world-space seeds so neighbouring chunks agree.
@@ -94,6 +95,7 @@ sloopMaterial.onBeforeCompile = shader => {
     transformed.x -= transformed.y * roll;
     transformed.z += sin(coastTime * 0.021 + phase) * 5.0;
   `);
+  addCloudShadows(shader);
 };
 sloopMaterial.customProgramCacheKey = () => 'coastal-sloop-v2';
 registerChunkResources('coastal-sea', { sloopGeometries, sloopMaterial });

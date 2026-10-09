@@ -154,7 +154,7 @@ test('a farmstead barn stops a free-roaming car driven straight at it', () => {
 
 test('tree trunks, fence rails, poles and street furniture are solid wherever they are drawn', async () => {
   const { CoastalChunk } = await import('../src/world/environment.js'), { JungleChunk } = await import('../src/world/jungle.js'), { CityChunk } = await import('../src/world/city.js');
-  const drawn = { coast: ['coastal-firs', 'headland-cypresses', 'monterey-pines'], jungle: ['jungle-trunks', 'palm-trunks', 'emergent-trunks'], plains: ['plains-trunks', 'fence-rails', 'utility-poles', 'cattle'],
+  const drawn = { coast: ['canyon-redwoods', 'headland-cypresses', 'live-oaks'], jungle: ['jungle-trunks', 'palm-trunks', 'emergent-trunks'], plains: ['plains-trunks', 'fence-rails', 'utility-poles', 'cattle'],
     city: ['street-lamps', 'traffic-signals', 'benches', 'bus-shelters', 'riverside-kiosks', 'litter-bins'] };
   const matrix = new THREE.Matrix4(), p = new THREE.Vector3();
   for (const [journey, Chunk] of Object.entries({ coast: CoastalChunk, jungle: JungleChunk, plains: PlainsChunk, city: CityChunk })) {
