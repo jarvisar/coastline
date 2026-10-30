@@ -28,7 +28,7 @@ export const JOURNEYS = {
     title: 'Midnight Alpine', label: 'MIDNIGHT ALPINE', routeNumber: '3', route: snowDrivingRoute, themeColor: '#111d30', night: 1,
     introduction: 'Wind above a moonlit lake through snow-covered mountains.',
     sound: 'Mountain wind and engine sounds on',
-    canvas: 'A snowy mountain road above a moonlit lake, with distant mountain ranges, snow-laden firs, shore cabins and warm lamps. Drive with WASD or the arrow keys.',
+    canvas: 'A snowy mountain road above a moonlit lake, through fir forests, open snowfields and bare crags, past frozen bays, small islands, shore cabins and warm lamps, under a starry sky with distant snowy ranges. Drive with WASD or the arrow keys.',
   },
   jungle: {
     title: 'Emerald Jungle', label: 'EMERALD JUNGLE', routeNumber: '4', route: jungleDrivingRoute, themeColor: '#22402a',
@@ -58,7 +58,7 @@ export const JOURNEYS = {
     title: 'Salt Flats', label: 'SALT FLATS', routeNumber: '8', route: saltDrivingRoute, themeColor: '#dae8ef',
     introduction: 'Cross a blinding white salt flat where shallow pools mirror the sky.',
     sound: 'Open wind, flamingos and engine sounds on',
-    canvas: 'A raised causeway across a white salt flat cracked into polygons, with turquoise pools reflecting the clouds, faceted boulders, wading flamingos and violet mountains on the horizon. Drive with WASD or the arrow keys.',
+    canvas: 'A raised causeway across a salt flat cracked into polygons, with blue and rose pools reflecting the clouds, stretches of clay playa, rocky hills and mesas, wading flamingos, and snow-capped volcanoes on the horizon. Drive with WASD or the arrow keys.',
   },
   swamp: {
     title: 'Cypress Swamp', label: 'CYPRESS SWAMP', routeNumber: '9', route: swampDrivingRoute, themeColor: '#2c3d4b', night: .9,

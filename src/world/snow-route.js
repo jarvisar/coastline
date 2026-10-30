@@ -1,4 +1,4 @@
-import { roadFrame, roadHeight, positionAt, randomAt, smoothstep, lerp } from './route.js';
+import { roadFrame, roadHeight, positionAt, randomAt, smoothstep, lerp, fieldNoise } from './route.js';
 
 export const SNOW_STEP = 8;
 export const LAMP_SPACING = 52;
@@ -149,6 +149,32 @@ export function snowBaseHeight(s, u) {
 // placement so they agree.
 export function alpineExposure(s, u) {
   return smoothstep(-.75, .75, Math.sin(s / 83 + u / 59) * .7 + Math.sin(s / 151 - u / 41) * .45);
+}
+
+// Each stretch of road has its own character: fir forest down to the shore,
+// open snowfields or bare crags, and open water or a frozen lake. Slow waves
+// with unrelated periods keep the mix from repeating. Terrain colour, trees,
+// rocks and lake ice all read from this.
+export function alpineStretch(s) {
+  const forest = smoothstep(-.2, .5, Math.sin(s / 390 + 2.4) * .7 + Math.sin(s / 149 + .3) * .35);
+  const crag = smoothstep(0, .6, Math.sin(s / 520 - 1.2) * .75 + Math.sin(s / 187 + 2.2) * .3) * (1 - forest * .75);
+  const ice = smoothstep(-.1, .7, Math.sin(s / 610 + .4) * .8 + Math.sin(s / 231 - 1.1) * .3);
+  return { forest, crag, ice };
+}
+
+// Chance of a fir at this spot, from 0 to 1. Groves are patchy everywhere and
+// close into forest in forest stretches. The bench beside the road stays open
+// so the lake shows past the guardrail.
+export function alpineForest(s, u, stretch = alpineStretch(s)) {
+  let region;
+  if (u < 0) {
+    const lake = alpineLake(s), edge = ledgeEdge(s);
+    region = smoothstep(lake.near + 2, lake.near + 6, u) * (1 - smoothstep(edge - 7, edge - 2, u));
+  } else region = smoothstep(12.5, 17, u) * (1 - smoothstep(105, 150, u));
+  if (!region) return 0;
+  const patches = fieldNoise(s, u, 38, 7301) * .62 + fieldNoise(s, u, 14, 7302) * .38;
+  const cover = .2 + stretch.forest * .58 - stretch.crag * .14 - alpineExposure(s, u) * .12;
+  return region * smoothstep(1 - cover, 1.12 - cover, patches);
 }
 
 export function terrainPocket(index, side) {

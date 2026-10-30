@@ -3,8 +3,9 @@ import { registerChunkResources } from './chunk-resources.js';
 import { finalizeChunkTransforms } from './chunk-transforms.js';
 import { splitBatch, computeInstanceBounds } from './instance-batches.js';
 import { LevelChunk, LevelWorld, geometryFrom, triangle, matte } from './level.js';
-import { CHUNK_LENGTH, randomAt, seededRandom, smoothstep } from './route.js';
-import { SNOW_STEP, SNOW_COLUMN_COUNT, LAMP_SPACING, snowVertex, snowPosition, snowGroundHeight, snowRoadHeight, snowFrame, snowBridgeAt, lampAt, terrainPocket, alpineLake, onLake, alpineExposure } from './snow-route.js';
+import { CHUNK_LENGTH, randomAt, seededRandom, smoothstep, fieldNoise } from './route.js';
+import { SNOW_STEP, SNOW_COLUMN_COUNT, LAMP_SPACING, snowVertex, snowPosition, snowGroundHeight, snowRoadHeight, snowFrame, snowBridgeAt, lampAt, terrainPocket, alpineLake, onLake, alpineExposure, alpineStretch, LAKE_LEVEL } from './snow-route.js';
+import { buildAlpineForest } from './alpine-forest.js';
 import { alpineRockVariants } from './alpine-rocks.js';
 import { alpinePines } from './alpine-pines.js';
 import { buildAlpineLake, lakeClock } from './alpine-lake.js';
@@ -15,6 +16,7 @@ import { buildSnowDiscoveries, animateSnowDiscoveries } from './snow-discovery-s
 import { solidPost, solidSpan, solidRocks } from './colliders.js';
 import { buildAlpineLandmarks, nearAlpineRelay } from './alpine-landmarks.js';
 import { CarHeadlights } from './headlights.js';
+import { AlpineSky } from './alpine-sky.js';
 
 // Rough scenery uses Lambert shading. It looks the same as physical shading on
 // matte surfaces and costs much less per pixel. Roads keep physical shading for
@@ -38,6 +40,10 @@ const glowMaterial = new THREE.MeshBasicMaterial({ color: '#ffe0a0', toneMapped:
 const boxGeometry = new THREE.BoxGeometry(1, 1, 1);
 const poleGeometry = new THREE.CylinderGeometry(1, 1, 1, 6);
 const dummy = new THREE.Object3D(), up = new THREE.Vector3(0, 1, 0);
+const snowLow = new THREE.Color('#bccbdd'), snowHigh = new THREE.Color('#ccd8e5');
+// Rock is pale on purpose. At the night exposure, tone mapping crushes darker
+// colours into flat navy and the faces lose their shape.
+const slate = new THREE.Color('#8794a9'), gneiss = new THREE.Color('#6d768a');
 registerChunkResources('snow', { terrainMaterial, snowMaterial, snowBankMaterial, stoneMaterial, pineMaterial, metalMaterial,
   barkMaterial, roadMaterial, lineMaterial, edgeMaterial, timberMaterial, glowMaterial, boxGeometry, poleGeometry, alpinePines, alpineRockVariants });
 
@@ -69,7 +75,7 @@ export class SnowChunk extends LevelChunk {
     super(index, `snow-chunk-${index}`);
     this.discoveries = snowDiscoveries(this.start - 40, this.start + CHUNK_LENGTH + 40);
     this.buildTerrain();
-    for (const part of buildAlpineLake(this.start)) this.addMesh(part.geometry, part.material, part.name).castShadow = false;
+    for (const part of buildAlpineLake(this.start)) this.addMesh(part.geometry, part.material, part.name).castShadow = !!part.shadows;
     this.buildRoad(); this.buildScenery(index);
     for (let i = Math.floor(this.start / CABIN_SPACING); i <= Math.floor((this.start + CHUNK_LENGTH) / CABIN_SPACING); i++) {
       const cabin = alpineCabin(i);
@@ -103,12 +109,23 @@ export class SnowChunk extends LevelChunk {
           const facet = randomAt(row * 2 + i, col + 923);
           const s = tri.reduce((sum, p) => sum + p.s, 0) / 3;
           const u = tri.reduce((sum, p) => sum + p.u, 0) / 3;
-          const highSnow = tri.reduce((sum, p) => sum + p.y, 0) / 3 > snowRoadHeight(s) + 54;
-          const exposure = alpineExposure(s, u);
-          const snowy = Math.abs(cross.y) > (highSnow ? .46 : .53 + exposure * .22);
-          const color = new THREE.Color(snowy ? '#c9d5e3' : '#566475');
-          // Keep per-facet variation small so each rock riser reads as one plane.
-          color.multiplyScalar(snowy ? .94 + exposure * .09 + facet * .045 : .9 + exposure * .1 + facet * .07);
+          const lift = tri.reduce((sum, p) => sum + p.y, 0) / 3 - snowRoadHeight(s);
+          const exposure = alpineExposure(s, u), stretch = alpineStretch(s);
+          // Snow gathers in broad fields and leaves whole faces bare, rather than
+          // flecking every slope. Crags hold less of it, forest floors more.
+          const drift = fieldNoise(s, u, 46, 7321) * .7 + fieldNoise(s, u, 17, 7322) * .3;
+          const limit = (lift > 54 ? .46 : .53 + exposure * .22) + (drift - .5) * .34 + stretch.crag * .1 - stretch.forest * .06;
+          const snowy = Math.abs(cross.y) > limit;
+          const color = new THREE.Color();
+          if (snowy) {
+            // Snow is a shade bluer in the low, sheltered ground by the lake.
+            color.lerpColors(snowLow, snowHigh, smoothstep(-40, 30, lift));
+            color.multiplyScalar(.94 + exposure * .09 + facet * .045);
+          } else {
+            // Rock shifts between slate and darker gneiss over whole faces, never per facet.
+            color.lerpColors(slate, gneiss, smoothstep(.35, .7, fieldNoise(s, u, 70, 7311) * .7 + stretch.crag * .4));
+            color.multiplyScalar(.9 + exposure * .1 + facet * .07);
+          }
           triangle(vertices, colors, ...tri, color, this.start);
         });
       }
@@ -159,7 +176,7 @@ export class SnowChunk extends LevelChunk {
       const item = { p: point(s, u, ground - size * .04),
         scale: [size * (.8 + random() * .5), size * (tall ? 1.35 : .55 + random() * .5), size * (.65 + random() * .5)],
         angle: random() * Math.PI * 2 };
-      rocks[variant].push({ ...item, color: ['#455166', '#515d70', '#596477', '#414c60'][Math.floor(random() * 4)] });
+      rocks[variant].push({ ...item, color: ['#5f6b80', '#6b778c', '#75808f', '#58637a'][Math.floor(random() * 4)] });
       if (snowy) rockCaps[variant].push(item);
     };
     const beam = (a, b, width, depth = width) => {
@@ -236,6 +253,9 @@ export class SnowChunk extends LevelChunk {
     }
     for (let i = 0; i < 115; i++) {
       const s = this.start + random() * CHUNK_LENGTH, u = (random() > .5 ? 1 : -1) * (12 + random() ** 1.8 * 160);
+      // Boulder fields gather under the crags and thin out in the forest.
+      const stretch = alpineStretch(s);
+      if (random() > .55 + stretch.crag * .45 - stretch.forest * .25) continue;
       if (Math.abs(snowGroundHeight(s, u + 1) - snowGroundHeight(s, u - 1)) > 2.8) continue;
       const size = .8 + random() ** 2 * 4.6;
       stone(s, u, size, true, i % 5 === 0);
@@ -246,6 +266,9 @@ export class SnowChunk extends LevelChunk {
       }
     }
     this.buildBridge(point, random, stone);
+    const forest = buildAlpineForest(this, (s, u, radius) => !onLake(s, u, radius * .5) && !nearCabin(s, u, radius)
+      && clearOfDiscoveries(s, u, radius));
+    if (forest.positions.length) this.addMesh(geometryFrom(forest.positions, forest.colors), terrainMaterial, 'fir-forest');
     instances(this.group, poleGeometry, barkMaterial, trunks, 'alpine-trunks');
     alpinePines.forEach((variant, i) => {
       instances(this.group, variant.needles, pineMaterial, pines[i], 'alpine-firs');
@@ -335,6 +358,10 @@ export class SnowWorld extends LevelWorld {
   constructor(scene, chunkSource = null) {
     super(scene, chunkSource, SnowChunk);
     this.effects = new THREE.Group(); this.effects.name = 'snow-night-effects'; scene.add(this.effects);
+    // Fog culling stays on: the dome's horizon is the fog colour and the
+    // terrain strips always reach back inside the fog, so the only things
+    // culled are small props that would barely mask the far ranges.
+    this.sky = new AlpineSky(this.effects);
     // Fixed pool of lights moved to the nearest lamps. No shadows.
     this.lights = Array.from({ length: 7 }, () => { const light = new THREE.PointLight('#ffb76b', 340, 40, 2); this.effects.add(light); return light; });
     this.cabinLights = Array.from({ length: 2 }, () => { const light = new THREE.PointLight('#ffc080', 110, 23, 2); this.effects.add(light); return light; });
@@ -362,6 +389,8 @@ export class SnowWorld extends LevelWorld {
   }
   update(s) {
     super.update(s);
+    const road = snowPosition(s, 0, LAKE_LEVEL - 4);
+    this.sky.follow(road.x, road.y, road.z + this.origin);
     const lampIndex = Math.round((s - 16) / LAMP_SPACING);
     // Reposition only when the pool advances or the origin rebases. Fades update every frame.
     if (lampIndex !== this.lampIndex || this.origin !== this.lightOrigin) {
@@ -408,6 +437,7 @@ export class SnowWorld extends LevelWorld {
     super.dispose();
     this.effects.removeFromParent();
     this.snowfall.dispose();
+    this.sky.dispose();
     this.headlights.dispose();
     this.glowGeometry.dispose(); this.glowMaterial.dispose();
   }

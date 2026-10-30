@@ -10,6 +10,7 @@ import { volcanicPalette } from './world/volcanic-palette.js';
 import { saltPalette, SALT_SUN, SALT_LIGHT } from './world/salt-palette.js';
 import { swampPalette, SWAMP_SUN, SWAMP_LIGHT } from './world/swamp-palette.js';
 import { coastPalette, COAST_SUN, COAST_LIGHT } from './world/coastal-palette.js';
+import { ALPINE_HORIZON } from './world/alpine-sky.js';
 
 // Overhead follow rates per second. Ground settles fast so steering feels
 // immediate. Height stays slow so the view doesn't bob over terrain.
@@ -34,10 +35,11 @@ const ROUTE_LIGHTING = {
     fog: { color: '#dab49b', near: 460, far: 860, thirdNear: 210, thirdFar: 350 },
   },
   snow: {
-    background: '#111f2b', exposure: .91,
+    background: ALPINE_HORIZON, exposure: .91,
     sky: { color: '#91afca', ground: '#2b3b4c', intensity: .72 },
     sun: { color: '#bbd1ea', intensity: 1.16, offset: [-170, 190, -80] },
-    fog: { color: '#243949', near: 340, far: 760, thirdNear: 190, thirdFar: 330 },
+    // Clear night air: the far lake shore and the ranges inland stay in view.
+    fog: { color: '#243949', near: 340, far: 760, thirdNear: 220, thirdFar: 470 },
   },
   jungle: {
     // Weak sun nearly overhead so the canopy shades the road, with strong green fill.

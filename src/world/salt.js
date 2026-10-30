@@ -5,10 +5,12 @@ import { splitBatch, computeInstanceBounds } from './instance-batches.js';
 import { LevelChunk, LevelWorld } from './level.js';
 import { CHUNK_LENGTH, randomAt, seededRandom, smoothstep, lerp, roadFrame, positionAt } from './route.js';
 import { SALT_LEVEL, WATER_LEVEL, CAUSEWAY_TOE, CELL_REACH, SALT_EDGES, CELL, CELL_ROWS, cellSeed, saltCell, keyFlooded,
-  saltRoadHeight, saltHeight, saltNoise, lagoonAmount, inPool, poolNear, saltClusters, saltPileFields } from './salt-route.js';
+  saltRoadHeight, saltHeight, saltNoise, lagoonAmount, saltRegion, inPool, poolNear, saltClusters, saltPileFields,
+  SALT_HILLS, saltHills, hillParts, clearOfHills } from './salt-route.js';
 import { crustMaterial, roadMaterial, rockMaterial, plantMaterial, pileMaterial, birdMaterial, postMaterial, poolMaterial,
   mirrorInstanceMaterial, mirrorMeshMaterial, WATER_MIRROR } from './salt-materials.js';
-import { saltBoulders, saltPebble, saltApron, saltTola, saltPile, flamingoStanding, flamingoFeeding, flamingoFlying, flightMaterial, postGeometry } from './salt-assets.js';
+import { saltBoulders, saltPebble, saltApron, saltTola, saltPile, saltHillShapes, flamingoStanding, flamingoFeeding, flamingoFlying, flightMaterial,
+  postGeometry } from './salt-assets.js';
 import { saltDiscoveries, saltDiscoveryClears } from './salt-discoveries.js';
 import { buildSaltDiscoveries } from './salt-discovery-scenery.js';
 import { SaltSky } from './salt-sky.js';
@@ -22,9 +24,16 @@ registerChunkResources('salt', { crustMaterial, roadMaterial, rockMaterial, plan
 const color = hex => new THREE.Color(hex);
 const CRUST = color('#fff4e5'), DIRTY = color('#e6d4bd'), COOL = color('#e4e9ee'), DUST = color('#dfcbb0');
 const CREST = color('#fffdf4'), WET_RIM = color('#d6ebe7'), SUNKEN = color('#c9e2de');
+// Clay playa: warm sandy crust split by darker mud cracks. Rose stretches blush
+// the salt a little. Damp salt round a pool is greyer.
+const CLAY = color('#e4c9a2'), CLAY_DEEP = color('#d4b089'), CLAY_CRACK = color('#bf9b74'), ROSE_SALT = color('#fbe9e2');
+const DAMP = color('#cfd3cd'), DAMP_CLAY = color('#c3a27f'), DAMP_ROSE = color('#ebcfc8');
 const GRAVEL = [color('#e2d5bb'), color('#d9caac'), color('#d2c2a3'), color('#e3dac8'), color('#ede7db')];
 const ROAD = { shoulder: color('#dccfb4'), asphalt: color('#4d5259'), edge: color('#f3f1ea'), centre: color('#e0b13e') };
 const ROCK_TINTS = ['#d2bfa4', '#c3b29d', '#ded0b9', '#b8afa4', '#cfbba0', '#d8c9b3'].map(color);
+const RUST = color('#b4846c');
+// Hill colour shifts, so repeated shapes don't match exactly.
+const HILL_TINTS = [[1, 1, 1], [1.04, 1, .95], [.96, .97, 1], [.93, .92, .93], [1.03, .98, .96]];
 const TOLA_TINTS = ['#cda866', '#bc9654', '#d7b877', '#a98d55', '#c4a870'].map(color);
 const PILE_TINTS = ['#ffffff', '#f7f5f0', '#fbf8f2'].map(color);
 const BIRD_TINTS = ['#ffffff', '#fff0f2', '#f6e3e6', '#ffe9ea'].map(color);
@@ -70,14 +79,24 @@ function mirrorOf(item) {
   return { matrix: mirrored.clone(), color: item.color, p: [item.p[0], WATER_LEVEL * 2 - item.p[1], item.p[2]] };
 }
 
+// Clay comes in patchy, leaving islands of white salt through a playa stretch.
+function crustMix(s, u) {
+  const { clay, rose } = saltRegion(s);
+  return { clay: clay * (.25 + .75 * smoothstep(-.3, .2, saltNoise(s, u, 64, 8867))), rose };
+}
 // Crust colour at a point: cleaner and cooler in places, grubbier in others,
 // and dusted beige next to the causeway.
-function crustTone(s, u, r = .5) {
+function crustTone(s, u, r = .5, mix = crustMix(s, u)) {
   const tone = CRUST.clone().lerp(DIRTY, smoothstep(-.45, .7, saltNoise(s, u, 170, 8863)) * .65);
   tone.lerp(COOL, smoothstep(-.15, .65, saltNoise(s + 90, u, 95, 8864)) * .48);
+  if (mix.rose) tone.lerp(ROSE_SALT, mix.rose * .45);
+  if (mix.clay) tone.lerp(CLAY.clone().lerp(CLAY_DEEP, smoothstep(-.3, .6, saltNoise(s - 40, u, 110, 8868))), mix.clay);
   tone.lerp(DUST, (1 - smoothstep(12, 30, Math.abs(u))) * .5);
   return tone.multiplyScalar(.94 + r * .1);
 }
+const dampTone = mix => DAMP.clone().lerp(DAMP_ROSE, mix.rose).lerp(DAMP_CLAY, mix.clay);
+// 0..1 where the polygon rims stand tall and broad, in stretches of white salt.
+const honeycomb = (s, u) => smoothstep(.05, .45, saltNoise(s, u, 260, 8879)) * (1 - saltRegion(s).clay);
 // Ridge height and brightness fade out toward the far field.
 const reachFade = u => 1 - smoothstep(320, 412, Math.abs(u));
 
@@ -85,25 +104,26 @@ export class SaltChunk extends LevelChunk {
   constructor(index) {
     super(index, `salt-chunk-${index}`);
     this.features = {}; this.cells = [];
-    this.crust = surface(); this.water = { positions: [], depths: [] };
+    this.crust = surface(); this.water = { positions: [], depths: [], rose: [] }; this.hillFaces = surface(); this.mirror = surface();
     this.items = { rocks: saltBoulders.map(() => []), rockMirrors: saltBoulders.map(() => []), pebbles: [], aprons: [], tola: [],
       piles: [], pileMirrors: [], standing: [], standingMirrors: [], feeding: [], feedingMirrors: [], posts: [], bands: [] };
     this.buildCrust(); this.buildFarField(); this.buildCauseway();
     this.terrain = this.addMesh(geometry(this.crust), crustMaterial, 'salt-crust');
     if (this.water.positions.length) {
-      const film = this.addMesh(geometry(this.water, [['poolDepth', this.water.depths, 1]]), poolMaterial, 'salt-pools');
+      const film = this.addMesh(geometry(this.water, [['poolDepth', this.water.depths, 1], ['poolRose', this.water.rose, 1]]), poolMaterial, 'salt-pools');
       film.receiveShadow = false;
     }
     this.buildRoad();
-    // Landmarks reach up to 40 m either side of their anchor.
+    // Landmarks reach up to 40 m either side of their anchor, hills up to 110 m.
     this.discoveries = saltDiscoveries(this.start - 40, this.start + CHUNK_LENGTH + 40);
-    this.buildRipRap(); this.buildClusters(); this.buildScatter(); this.buildShrubs(); this.buildPiles(); this.buildFlamingos(); this.buildPosts();
+    this.hills = saltHills(this.start - 130, this.start + CHUNK_LENGTH + 130);
+    this.buildHills(); this.buildRipRap(); this.buildClusters(); this.buildScatter(); this.buildShrubs(); this.buildPiles(); this.buildFlamingos(); this.buildPosts();
     buildSaltDiscoveries(this, this.discoveries);
     this.finishScenery();
-    delete this.crust; delete this.water; delete this.items; delete this.cells; delete this.discoveries;
+    delete this.crust; delete this.water; delete this.items; delete this.cells; delete this.discoveries; delete this.hills;
     finalizeChunkTransforms(this.group);
   }
-  clear(s, u, radius) { return saltDiscoveryClears(s, u, this.discoveries, radius); }
+  clear(s, u, radius) { return saltDiscoveryClears(s, u, this.discoveries, radius) && clearOfHills(this.hills, s, u, radius); }
   // Chunk-local position.
   at(s, u, y = saltHeight(s, u)) { const p = positionAt(s, u, y); return { x: p.x, y: p.y, z: p.z + this.start }; }
   // Salt polygons are Voronoi cells, owned by the chunk holding their seed.
@@ -125,18 +145,20 @@ export class SaltChunk extends LevelChunk {
     let area = 0;
     for (let j = 0; j < n; j++) { const a = outline[j], b = outline[(j + 1) % n]; area += a.s * b.u - b.s * a.u; }
     const turn = area > 0 ? 1 : -1, r = randomAt(cell.i, cell.k * 7 + (cell.side > 0 ? 8865 : 8866));
-    const tone = crustTone(cell.s, cell.u, r), fade = reachFade(cell.u);
+    const mix = crustMix(cell.s, cell.u), tone = crustTone(cell.s, cell.u, r, mix), fade = reachFade(cell.u);
+    // Dry polygons darken toward any pool they border.
+    const wet = labels.map(label => !flooded && keyFlooded(label)), damp = dampTone(mix);
     const submerged = j => flooded && keyFlooded(labels[(j + n - 1) % n]) && keyFlooded(labels[j]);
     const crest = outline.map((v, j) => {
       if (isBoundary(labels[(j + n - 1) % n]) || isBoundary(labels[j])) return 0;
       if (submerged(j)) return WATER_LEVEL - SALT_LEVEL - .1;
-      return (.025 + .04 * (.5 + .5 * saltNoise(v.s, v.u, 37, 8862))) * reachFade(v.u);
+      return (.025 + .04 * (.5 + .5 * saltNoise(v.s, v.u, 37, 8862)) + .08 * honeycomb(v.s, v.u)) * reachFade(v.u);
     });
     // Each rim is a flat white band along the crack, then a bevel down to the
     // polygon floor. Pool shores keep the band dry and slope into the water.
     const band = labels.map(label => {
       if (isBoundary(label)) return 0;
-      if (!flooded) return .045 + .09 * (.5 + .5 * saltNoise(cell.s, cell.u, 23, 8868));
+      if (!flooded) return .045 + .09 * (.5 + .5 * saltNoise(cell.s, cell.u, 23, 8868)) + .12 * honeycomb(cell.s, cell.u);
       return keyFlooded(label) ? 0 : .14;
     });
     const inset = labels.map((label, j) => band[j] + (isBoundary(label) ? (flooded ? .75 : 0) : !flooded ? .3 : keyFlooded(label) ? .14 : 1.05));
@@ -175,9 +197,14 @@ export class SaltChunk extends LevelChunk {
     });
     const floor = inner.map((v, j) => this.at(v.s, v.u, flooded ? WATER_LEVEL - .22
       : SALT_LEVEL + (onBoundary(j) ? 0 : .006 + .012 * (.5 + .5 * saltNoise(v.s, v.u, 7, 8869)))));
-    const crestTone = tone.clone().lerp(CREST, .25 + .75 * fade);
-    const rimColor = j => !flooded ? (crest[j] > .01 ? crestTone : tone) : submerged(j) ? WET_RIM : crest[j] > .01 ? crestTone : tone;
-    const floorColor = flooded ? SUNKEN : tone.clone().multiplyScalar(.965);
+    // On clay the cracks are darker than the plates, not brighter.
+    const crestTone = tone.clone().lerp(CREST, (.25 + .75 * fade) * (1 - mix.clay)).lerp(CLAY_CRACK, mix.clay * .8);
+    // Shores and the floor along a pool's edge are damp.
+    const shoreTone = crestTone.clone().lerp(damp, .55), wetAt = j => wet[(j + n - 1) % n] || wet[j];
+    const rimColor = j => !flooded ? (wetAt(j) ? shoreTone : crest[j] > .01 ? crestTone : tone)
+      : submerged(j) ? WET_RIM : crest[j] > .01 ? shoreTone : tone;
+    const baseFloor = flooded ? SUNKEN : tone.clone().multiplyScalar(.965), dampFloor = baseFloor.clone().lerp(damp, .7);
+    const floorColor = j => !flooded && wetAt(j) ? dampFloor : baseFloor;
     for (let j = 0; j < n; j++) {
       const k = (j + 1) % n;
       // Flooded neighbours make one open pool, with no internal white dividers.
@@ -188,21 +215,21 @@ export class SaltChunk extends LevelChunk {
         triangle(this.crust, rim[k], shoulder[k], shoulder[j], rimColor(k), rimColor(k), rimColor(j));
       }
       const from = band[j] > 0 ? shoulder : rim;
-      triangle(this.crust, from[j], from[k], floor[j], rimColor(j), rimColor(k), floorColor);
-      if (Math.hypot(inner[j].s - inner[k].s, inner[j].u - inner[k].u) > 1e-4) triangle(this.crust, from[k], floor[k], floor[j], rimColor(k), floorColor, floorColor);
+      triangle(this.crust, from[j], from[k], floor[j], rimColor(j), rimColor(k), floorColor(j));
+      if (Math.hypot(inner[j].s - inner[k].s, inner[j].u - inner[k].u) > 1e-4) triangle(this.crust, from[k], floor[k], floor[j], rimColor(k), floorColor(k), floorColor(j));
     }
     if (!flooded) {
       // A shallow dish or dome, so the fan's facets catch the sun a little differently.
       const cs = inner.reduce((sum, v) => sum + v.s, 0) / n, cu = inner.reduce((sum, v) => sum + v.u, 0) / n;
-      const centre = this.at(cs, cu, SALT_LEVEL + .005 + (r - .45) * .065);
+      const centre = this.at(cs, cu, SALT_LEVEL + .005 + (r - .45) * .065), soaked = wet.some(Boolean);
       for (let j = 0; j < n; j++) {
         const k = (j + 1) % n;
         if (Math.hypot(inner[j].s - inner[k].s, inner[j].u - inner[k].u) < 1e-4) continue;
         // Broad mineral facets, with a little more colour at the centre than
         // the perimeter. The quiet variation keeps the crust from reading as tiles.
         const facet = tone.clone().multiplyScalar(.89 + randomAt(j, cell.i * 31 + cell.k) * .16);
-        const edgeTone = facet.clone().lerp(floorColor, .42);
-        triangle(this.crust, centre, floor[j], floor[k], facet, edgeTone, edgeTone);
+        if (soaked) facet.lerp(damp, .22);
+        triangle(this.crust, centre, floor[j], floor[k], facet, facet.clone().lerp(floorColor(j), .42), facet.clone().lerp(floorColor(k), .42));
       }
       return;
     }
@@ -222,7 +249,7 @@ export class SaltChunk extends LevelChunk {
     const waterFace = (a, b, c, da, db, dc) => {
       if ((b.z - a.z) * (c.x - a.x) - (b.x - a.x) * (c.z - a.z) < 0) { [b, c] = [c, b]; [db, dc] = [dc, db]; }
       for (const p of [a, b, c]) this.water.positions.push(p.x, p.y, p.z);
-      this.water.depths.push(da, db, dc);
+      this.water.depths.push(da, db, dc); this.water.rose.push(mix.rose, mix.rose, mix.rose);
     };
     for (let j = 0; j < shore.length; j++) {
       const k = (j + 1) % shore.length;
@@ -289,19 +316,49 @@ export class SaltChunk extends LevelChunk {
     band(-.21, -.07, .093, ROAD.centre); band(.07, .21, .093, ROAD.centre);
     this.addMesh(geometry(road), roadMaterial, 'salt-causeway-road');
   }
+  // Rocky hills, merged into one mesh per chunk, with talus at their feet. The
+  // ones near a pool add their reflection to the chunk's mirrored mesh.
+  buildHills() {
+    const place = new THREE.Matrix4(), turn = new THREE.Quaternion(), point = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
+    for (const hill of this.hills) {
+      if (hill.s < this.start || hill.s >= this.start + CHUNK_LENGTH) continue;
+      const shape = SALT_HILLS[hill.variant], source = saltHillShapes[hill.variant][hill.index & 1], root = this.at(hill.s, hill.u, SALT_LEVEL + .03);
+      place.compose(point.set(root.x, root.y, root.z), turn.setFromAxisAngle(up, hill.yaw), new THREE.Vector3(hill.radius, hill.height / shape.height, hill.radius));
+      const tint = HILL_TINTS[Math.floor(randomAt(hill.index, 8961) * HILL_TINTS.length)], reflect = poolNear(hill.s, hill.u, hill.reach + hill.height * 2);
+      const crust = crustTone(hill.s, hill.u, .8), drift = [crust.r, crust.g, crust.b];
+      for (let i = 0; i < source.positions.length; i += 3) {
+        point.fromArray(source.positions, i).applyMatrix4(place);
+        const shift = source.foot[i / 3] ? drift : tint;
+        const r = source.colors[i] * shift[0], g = source.colors[i + 1] * shift[1], b = source.colors[i + 2] * shift[2];
+        this.hillFaces.positions.push(point.x, point.y, point.z); this.hillFaces.colors.push(r, g, b);
+        if (reflect) { this.mirror.positions.push(point.x, point.y, point.z); this.mirror.colors.push(r, g, b); }
+      }
+      for (const part of hillParts(hill)) solidPost(this, part.x, part.z + this.start, part.r * .8);
+      // Fallen blocks round the foot, in the hill's own rock.
+      const random = seededRandom(hill.index * 7 + 89171);
+      for (const part of hillParts(hill)) for (let n = 0, count = 1 + Math.floor(random() * 3); n < count; n++) {
+        const angle = random() * Math.PI * 2, reach = part.r * (1.2 + random() * .35), s = -(part.z + Math.sin(angle) * reach);
+        this.rock(s, part.x + Math.cos(angle) * reach - positionAt(s, 0, 0).x, .7 + random() * 1.6, random, { tints: source.rock });
+      }
+    }
+  }
   // Rock and its reflection when a pool is close enough to show one. Rocks on
   // dry crust get a collar of heaped salt.
-  rock(s, u, size, random, { slope = false, tall = 1 } = {}) {
+  rock(s, u, size, random, { slope = false, tall = 1, tints = ROCK_TINTS } = {}) {
     const variant = Math.floor(random() * saltBoulders.length), height = size * (.78 + random() * .3) * tall;
     if (!this.clear(s, u, size * 1.2 + .5)) return;
     const p = this.at(s, u, slope ? saltHeight(s, u) : SALT_LEVEL);
+    const tint = pick(tints, random()).clone(), clay = saltRegion(s).clay;
+    if (clay && tints === ROCK_TINTS) tint.lerp(RUST, clay * .35);
     const item = { p: [p.x, p.y + height * .4, p.z], r: [(random() - .5) * .16, random() * Math.PI * 2, (random() - .5) * .16],
-      scale: [size, height, size * (.75 + random() * .4)], color: pick(ROCK_TINTS, random()) };
+      scale: [size, height, size * (.75 + random() * .4)], color: tint };
     if (size < .45) { this.items.pebbles.push({ ...item, scale: [size, size * .7, size * .9] }); return; }
     this.items.rocks[variant].push(item);
     if (poolNear(s, u, size + height * 1.8 + 4)) this.items.rockMirrors[variant].push(mirrorOf(item));
     if (!slope && size > .8 && !inPool(s, u)) {
-      this.items.aprons.push({ p: [p.x, SALT_LEVEL - .015, p.z], r: [0, random() * Math.PI * 2, 0], scale: [size * 1.3, .55 + size * .22, size * 1.3] });
+      // White salt heaps, or drifted clay on the playa.
+      const mix = crustMix(s, u), tone = mix.clay ? color('#ffffff').lerp(crustTone(s, u, .7, mix), mix.clay) : undefined;
+      this.items.aprons.push({ p: [p.x, SALT_LEVEL - .015, p.z], r: [0, random() * Math.PI * 2, 0], scale: [size * 1.3, .55 + size * .22, size * 1.3], color: tone });
     }
   }
   // Loose rip-rap along both embankments.
@@ -347,26 +404,43 @@ export class SaltChunk extends LevelChunk {
     const p = this.at(s, u, SALT_LEVEL);
     this.items.tola.push({ p: [p.x, p.y - .03, p.z], r: [0, random() * Math.PI * 2, 0], scale: [size, size * (.8 + random() * .4), size], color: pick(TOLA_TINTS, random()) });
   }
-  // Dry tufts along the foot of the causeway, thinning out onto the crust.
+  // Dry tufts along the foot of the causeway, thinning out onto the crust. On
+  // the clay playa they spread out into open steppe.
   buildShrubs() {
-    const random = seededRandom(this.index + 89141);
+    const random = seededRandom(this.index + 89141), clay = saltRegion(this.start + CHUNK_LENGTH / 2).clay;
     for (const side of [-1, 1]) for (let s = this.start + random() * 4; s < this.start + CHUNK_LENGTH; s += 2.5 + random() * 7) {
       const u = side * (CAUSEWAY_TOE + .6 + random() ** 1.6 * 9);
-      if (random() < .62) continue;
+      if (random() < .62 - clay * .15) continue;
       this.tola(s, u, .55 + random() * .65, random);
       if (random() < .4) this.tola(s + (random() - .5) * 2, u + side * (.6 + random()), .35 + random() * .35, random);
     }
+    for (let n = 0, count = Math.round(clay * 20); n < count; n++) {
+      const s = this.start + random() * CHUNK_LENGTH, side = random() < .5 ? -1 : 1, u = side * (CAUSEWAY_TOE + 8 + random() ** 1.4 * 110);
+      if (crustMix(s, u).clay > .5) this.tola(s, u, .6 + random() * .7, random);
+    }
   }
-  // Raked salt cones in loose rows, the ones in brine doubled by reflections.
+  // Raked salt cones in a few loose clumps of different sizes, with strays
+  // between them, biggest toward the middle of each clump. Each field stays
+  // within the box that landmarks and hills keep clear of. The ones in brine
+  // are doubled by reflections.
   buildPiles() {
     for (const field of saltPileFields(this.start, this.start + CHUNK_LENGTH)) {
-      const random = seededRandom(field.index * 17 + 89151);
-      for (let row = 0; row < field.rows; row++) for (let column = 0; column < field.columns; column++) {
-        if (random() < .12) continue;
-        const s = field.s + (column - field.columns / 2) * field.spacing + row * field.skew + (random() - .5) * .6;
-        const u = field.u + field.side * (row - field.rows / 2) * field.spacing + (random() - .5) * .6;
+      const random = seededRandom(field.index * 17 + 89151), halfS = field.columns * field.spacing / 2, halfU = field.rows * field.spacing / 2;
+      const clumps = Array.from({ length: 2 + Math.floor(random() * 3) }, () => ({ x: (random() - .5) * 1.1, z: (random() - .5) * 1.1, reach: .28 + random() * .3 }));
+      const placed = [], target = Math.round(field.rows * field.columns * .75), turn = field.skew * .6;
+      for (let attempt = 0; attempt < target * 14 && placed.length < target; attempt++) {
+        // Mostly drawn round a clump, falling off from its middle.
+        const clump = clumps[Math.floor(random() * clumps.length)], stray = random() < .12;
+        const spread = stray ? 1 : clump.reach * (random() + random() + random() - 1.5) / 1.5, angle = random() * Math.PI * 2;
+        const x = stray ? random() * 2 - 1 : clump.x + Math.cos(angle) * spread, z = stray ? random() * 2 - 1 : clump.z + Math.sin(angle) * spread;
+        if (Math.abs(x) > 1 || Math.abs(z) > 1) continue;
+        const middle = stray ? 0 : 1 - Math.abs(spread) / clump.reach, radius = (.6 + .4 * middle) * (.85 + random() * .3);
+        // A slight turn keeps the heap from lining up with the road.
+        const s = field.s + x * halfS + z * halfU * turn, u = field.u + field.side * (z * halfU - x * halfS * turn * .3);
+        if (placed.some(other => Math.hypot(other.s - s, other.u - u) < (other.radius + radius) * 1.1 + .25)) continue;
         if (!this.clear(s, u, 1.5)) continue;
-        const wet = inPool(s, u), height = 1 + random() * .45, radius = .85 + random() * .25, p = this.at(s, u, wet ? WATER_LEVEL - .08 : SALT_LEVEL - .03);
+        placed.push({ s, u, radius });
+        const wet = inPool(s, u), height = radius * (1.05 + random() * .45), p = this.at(s, u, wet ? WATER_LEVEL - .08 : SALT_LEVEL - .03);
         const item = { p: [p.x, p.y, p.z], r: [0, random() * Math.PI * 2, 0], scale: [radius, height, radius], color: pick(PILE_TINTS, random()) };
         this.items.piles.push(item);
         if (poolNear(s, u, 3)) this.items.pileMirrors.push(mirrorOf(item));
@@ -376,7 +450,8 @@ export class SaltChunk extends LevelChunk {
   }
   // Small groups wading in the wider pools, most in the lagoon stretches.
   buildFlamingos() {
-    const random = seededRandom(this.index + 89161), lagoon = lagoonAmount(this.start + CHUNK_LENGTH / 2);
+    const random = seededRandom(this.index + 89161), middle = this.start + CHUNK_LENGTH / 2;
+    const lagoon = Math.min(1, lagoonAmount(middle) + saltRegion(middle).rose * .6);
     const pools = this.cells.filter(cell => cell.flooded && Math.abs(cell.u) > 24 && Math.abs(cell.u) < 240);
     const groups = pools.length ? (random() < .2 + lagoon * .7 ? 1 : 0) + (random() < lagoon * .45 ? 1 : 0) : 0;
     for (let g = 0; g < groups; g++) {
@@ -430,13 +505,17 @@ export class SaltChunk extends LevelChunk {
     instances(this.group, saltPile, mirrorInstanceMaterial, pileMirrors, 'salt-pile-reflections', { mirror: true });
     instances(this.group, flamingoStanding, mirrorInstanceMaterial, standingMirrors, 'salt-flamingo-reflections', { mirror: true });
     instances(this.group, flamingoFeeding, mirrorInstanceMaterial, feedingMirrors, 'salt-flamingo-reflections', { mirror: true });
+    if (this.hillFaces.positions.length) this.addMesh(geometry(this.hillFaces), rockMaterial, 'salt-hills', true);
     // The causeway doubles in any lagoon that reaches its foot.
     if (this.cells.some(cell => cell.flooded && cell.k === 0)) {
-      const bank = new THREE.Mesh(geometry(this.bank), mirrorMeshMaterial); bank.name = 'salt-causeway-reflection';
-      bank.position.y = WATER_LEVEL * 2; bank.scale.y = -1; bank.userData.ambientOcclusion = false; bank.receiveShadow = false;
-      this.group.add(bank); this.owned.push(bank.geometry);
+      this.mirror.positions = this.mirror.positions.concat(this.bank.positions); this.mirror.colors = this.mirror.colors.concat(this.bank.colors);
     }
-    delete this.bank;
+    if (this.mirror.positions.length) {
+      const mirror = new THREE.Mesh(geometry(this.mirror), mirrorMeshMaterial); mirror.name = 'salt-landform-reflections';
+      mirror.position.y = WATER_LEVEL * 2; mirror.scale.y = -1; mirror.userData.ambientOcclusion = false; mirror.receiveShadow = false;
+      this.group.add(mirror); this.owned.push(mirror.geometry);
+    }
+    delete this.bank; delete this.hillFaces; delete this.mirror;
   }
 }
 

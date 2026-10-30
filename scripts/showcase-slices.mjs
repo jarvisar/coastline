@@ -6,7 +6,7 @@ import { createServer } from 'vite';
 
 // Every route shares a seed, camera angle and full landscape framing. A few
 // move along their own road to frame something worth showing: sea stacks off
-// the coast, a river bridge in the city and the salt flat's wetter pools.
+// the coast, a river bridge in the city and a mesa in the salt flat's lagoons.
 // Every slice's road is still lined up with the coast road at POSITION.
 const routes = ['coast', 'desert', 'snow', 'jungle', 'city', 'plains', 'volcanic', 'salt', 'swamp'];
 const distance = (name, fallback) => {
@@ -15,7 +15,7 @@ const distance = (name, fallback) => {
   return value;
 };
 const position = distance('POSITION', -1100);
-const positions = { coast: distance('COAST_POSITION', position - 220), city: distance('CITY_POSITION', position + 220), salt: distance('SALT_POSITION', position + 80) };
+const positions = { coast: distance('COAST_POSITION', position - 220), city: distance('CITY_POSITION', position + 220), salt: distance('SALT_POSITION', position + 2300) };
 const root = fileURLToPath(new URL('../', import.meta.url));
 const output = resolve(root, process.env.OUTPUT ?? 'showcase/scene-slices.png');
 // The preview doubles as the website's wide install screenshot. A run sent

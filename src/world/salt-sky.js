@@ -54,13 +54,18 @@ function skyMaterial() {
 // Ranges ringing the flat at a fixed distance, following the car like the sky
 // so they never get closer. Only road-level cameras see them. Their feet stand
 // on the water plane so a mirrored copy can sit directly beneath.
+// Warm sandy feet under dusty rose and violet slopes, cooling with distance.
+// Stratovolcanoes stand at fixed bearings, so the road keeps one in view ahead
+// for a long time. A bearing of -PI / 2 is straight down the route.
 const RANGES = [
-  { distance: 700, depth: 90, low: 3, high: 26, peaks: 6, peak: 34, tint: '#929fb7', salt: 8961 },
-  { distance: 820, depth: 120, low: 4, high: 40, peaks: 5, peak: 60, tint: '#a4acc4', salt: 8971 },
+  { distance: 700, depth: 90, low: 3, high: 26, peaks: 6, peak: 34, tint: '#a48c90', foot: '#cbae95', salt: 8961 },
+  { distance: 820, depth: 120, low: 4, high: 40, peaks: 5, peak: 60, tint: '#a194ad', foot: '#c0a6a0', salt: 8971,
+    volcanoes: [{ bearing: -2.35, height: 104, width: .2 }, { bearing: 1.25, height: 92, width: .19 }] },
   // Only the far range is tall enough to hold snow.
-  { distance: 960, depth: 150, low: 5, high: 52, peaks: 4, peak: 96, tint: '#abadca', salt: 8981, snowline: 118 },
+  { distance: 960, depth: 150, low: 5, high: 52, peaks: 4, peak: 96, tint: '#a3a7c8', foot: '#b6adc2', salt: 8981, snowline: 118,
+    volcanoes: [{ bearing: -1.22, height: 178, width: .24 }, { bearing: -.42, height: 140, width: .2 }, { bearing: 2.1, height: 160, width: .22 }] },
 ];
-const STEPS = 150;
+const STEPS = 240;
 function mountains() {
   const positions = [], colors = [], horizon = new THREE.Color(saltPalette.horizon), snow = new THREE.Color('#f1f3f8');
   const light = new THREE.Vector3(sun.x, sun.y * .6, sun.z).normalize();
@@ -77,28 +82,41 @@ function mountains() {
       }
       return height;
     };
-    const tint = new THREE.Color(range.tint), shade = tint.clone().multiplyScalar(.74).lerp(new THREE.Color('#6d6f95'), .25);
+    // 0..1 toward a volcano's axis. Concave flanks rise to a blunt summit crater.
+    const coneAt = angle => Math.max(0, ...(range.volcanoes ?? []).map(volcano =>
+      1 - Math.abs(Math.atan2(Math.sin(angle - volcano.bearing), Math.cos(angle - volcano.bearing))) / volcano.width));
+    const volcanoHeight = angle => Math.max(0, ...(range.volcanoes ?? []).map(volcano => {
+      const t = Math.max(0, 1 - Math.abs(Math.atan2(Math.sin(angle - volcano.bearing), Math.cos(angle - volcano.bearing))) / volcano.width);
+      return volcano.height * Math.min(.9, t ** 1.7) / .9;
+    }));
+    const tint = new THREE.Color(range.tint), foot = new THREE.Color(range.foot);
     const rows = Array.from({ length: STEPS }, (_, j) => {
-      const angle = (j + (randomAt(j, range.salt + 3) - .5) * .5) / STEPS * Math.PI * 2, height = ridgeHeight(angle);
-      const radius = range.distance + (randomAt(j, range.salt + 4) - .5) * 30;
+      const angle = (j + (randomAt(j, range.salt + 3) - .5) * .5) / STEPS * Math.PI * 2, ridge = ridgeHeight(angle), cone = volcanoHeight(angle);
+      // Volcano flanks are smooth and concave. Elsewhere the shoulder is broken.
+      const smooth = cone > ridge ? smoothstep(0, .35, coneAt(angle)) : 0, height = Math.max(ridge, cone);
+      const radius = range.distance + (randomAt(j, range.salt + 4) - .5) * 30 * (1 - smooth);
       const at = (r, y, offset = 0) => new THREE.Vector3(Math.cos(angle + offset) * r, y, Math.sin(angle + offset) * r);
-      // Foot, a broken shoulder, then the crest.
-      return [at(radius - range.depth, 0), at(radius - range.depth * (.35 + randomAt(j, range.salt + 5) * .35), height * (.3 + randomAt(j, range.salt + 6) * .4), (randomAt(j, range.salt + 7) - .5) * .035), at(radius, height)];
+      const shoulder = [lerp(.35 + randomAt(j, range.salt + 5) * .35, .55, smooth), lerp(.3 + randomAt(j, range.salt + 6) * .4, .2, smooth)];
+      const upper = [lerp(.1 + randomAt(j, range.salt + 8) * .08, .24, smooth), lerp(.8 + randomAt(j, range.salt + 9) * .1, .6, smooth)];
+      // Foot, shoulder, upper slope, then the crest.
+      return [at(radius - range.depth, 0), at(radius - range.depth * shoulder[0], height * shoulder[1], (randomAt(j, range.salt + 7) - .5) * .035 * (1 - smooth)),
+        at(radius - range.depth * upper[0], height * upper[1]), at(radius, height)];
     });
-    const face = (a, b, c) => {
+    const face = (a, b, c, ragged) => {
       const normal = new THREE.Vector3().subVectors(b, a).cross(new THREE.Vector3().subVectors(c, a)).normalize();
       if (normal.dot(a) > 0) { [b, c] = [c, b]; normal.negate(); }
       const top = Math.max(a.y, b.y, c.y), middle = (a.y + b.y + c.y) / 3;
-      const color = shade.clone().lerp(tint, smoothstep(-.1, .6, normal.dot(light)));
-      if (range.snowline && top > range.snowline && middle > top * .74) color.lerp(snow, .82);
+      const lit = tint.clone().lerp(foot, 1 - smoothstep(range.low, range.high * .9, middle));
+      const shade = lit.clone().multiplyScalar(.74).lerp(new THREE.Color('#6d6f95'), .25);
+      const color = shade.lerp(lit, smoothstep(-.1, .6, normal.dot(light)));
+      if (range.snowline && middle > range.snowline + ragged * 24) color.lerp(snow, .82);
       // Feet fade into the haze, far ranges more.
       color.lerp(horizon, .2 + .6 * (1 - smoothstep(0, range.high, middle)) * (range.distance / 960));
       for (const p of [a, b, c]) { positions.push(p.x, p.y, p.z); colors.push(color.r, color.g, color.b); }
     };
     for (let j = 0; j < STEPS; j++) {
-      const a = rows[j], b = rows[(j + 1) % STEPS];
-      face(a[0], b[0], a[1]); face(b[0], b[1], a[1]);
-      face(a[1], b[1], a[2]); face(b[1], b[2], a[2]);
+      const a = rows[j], b = rows[(j + 1) % STEPS], ragged = randomAt(j, range.salt + 10) - .5;
+      for (let k = 0; k < 3; k++) { face(a[k], b[k], a[k + 1], ragged); face(b[k], b[k + 1], a[k + 1], ragged); }
     }
   }
   const g = new THREE.BufferGeometry();

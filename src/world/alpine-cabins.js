@@ -35,9 +35,9 @@ export function alpineCabin(index) {
   if (cabins.size > 128) cabins.delete(cabins.keys().next().value);
   return cabin;
 }
-export function nearCabin(s, u) {
+export function nearCabin(s, u, margin = 0) {
   const cabin = alpineCabin(Math.floor(s / CABIN_SPACING));
-  return Math.abs(s - cabin.s) < 10 && Math.abs(u - cabin.u) < 8;
+  return Math.abs(s - cabin.s) < 10 + margin && Math.abs(u - cabin.u) < 8 + margin;
 }
 
 const wood = new THREE.MeshStandardMaterial({ color: '#665048', roughness: .92, flatShading: true });

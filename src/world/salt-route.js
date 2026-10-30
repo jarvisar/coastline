@@ -1,5 +1,5 @@
 import { roadFrame, positionAt, randomAt, smoothstep, lerp } from './route.js';
-import { saltDiscoveryFlood } from './salt-discoveries.js';
+import { saltDiscoveryFlood, saltDiscoveries, saltDiscoveryClears } from './salt-discoveries.js';
 
 // The crust is dead level. A low causeway carries the road across it.
 export const SALT_LEVEL = 22;
@@ -45,6 +45,17 @@ export function lagoonAmount(s) {
   return smoothstep(.56, .8, lerp(randomAt(cell, 8831), randomAt(cell + 1, 8831), t));
 }
 
+// The flat changes character every kilometre or two. Most of it is white salt,
+// with stretches of warm clay playa near the margins and of rose brine where
+// algae colour the pools. Weights are 0..1 and blend across each boundary.
+export const REGION_LENGTH = 1400;
+const regionOf = cell => { const r = randomAt(cell, 8837); return [r < .26 ? 1 : 0, r > .81 ? 1 : 0]; };
+export function saltRegion(s) {
+  const x = s / REGION_LENGTH, cell = Math.floor(x), f = x - cell, near = f < .5 ? f : 1 - f;
+  const own = regionOf(cell), other = regionOf(f < .5 ? cell - 1 : cell + 1), mix = .5 * (1 - smoothstep(0, .2, near));
+  return { clay: lerp(own[0], other[0], mix), rose: lerp(own[1], other[1], mix) };
+}
+
 // Hexagonal seed lattice per side of the road, so no cell straddles the causeway.
 export function cellSeed(i, k, side) {
   const salt = side > 0 ? 8811 : 8821;
@@ -67,7 +78,8 @@ export function cellFlooded(i, k, side) {
   const jitter = (randomAt(i, k * 7 + (side > 0 ? 8813 : 8823)) - .5) * .3;
   const verge = k === 0 ? .22 : 0;
   const far = smoothstep(330, 400, cross) * .6;
-  const flooded = saltDiscoveryFlood(i, k, side) ?? patch + jitter + lagoon * .26 - verge - far > .33;
+  const { clay, rose } = saltRegion(s);
+  const flooded = saltDiscoveryFlood(i, k, side) ?? patch + jitter + lagoon * .26 + rose * .1 - clay * .16 - verge - far > .33;
   if (floodCache.size > 20000) floodCache.clear();
   floodCache.set(key, flooded);
   return flooded;
@@ -176,6 +188,62 @@ export function saltPileFields(from, to) {
       columns: 6 + Math.floor(randomAt(f, 8876) * 6), spacing: 3.3 + randomAt(f, 8877) * .6, skew: (randomAt(f, 8878) - .5) * .5 });
   }
   return fields;
+}
+
+// Rocky hills standing out on the flat, built at unit radius in salt-assets.js.
+// `height` is a share of the radius. `parts` are [x, z, radius] circles that
+// cover the footprint, used for collisions and for clearing other scenery.
+export const SALT_HILLS = [
+  { kind: 'knoll', height: .6, parts: [[0, 0, 1]] },
+  { kind: 'mesa', height: .62, parts: [[0, 0, 1]] },
+  { kind: 'cone', height: .62, parts: [[0, 0, 1]] },
+  { kind: 'ridge', height: .5, parts: [[-1.1, 0, .78], [0, 0, .8], [1.1, 0, .78]] },
+];
+const hillReach = shape => Math.max(...shape.parts.map(([x, z, r]) => Math.hypot(x, z) + r));
+// One slot per side every HILL_SPACING metres, filled more often on clay.
+export const HILL_SPACING = 230;
+function hillCandidate(c, side) {
+  const salt = side > 0 ? 8941 : 8951, s = (c + randomAt(c, salt)) * HILL_SPACING;
+  if (randomAt(c, salt + 1) > .4 + saltRegion(s).clay * .4) return null;
+  const variant = Math.floor(randomAt(c, salt + 2) * SALT_HILLS.length), shape = SALT_HILLS[variant];
+  const radius = 19 + randomAt(c, salt + 3) ** 1.3 * 30, reach = radius * hillReach(shape);
+  return { index: c * 2 + (side > 0 ? 1 : 0), s, u: side * (reach + 28 + randomAt(c, salt + 4) ** 1.5 * 130), side, variant, radius, reach,
+    height: radius * shape.height * (.85 + randomAt(c, salt + 5) * .3), yaw: randomAt(c, salt + 6) * Math.PI * 2 };
+}
+// Footprint circles in world x/z, turned like the model (a Y rotation by yaw).
+export function hillParts(hill) {
+  const cos = Math.cos(hill.yaw), sin = Math.sin(hill.yaw), root = positionAt(hill.s, hill.u, 0);
+  return SALT_HILLS[hill.variant].parts.map(([x, z, r]) => ({ x: root.x + (x * cos + z * sin) * hill.radius, z: root.z + (z * cos - x * sin) * hill.radius, r: r * hill.radius }));
+}
+// Whether a point, plus a margin, stands clear of every hill in the list.
+export function clearOfHills(hills, s, u, margin = 0) {
+  const p = positionAt(s, u, 0);
+  return hills.every(hill => (hill.parts ??= hillParts(hill)).every(part => Math.hypot(p.x - part.x, p.z - part.z) > part.r * 1.15 + margin));
+}
+const hillCache = new Map();
+function hillAt(c, side) {
+  const key = `${c},${side}`;
+  if (hillCache.has(key)) return hillCache.get(key);
+  let hill = hillCandidate(c, side);
+  if (hill) {
+    const previous = hillCandidate(c - 1, side);
+    const piles = saltPileFields(hill.s - hill.reach - 80, hill.s + hill.reach + 80);
+    // Keep clear of the slot before, landmarks and salt works.
+    if ((previous && Math.hypot(previous.s - hill.s, previous.u - hill.u) < previous.reach + hill.reach + 20)
+      || !saltDiscoveryClears(hill.s, hill.u, saltDiscoveries(hill.s - 200, hill.s + 200), hill.reach + 8)
+      || piles.some(field => Math.hypot(field.s - hill.s, field.u - hill.u) < hill.reach + 30)) hill = null;
+  }
+  if (hillCache.size > 4000) hillCache.clear();
+  hillCache.set(key, hill);
+  return hill;
+}
+export function saltHills(from, to) {
+  const hills = [];
+  for (let c = Math.floor(from / HILL_SPACING) - 1; c * HILL_SPACING <= to; c++) for (const side of [-1, 1]) {
+    const hill = hillAt(c, side);
+    if (hill && hill.s >= from && hill.s < to) hills.push(hill);
+  }
+  return hills;
 }
 
 export const saltDrivingRoute = {

@@ -84,29 +84,39 @@ export const birdMaterial = new THREE.MeshLambertMaterial({ vertexColors: true, 
 export const postMaterial = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: .8 });
 
 // Transparent film over the mirror beneath each pool: pale where it runs over
-// the salt rim, deeper turquoise over open water, thinner at grazing angles so
-// road-level views see more reflection.
+// the salt rim, deeper over open water, thinner at grazing angles so road-level
+// views see more reflection. Brine shifts between cobalt, turquoise and milky
+// aqua across the flat, and rose stretches colour some pools with algae.
 export const poolMaterial = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, depthWrite: false, toneMapped: false });
 poolMaterial.onBeforeCompile = shader => {
   clockUniforms(shader);
-  shader.vertexShader = 'attribute float poolDepth; varying float vPoolDepth; varying vec3 vPoolWorld;\n' + shader.vertexShader.replace('#include <worldpos_vertex>', `#include <worldpos_vertex>
-    vPoolDepth = poolDepth;
+  shader.vertexShader = 'attribute float poolDepth; attribute float poolRose; varying float vPoolDepth; varying float vPoolRose; varying vec3 vPoolWorld;\n'
+    + shader.vertexShader.replace('#include <worldpos_vertex>', `#include <worldpos_vertex>
+    vPoolDepth = poolDepth; vPoolRose = poolRose;
     ${worldVarying('vPoolWorld')}`);
-  shader.fragmentShader = cloudGLSL + 'varying float vPoolDepth; varying vec3 vPoolWorld;\n' + shader.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
+  shader.fragmentShader = cloudGLSL + 'varying float vPoolDepth; varying float vPoolRose; varying vec3 vPoolWorld;\n' + shader.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
     vec3 toEye = isOrthographic ? vec3(viewMatrix[0][2], viewMatrix[1][2], viewMatrix[2][2]) : normalize(cameraPosition - vPoolWorld);
     float grazing = pow(1.0 - clamp(abs(toEye.y), 0.0, 1.0), 4.0);
     // Cat's-paws of wind drifting across the surface.
     vec2 p = vec2(vPoolWorld.x, vPoolWorld.z - saltOrigin);
     float band = saltValue(p * 0.0625 + vec2(saltTime * 0.05, saltTime * 0.02));
     float breeze = smoothstep(0.6, 0.85, saltValue(p * 0.125 - vec2(saltTime * 0.08, saltTime * 0.03)));
-    vec3 shallow = vec3(0.62, 0.83, 0.79), deep = vec3(0.12, 0.52, 0.59);
+    float tone = saltValue(p * 0.0078125 + vec2(3.0, 7.0));
+    float cobalt = smoothstep(0.42, 0.24, tone), milky = smoothstep(0.58, 0.76, tone);
+    // Broad patches with crisp edges. Toward the end of a rose stretch the
+    // patches thin out rather than fading.
+    float rose = smoothstep(0.0, 0.06, saltValue(p * 0.00390625 + vec2(11.0, 5.0)) + vPoolRose * 0.62 - 0.97);
+    vec3 shallow = mix(mix(mix(vec3(0.62, 0.83, 0.84), vec3(0.58, 0.79, 0.88), cobalt), vec3(0.76, 0.89, 0.9), milky), vec3(0.99, 0.85, 0.77), rose);
+    vec3 deep = mix(mix(mix(vec3(0.12, 0.5, 0.6), vec3(0.09, 0.37, 0.62), cobalt), vec3(0.36, 0.66, 0.76), milky), vec3(0.94, 0.56, 0.52), rose);
     // Shallow only along the outer rim, so reflections near a shore stay clear.
     float depth = smoothstep(0.0, 0.32, vPoolDepth);
     diffuseColor.rgb = mix(shallow, deep, depth) * (0.94 + 0.08 * band) + breeze * 0.025;
-    diffuseColor.a = mix(0.76, 0.46, depth) * mix(1.0, 0.3, grazing) + breeze * 0.035;
+    // Milky and algal brine is more opaque.
+    float body = max(milky * 0.5, rose);
+    diffuseColor.a = mix(mix(0.76, 0.46, depth), mix(0.88, 0.8, depth), body) * mix(1.0, 0.3, grazing) + breeze * 0.035;
   `);
 };
-poolMaterial.customProgramCacheKey = () => 'salt-pool-film-v2';
+poolMaterial.customProgramCacheKey = () => 'salt-pool-film-v3';
 
 // Reflections are geometry flipped under the water plane. They're lit with
 // the un-mirrored face normal against the scene's sun and sky, so each face

@@ -4,6 +4,7 @@ import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
 import { randomAt, smoothstep } from './route.js';
 import { waterClock } from './water.js';
 import { birdFlightGLSL } from './bird-flight.js';
+import { SALT_HILLS } from './salt-route.js';
 
 const up = new THREE.Vector3(0, 1, 0);
 
@@ -135,6 +136,70 @@ function tola() {
   return g;
 }
 export const saltTola = tola();
+
+// Hills out on the flat, at unit radius with the foot buried below the crust.
+// Rings of [outline share, height share] climb from a low drift of crust at the
+// foot to an apex, a flat cap or a crater. Faces are coloured by height and
+// slope: scree on gentle slopes, bare rock or bedded strata on steep ones.
+const HILLS = {
+  knoll: { sides: 13, rings: [[1.16, -.03], [1, .04], [.82, .3], [.58, .62], [.32, .88]], top: 'apex',
+    rock: ['#a77665', '#9c6c5c'], scree: ['#c29c7e', '#ba9476'] },
+  ridge: { sides: 16, rings: [[1.14, -.03], [1, .04], [.8, .32], [.56, .66], [.3, .9], [.12, 1]], top: 'apex',
+    rock: ['#8c6e69', '#806560'], scree: ['#b09280', '#a88a79'] },
+  cone: { sides: 14, rings: [[1.16, -.03], [1, .04], [.78, .3], [.56, .62], [.38, .9], [.31, 1], [.17, .84]], top: 'floor', floor: .78,
+    rock: ['#6f504a', '#775349'], scree: ['#8d6a5d', '#86655a'], rim: ['#a65f47', '#ad6449'] },
+  // Cliff rings from `cliff` up share one outline, so the walls stay sheer.
+  mesa: { sides: 12, rings: [[1.18, -.03], [1, .04], [.9, .15], [.8, .28], [.78, .52], [.76, .78], [.74, 1]], top: 'cap', cliff: 3,
+    strata: ['#c99a72', '#b5805f', '#d2a67e', '#bd8967'], scree: ['#c9a27e', '#c29a77'], cap: ['#b98b67', '#c09270'] },
+};
+function hillShape(kind, height, seed) {
+  const spec = HILLS[kind], { sides, rings } = spec, rand = (a, b) => randomAt(a, seed + b);
+  const phase = [0, 1, 2].map(k => rand(k, 1) * Math.PI * 2);
+  const wobble = angle => 1 + .1 * Math.sin(2 * angle + phase[0]) + .06 * Math.sin(3 * angle + phase[1]) + .035 * Math.sin(5 * angle + phase[2]);
+  // An off-centre summit makes one flank steeper. Ridges stretch along x.
+  const summit = [(rand(0, 2) - .5) * .3, (rand(1, 2) - .5) * .3];
+  const stretch = kind === 'ridge' ? [1.8, .74] : [1, 1];
+  // Each column keeps one bearing and spread all the way up, so no face can overhang.
+  const columns = Array.from({ length: sides }, (_, i) => ({ angle: (i + (rand(i, 10) - .5) * .4) / sides * Math.PI * 2, spread: 1 + (rand(i, 11) - .5) * .1 }));
+  const cliff = j => spec.cliff !== undefined && j >= spec.cliff;
+  const grid = rings.map(([t, y], j) => columns.map(({ angle, spread }, i) => {
+    const r = wobble(angle) * t * (j ? spread : 1) * (j < 2 || cliff(j) ? 1 : 1 + (rand(i, 20 + j) - .5) * .08), lean = Math.max(0, 1 - t);
+    // Ridges get a serrated crest, slopes a little roughness.
+    const rough = j < 2 || cliff(j) ? 0 : (rand(i, 30 + j) - .5) * .1 + (kind === 'ridge' ? Math.sin(angle * 3 + phase[2]) * .08 * y : 0);
+    return [(Math.sin(angle) * r + summit[0] * lean) * stretch[0], Math.min(1, y + rough) * height, (Math.cos(angle) * r + summit[1] * lean) * stretch[1]];
+  }));
+  // Scale the plan so the base meets the crust inside the unit outline that
+  // SALT_HILLS parts cover. Only the low drift of crust reaches past it.
+  const base = Math.max(...grid[1].map(([x, , z]) => Math.hypot(x / stretch[0], z / stretch[1])));
+  for (const ring of grid) for (const p of ring) { p[0] /= base; p[2] /= base; }
+  const centre = [summit[0] * stretch[0] / base, (spec.top === 'floor' ? spec.floor : 1) * height, summit[1] * stretch[1] / base];
+  const triangles = [];
+  for (let j = 0; j < grid.length; j++) for (let i = 0; i < sides; i++) {
+    const a = grid[j][i], b = grid[j][(i + 1) % sides];
+    if (j === grid.length - 1) { triangles.push([a, b, centre, j]); continue; }
+    const c = grid[j + 1][i], d = grid[j + 1][(i + 1) % sides];
+    triangles.push(...((i + j) % 2 ? [[a, b, c, j], [b, d, c, j]] : [[a, b, d, j], [a, d, c, j]]));
+  }
+  const positions = [], colors = [], foot = [], normal = new THREE.Vector3(), edge = new THREE.Vector3(), tint = new THREE.Color();
+  const offset = Math.floor(rand(3, 4) * 4);
+  triangles.forEach(([a, b, c, ring], n) => {
+    // Upward winding: every face of a height field points up.
+    if ((b[2] - a[2]) * (c[0] - a[0]) - (b[0] - a[0]) * (c[2] - a[2]) < 0) [b, c] = [c, b];
+    normal.set(b[0] - a[0], b[1] - a[1], b[2] - a[2]).cross(edge.set(c[0] - a[0], c[1] - a[1], c[2] - a[2])).normalize();
+    const steep = normal.y < .86, pick = list => list[Math.floor(rand(n, 40) * list.length) % list.length];
+    let hex;
+    if (ring === 0) hex = '#ffffff';
+    else if (kind === 'mesa') hex = ring >= rings.length - 1 ? pick(spec.cap) : ring < spec.cliff ? pick(spec.scree) : spec.strata[(ring + offset) % spec.strata.length];
+    else if (kind === 'cone' && ring >= rings.length - 3) hex = pick(spec.rim);
+    else hex = steep ? pick(spec.rock) : pick(spec.scree);
+    tint.set(hex).multiplyScalar(.9 + normal.y * .08 + (rand(n, 41) - .5) * .025);
+    for (const p of [a, b, c]) { positions.push(...p); colors.push(tint.r, tint.g, tint.b); foot.push(ring === 0 ? 1 : 0); }
+  });
+  // The foot takes the crust colour where the hill is placed. Talus blocks take the hill's rock colour.
+  return { positions: new Float32Array(positions), colors: new Float32Array(colors), foot: new Uint8Array(foot),
+    rock: (spec.rock ?? spec.strata).map(hex => new THREE.Color(hex)) };
+}
+export const saltHillShapes = SALT_HILLS.map(({ kind, height }, n) => [0, 1].map(k => hillShape(kind, height, 9301 + n * 31 + k * 7)));
 
 // Hand-raked salt cone: bright top, greyer where it stands in the brine.
 function saltCone() {
