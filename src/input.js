@@ -21,8 +21,8 @@ export class Input {
     window.addEventListener('keydown', e => {
       // Range sliders own their arrow, Home and End keys, so editing a volume doesn't drive.
       if (e.target.matches?.('input[type="range"]') && !['Escape', 'KeyP', 'KeyM'].includes(e.code)) return;
-      // Let menu buttons keep their native keyboard activation.
-      if (e.target.closest?.('button') && ['Space', 'Enter'].includes(e.code)) return;
+      // Let menu buttons and links keep their native keyboard activation.
+      if (e.target.closest?.('button, a[href]') &&['Space', 'Enter'].includes(e.code)) return;
       if (this.konami.keydown(e)) {
         e.preventDefault(); this.clear(); onKonami();
         return;

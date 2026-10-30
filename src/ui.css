@@ -192,6 +192,14 @@ body[data-journey=jungle] #touch-stick.active .stick-thumb { background: #a9d48f
 .panel-toggle[aria-pressed=true] .panel-switch { background: var(--ink); border-color: var(--ink); }
 .panel-toggle[aria-pressed=true] .panel-switch::after { transform: translateX(14px); background: var(--cream); }
 .graphics-status { font-size: 11px; line-height: 1.6; margin: 10px 0 0; opacity: .7; }
+.pause-link {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 44px; padding: 8px 14px; border-radius: 999px;
+  color: inherit; font-size: 12px; text-decoration: none;
+}
+.pause-link svg { width: 18px; height: 18px; }
+.pause-link:hover { background: color-mix(in srgb, currentColor 7%, transparent); }
+.pause-link:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
 @media (max-width: 760px) {
   .graphics-panel { width: 100%; margin-bottom: 14px; }
   .graphics-levels button { flex: 1 1 28%; padding: 0 8px; }

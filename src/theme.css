@@ -69,8 +69,8 @@ body[data-journey] .car-meter-track { background: color-mix(in srgb, var(--ink) 
 body[data-journey] .pause-overlay { color: var(--ink); }
 /* The scene shows through the pause screen, so text outside the panels gets
    the same see-through surface as the driving overlays. */
-body[data-journey] :is(.pause-header, .pause-settings h3, #pause-overlay .pwa-install-button) { background: var(--surface-hud); }
-body[data-journey] #pause-overlay .pwa-install-button:hover { background: var(--surface-hover); }
+body[data-journey] :is(.pause-header, .pause-settings h3, #pause-overlay :is(.pwa-install-button, .pause-link)) { background: var(--surface-hud); }
+body[data-journey] #pause-overlay :is(.pwa-install-button, .pause-link):hover { background: var(--surface-hover); }
 body[data-journey] .pause-settings :is(.controller-hint, .pwa-install-help) { background: var(--surface-glass); }
 body[data-journey] :is(.panel-button, .panel-toggle, .graphics-levels button) {
   color: var(--ink); background: var(--surface-control); border-color: var(--line);

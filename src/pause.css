@@ -19,6 +19,10 @@
 .pause-settings .controller-hint { margin: 0; padding: 8px 12px; border-radius: 10px; justify-self: center; text-align: center; }
 .pause-settings .pwa-install { width: 100%; margin: 0; }
 .pause-settings .pwa-install-help { padding: 8px 12px; border-radius: 10px; }
+/* The install button joins this row. Its help text wraps below both links. */
+.pause-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.pause-links .pwa-install:not([hidden]) { display: contents; }
+.pause-links .pwa-install-help { flex-basis: 100%; order: 1; }
 .pause-settings :is(.audio-channel input, .graphics-slider input) { height: 44px; }
 .pause-settings :is(.audio-presets button, .graphics-levels button) { min-height: 44px; }
 .graphics-toggle { min-height: 58px; margin-top: 6px; text-align: left; }
